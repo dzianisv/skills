@@ -1,10 +1,12 @@
 ---
-name: own
+name: take-ownership
 description: >
-  Take full ownership of a task end-to-end. Use when user says "own this", "/own",
-  "take ownership", "drive this to merge", or hands off a task they want completed
-  without micro-management. Walks all phases: issue → design → plan → implement →
-  review → test (no mocks) → PR → CI → final review → merge ask.
+  Take full ownership of a task end-to-end. Use when the user invokes
+  `/take-ownership`, or says "take ownership", "own this", "drive this to
+  merge", "/own", or hands off a task they want completed without
+  micro-management. Walks all phases: issue → design → plan → implement →
+  review → test (no mocks) → PR → CI → final review → merge ask →
+  post-merge prod verify → close.
 argument-hint: "[task description | issue #N | URL to issue]"
 allowed-tools:
   - Read
@@ -19,7 +21,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-# Own — Full-Ownership Task Driver
+# Take Ownership — Full-Ownership Task Driver
 
 You are now the **owner** of the task. Behave like a senior engineer who has been
 handed a problem and is responsible for shipping it. Do not punt. Do not stop
@@ -57,7 +59,7 @@ fallback exists.** Ask only when every avenue is exhausted.
 | Need to click / fill / scrape a web page | `chrome-devtools` MCP tools (`mcp__chrome-devtools__navigate_page`, `click`, `fill`, `take_snapshot`, `evaluate_script`) | `agent-browser` skill / CLI for full automation | `WebFetch` for read-only pages, `mcp__ScraplingServer__fetch` / `stealthy_fetch` for protected pages |
 | Need to log in to a site | Bitwarden → fetch creds → drive login via chrome-devtools | OAuth tokens in `~/.env.d/` | If MFA prompt → solve via TOTP from Bitwarden item (`bw get totp <id>`) |
 | Tool missing on machine | `command -v <tool>` then install via system pkg manager (apt/brew/npm/pip/cargo) | Check `~/.local/bin/`, `~/bin/`, `~/.cargo/bin/` for binary | Use container / docker run as last resort |
-| `gh` not authed | `gh auth status` → if expired, `gh auth refresh` | Use `GH_TOKEN` from `~/.env.d/github*.env` if present (per-account env files) | `gh auth login --with-token` from stored secret |
+| `gh` not authed | `gh auth status` → if expired, `gh auth refresh` | Use `GH_TOKEN` from `~/.env.d/github*.env` (`source ~/.env.d/github*.env`) | `gh auth login --with-token` from stored secret |
 | `git push` fails (auth) | Check SSH key works: `ssh -T git@github.com` | If HTTPS remote → swap to SSH or set `GH_TOKEN` and use https credentials helper | Generate SSH key if none exists |
 | Service down / cert expired | Check `~/.env.d/` for alt endpoint | Spin up local equivalent via docker | Skip to fallback path noted in design.md |
 | Ambiguous spec | Re-read issue + linked docs + recent commits + knowledge graph | Web search for similar features / RFCs | **Only now** ask the user — and only the questions that survived |
@@ -262,10 +264,43 @@ Update STATE: `phase: 4-done, awaiting-go` then `phase: 4-approved` on go.
 
 ## Phase 5 — Implementation
 
-Create a working branch:
+**Create a working worktree (preferred) or branch.**
+
+Worktree with secure perms (avoid leaking `.env`/`.npmrc` on shared runners):
+
+```bash
+git fetch origin main
+WT="${TMPDIR:-/tmp}/wt-$ID.$$"
+mkdir -m 700 "$WT"                       # 700 — not world-readable
+git worktree add -b own/$ID-<short-slug> "$WT" origin/main
+cd "$WT"
+```
+
+Fallback (no worktree):
 ```bash
 git switch -c own/$ID-<short-slug>
 ```
+
+**Secrets hygiene for subagent reports.** Never paste values of
+`Authorization`, `master_key`, `api_key`, `secret`, `token`, or any
+base64-decoded k8s Secret into subagent return text. Refer by name only
+("master key present, length N"). Do NOT run `kubectl get/describe secret`
+to dump values. Quoting logs / env blocks: redact values, quote only
+structural shape.
+
+**Pin every new dependency by digest or lockfile-hash.** No floating tags,
+no `latest`, no unpinned image versions. Floating versions will be rejected
+in Phase 5b security pass.
+
+**Subagent dispatch — prefer specialized types over generic `general-purpose`:**
+
+| Phase | Subagent type | Why |
+|-------|---------------|-----|
+| Diagnose (read-only) | `Explore` or `caveman:cavecrew-investigator` | Read-only; investigator output is caveman-compressed (~60% smaller tool result) |
+| 1–2 file edit | `caveman:cavecrew-builder` | Hard-refuses ≥3-file scope — natural guardrail against scope creep |
+| 3+ file edit / new feature | `general-purpose` on `sonnet` or `gpt-5.1-codex` | Generic with cheaper model |
+| Review | `caveman:cavecrew-reviewer` | Severity-tagged single-line findings, no praise |
+| Docs / tiny edits | `general-purpose` on `haiku` | Cheapest coherent model |
 
 For each parallel group, spawn one subagent per task **in the same message**:
 
@@ -483,13 +518,34 @@ Update STATE: `phase: 7-ship-recommended`.
 
 ## Phase 8 — Ask About Merge
 
-If the user pre-authorized merge (in `$ARGUMENTS` or earlier in the convo),
-merge directly:
-```bash
-gh pr merge <number> --squash --delete-branch   # match repo's default style
-```
+**Merge is irreversible.** Even when the user has pre-authorized, do the
+following safety dance BEFORE running `gh pr merge`:
 
-Otherwise ask:
+1. **Drop caveman mode** for this turn — clarity beats compression on
+   irreversible actions. If the harness can't switch mid-session, write the
+   confirmation in full prose anyway.
+2. **State out loud:** target branch (e.g. `main`), merge semantics
+   (`--squash` / `--rebase` / `--merge`), branch-delete behavior,
+   and that the user authorized the merge.
+3. **Check branch protection BEFORE using `--auto`:**
+
+   ```bash
+   PROT=$(gh api "repos/<owner>/<repo>/branches/main/protection" 2>/dev/null || echo '{}')
+   HAS_GATE=$(jq -e '.required_pull_request_reviews or .required_status_checks' \
+              <<<"$PROT" >/dev/null 2>&1 && echo yes || echo no)
+   ```
+
+   - `HAS_GATE=yes` → `gh pr merge <N> --squash --delete-branch --auto` is
+     safe; it parks the merge until the gate clears.
+   - `HAS_GATE=no` → **DROP `--auto`**. On an unprotected branch `--auto`
+     merges immediately and silently — that bypasses the human-authorization
+     gate. Merge synchronously after the spoken confirmation:
+
+     ```bash
+     gh pr merge <N> --squash --delete-branch
+     ```
+
+If the user has NOT pre-authorized, ask:
 > "PR #<N> is green, reviewed, and the final review says ship. Merge now?
 > (squash / rebase / merge / hold)"
 
@@ -501,6 +557,59 @@ After merge:
   - merged-at: <ISO>
   - merge-commit: <sha>
   ```
+
+---
+
+## Phase 9 — Post-Merge Production Verification
+
+**CI green ≠ done.** Done = the runtime path the issue claims to fix is
+proven working in prod. Many "fixed" PRs revealed broken pods only after
+merge because no one looked at the live system.
+
+Spawn a verifier subagent (cross-link: this is the dedicated
+`post-merge-verify` workflow):
+
+```
+Agent(
+  description: "Post-merge prod verification for task $ID",
+  subagent_type: "general-purpose",
+  model: "sonnet",
+  prompt: "
+    PR #<N> merged as <sha>. Verify the success metric from
+    .tasks/$ID/design.md against the running system (not the diff, not the
+    YAML — the live pod / service / endpoint).
+
+    For each component touched, return runtime evidence:
+      - kubectl rollout status / kubectl get pods (no Secrets)
+      - HTTP probes against the live endpoint (cache-busted)
+      - log lines (redacted) showing the new code path executed
+      - admin endpoints if applicable (e.g., /v1/models, /router/settings)
+    Compare against the success metric exactly.
+    Write .tasks/$ID/verify.md. End with: PROD: pass | fail (<one-line>).
+  "
+)
+```
+
+Only `PROD: pass` closes the task. `PROD: fail` → reopen issue, back to
+Phase 5 with the verifier output as the new bug spec.
+
+Update STATE: `phase: 9-prod-verified`.
+
+---
+
+## Phase 10 — Close + Follow-ups
+
+```bash
+gh issue comment <N> --body "Root cause: <one sentence>. Shipped in #<PR>
+as <sha>. Prod verifier: PASS (see .tasks/$ID/verify.md). Follow-ups: <list>."
+gh issue close <N>
+```
+
+For each deferred item collected during Phases 2–8 (out-of-scope risks,
+"while I'm here" temptations resisted, review WARNINGs dismissed):
+file a new issue, link from the closing comment.
+
+Update STATE: `phase: 10-closed`.
 
 ---
 
@@ -544,6 +653,33 @@ Decide yourself for everything else, including:
 - "Skip the design doc, the task is small." — No. Tiny tasks get tiny design docs.
 - "Merge while CI is still running." — No.
 - "Ask the user for every uncertainty." — No. You own this. Investigate first.
+- "Merged CI-green; didn't check the pod." — No. Phase 9 prod verify is required.
+- "Combined diagnose + implement in one context." — No. Single context drifts;
+  fresh-context subagents per step is the whole point.
+- "Took 'theirs'/'ours' blindly during a rebase." — No. Reconcile semantic
+  intent, then re-run review + tests on the rebased tree.
+- "Closed the issue before the verifier returned PASS." — No.
+- "Bundled an unrelated refactor while I'm here." — No. Auditable diffs only.
+- "Posted a long status update instead of runtime evidence." — No. Evidence,
+  not narration.
+- "Inlined a phase 'to save tokens'." — No. That is exactly the failure mode
+  this skill exists to stop.
+- "Used `--no-verify` to skip a failing hook." — No. Investigate the hook.
+- "Force-pushed a shared branch." — No. `--force-with-lease` on feature
+  branches only; never on `main`/`master`/`release/*`.
+- "Amended a published commit." — No. New commits on top.
+
+## Cross-References
+
+| Pattern | Skill |
+|---------|-------|
+| Tests at the right tier (unit / integration / live / eval) | `[[write-test]]` |
+| Post-merge prod verification command set | `[[post-merge-verify]]` |
+| Bulk-drain a backlog of issues in parallel | `[[no-github-backlog]]` |
+| Subagent-fan-out template patterns | inlined above (was: `[[own-github-issue]]`) |
+| Discovering an existing skill before reinventing | `[[skill-creator]]` |
+| Storing / fetching creds via Bitwarden | `[[bitwarden-cli]]` |
+| Driving a browser to resolve a blocker | `[[chrome-devtools-remote]]` |
 
 ## Resume
 

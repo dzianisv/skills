@@ -134,7 +134,7 @@ DuckDNS provides an update API — no browser needed after initial setup:
 ```bash
 source ~/.env.d/duckduckgo.env
 SUBDOMAIN="${DUCKDNS_DOMAIN%.duckdns.org}"
-curl -fsS "https://www.duckdns.org/update?domains=${SUBDOMAIN}&token=${DUCKDNS_TOKEN}&ip=${SERVER_IP}"
+curl -fsS "https://www.duckdns.org/update?domains=${SUBDOMAIN}&token=${DUCKDNS_TOKEN}&ip=<server-ip>"
 # Returns "OK" on success
 ```
 
@@ -154,8 +154,8 @@ Add to cron or deploy script to keep IP current.
 
 ---
 
-## Suggested credential storage
+## Current state (2026-05-24)
 
-- Save the DuckDNS token to `~/.env.d/duckdns.env` (or your equivalent env-file
-  store) and to a Bitwarden item named e.g. `DUCKDNS_TOKEN` for redundancy.
-- Pick a subdomain that reflects the project: `<project>.duckdns.org`.
+- Account: `<your-github-account>`
+- Token: stored in `~/.env.d/duckduckgo.env` and Bitwarden item `DUCKDNS_TOKEN`
+- Domain: `<your-subdomain>.duckdns.org` → `<server-ip>`

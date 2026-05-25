@@ -1,3 +1,8 @@
+---
+name: vercel-lfs
+description: Deploy a site with Git LFS assets (videos, images) to Vercel without serving 15-byte pointer files. Use when "videos not loading on Vercel", "LFS files not served", "Vercel serving pointer files", "15 bytes instead of video", "text/plain for video", or "deploy site with LFS assets". Covers the prebuilt-deploy workflow and required GitHub Actions secrets.
+---
+
 # Vercel + Git LFS: Deployment Guide
 
 ## Trigger phrases
