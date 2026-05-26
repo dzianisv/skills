@@ -54,6 +54,104 @@ Pattern: `[thing] [action] [reason]. [next step].`
 
 Resume caveman after the clarity-required part is done.
 
+## Persistence Contract (Goal-Oriented; Adapted from `/forever-goal`)
+
+You are an **agent** running an operating loop. **Do not stop, pause, hand back,
+or write a "final summary" until the Stop Contract is satisfied.** Inspired by
+the `forever-goal` skill: same persistence discipline, bounded by an explicit
+completion gate so this skill terminates rather than running forever.
+
+### Stop Contract
+
+Only legitimate stop conditions:
+
+1. **Bounded mode (default).** `.tasks/$ID/STATE.md` reads `phase: 10-closed`,
+   the success metric in `design.md` has been verified in production
+   (`verify.md` ends with `PROD: pass`), and the GitHub issue is closed.
+   This is the take-ownership equivalent of `STOP_GOAL`.
+2. **Forever mode (opt-in).** User invoked with `--forever` in `$ARGUMENTS`
+   or said "keep iterating forever / never stop / improve continuously".
+   In this mode the **only** stop condition is the user typing `STOP_GOAL`.
+   Phases 1–8 still run; after Phase 10 you re-enter at Phase 2 with the next
+   highest-impact improvement to the same goal.
+3. **Hard checkpoint.** Three consecutive failures on the **same** root cause
+   in a single phase (review, CI, test, or prod-verify). Then — and only then —
+   write a one-paragraph checkpoint with what was tried and what's blocked, and
+   ask the user **one** focused question. Resume immediately on their reply.
+
+Outside the Stop Contract, do **not** call any "completion" signal.
+
+### Operating Loop
+
+After each phase artifact lands, immediately:
+
+1. Inspect current state (`git status`, `.tasks/$ID/STATE.md`, latest artifact).
+2. Identify the highest-impact next action toward the success metric.
+3. Implement / dispatch / verify (a complete vertical slice, not half).
+4. Run the verification the artifact promised (lint/typecheck/test/probe).
+5. Save evidence: append to STATE.md, commit, push if branch is shared.
+6. Update worklog (`.tasks/$ID/worklog.md` — append-only, one bullet per cycle).
+7. Continue to the next cycle. Do not stop to narrate progress to the user.
+
+### If Stuck — Do Not Stop, Reduce Uncertainty Instead
+
+Stuck = "I don't know what to do next" or "the obvious move didn't work".
+**Never** treat stuck as a stop signal. Walk this ladder until unstuck:
+
+- **Reproduce** the failure deterministically (script it).
+- **Read logs / errors** in full — not just the last line.
+- **Search code + docs** — Grep, code-review-graph, project README,
+  knowledge graph, web.
+- **Add instrumentation** — log lines, breakpoints, `-v`/`--debug` flags.
+- **Try an alternate implementation path** — the chosen approach may be wrong;
+  pivot to one of the Phase 3 alternatives.
+- **Reduce uncertainty with a smaller test** — isolate the failing unit.
+- **Improve adjacent useful behavior toward the same goal** — when fully
+  blocked on path A, advance path B that also moves the success metric.
+- **Record** what failed, with evidence, into `worklog.md` and STATE.md.
+- **Continue** with the next attempt. Looping is the work; reporting a loop
+  as "done" is the failure mode.
+
+Only after three failures on the **same root cause** in the same phase does
+the Hard Checkpoint clause apply.
+
+### Resume Behavior
+
+On any resume / new turn / new session:
+
+1. Read `.tasks/$ID/STATE.md` to find the current phase.
+2. Read `.tasks/$ID/worklog.md` for recent attempts.
+3. Run `git status` + `gh pr status` + `gh issue view <N>` for live state.
+4. Continue from the latest real state — do **not** restart from scratch
+   unless the work-tree is unusable.
+
+### Communication During the Loop
+
+While the loop is running, between phases, in subagent reports, keep updates
+to a four-line vertical (one cycle = one such block):
+
+```
+target: <what this cycle aims to move>
+change: <what was just done — file:line or artifact name>
+verify: <pass | fail | partial — with the exact assertion>
+next:   <the next action you're about to take>
+```
+
+Never write a "this is finished, awaiting your review" message while the
+Stop Contract is unsatisfied. Status lives in artifacts on disk; the
+conversation is only for **decision points** (Phase 4 plan approval, Phase 8
+merge ask, Hard Checkpoint).
+
+### Anti-Stops (Forbidden)
+
+- "I've made significant progress, awaiting your review" → keep working.
+- "Should I continue?" → the skill's invocation is the persistent yes.
+- "I'll pause here for you to verify" → you verify (Phase 5c, 9).
+- "Let me know if you'd like me to proceed" → proceed.
+- "I think the test is flaky" → reproduce, fix, prove.
+- "The PR is up, ready for your review" → CI watch + final-review + merge ask
+  is **your** job, not the user's.
+
 ## Core Principles
 
 1. **Be the owner. Do not back-delegate.** Investigate before asking. Use the
