@@ -152,6 +152,112 @@ merge ask, Hard Checkpoint).
 - "The PR is up, ready for your review" → CI watch + final-review + merge ask
   is **your** job, not the user's.
 
+## Alpha Mode (`--alpha`) — Fully Autonomous, Zero Questions
+
+**Trigger:** `$ARGUMENTS` contains `--alpha`, OR user said "alpha mode",
+"autopilot", "yolo it", "no questions", "decide everything yourself",
+"don't ask me".
+
+**Effect:** every `AskUserQuestion` gate in this skill is **disabled**.
+You decide, you log, you proceed. The user gets a finished PR + verified
+prod + a `decisions.md` audit trail. No mid-flight prompts.
+
+### What gets auto-decided (no ask)
+
+| Gate | Alpha behavior |
+|------|----------------|
+| Phase 2 fuzzy success metric | Pick the most measurable interpretation that's consistent with the issue body. Log in decisions.md. |
+| Phase 3 design ambiguity | Pick the design that minimizes risk to existing flows + matches house style. Log alternatives + rejection rationale. |
+| Phase 4 plan approval ("Reply 'go'") | **SKIP THE ASK.** Tradeoff defaults to `balanced`. Log the tradeoff choice + 2 alternatives considered. Proceed directly to Phase 5. |
+| Phase 8 merge ask | **SKIP THE ASK.** Run the branch-protection check exactly as documented; honour `--auto` / synchronous-merge rules. Log the merge decision + why squash vs rebase vs merge. **The safety dance (state target, semantics, branch-delete behaviour) still runs — just in writing in decisions.md, not in a question to the user.** |
+| Hard Checkpoint (3× same root cause) | **Skip the ask.** Treat as a STOP_GOAL only if alpha _and_ forever modes both off. Otherwise: log the impasse + next pivot, then continue the If-Stuck ladder. |
+| Any other `AskUserQuestion` call you'd be tempted to make | Decide. Log. Proceed. |
+
+### What still requires user contact (hard exits)
+
+Alpha is "no questions", not "no safety". You still **abort + surface to user**
+(not ask — surface, with a one-line "ABORTED: <reason>; see decisions.md") if:
+
+- A blocker requires the user's physical presence (hardware key, in-person
+  approval, TOTP not in Bitwarden).
+- The action would violate this skill's hard rules: force-push to
+  `main`/`master`/`release/*`, secret value pasted in subagent text, amend
+  of a published commit, `--no-verify` to skip a failing hook.
+- Branch protection requires PR review by a specific human and the human
+  hasn't reviewed.
+- A destructive prod-data action (drop table, truncate, delete prod bucket,
+  revoke shared credential) is the next step — alpha never auto-runs these.
+
+### Decisions Log Format — `.tasks/$ID/decisions.md`
+
+Append-only. One entry per skipped ask OR per non-obvious internal choice.
+Newest at the top.
+
+```markdown
+## D-NNN — <short title>
+- phase: <1-issue | 4-plan | 8-merge | 5-impl | 9-verify | ...>
+- timestamp: <ISO>
+- question: <the question that would have been asked, in plain English>
+- decision: <what you chose>
+- reasoning: <why — 1-3 sentences, citing evidence file:line or doc URL>
+- alternatives:
+  - "<alt 1>" → rejected: <one-line why>
+  - "<alt 2>" → rejected: <one-line why>
+- evidence: <files read / commands run / graph queries — the inputs that
+  drove the decision>
+- reversibility: <reversible | hard-to-reverse | irreversible>
+- confidence: <high | medium | low>
+```
+
+Rules:
+
+- **Every** skipped ask gets an entry. No exceptions.
+- **Every** non-obvious internal choice (model selection, design pivot,
+  rollback trigger, dependency add, framework adoption) gets an entry.
+- **Two alternatives minimum.** "There were no alternatives" is almost always
+  laziness — surface the ones you discarded mentally.
+- **Confidence ≠ certainty.** Low-confidence entries are still OK if logged
+  honestly; they're the audit trail for "why we shipped X and it broke".
+- If a decision is reversed later in the loop (Phase 5b review forces a
+  redesign), file a new `D-NNN` referencing the original and explain the
+  reversal — never edit the prior entry.
+
+### Worked Example
+
+```markdown
+## D-007 — squash-merge over rebase
+- phase: 8-merge
+- timestamp: 2026-05-26T17:42:11Z
+- question: which merge strategy?
+- decision: squash + delete-branch
+- reasoning: project history (git log main -20) shows 100% squash commits;
+  matches house style. PR has 9 fix-up commits not worth preserving.
+- alternatives:
+  - "rebase + merge" → rejected: would dirty linear history with WIP commits
+  - "merge commit"   → rejected: no merge-commit convention in repo
+- evidence: `git log origin/main --oneline -20`,
+  `.github/pull_request_template.md` references squash
+- reversibility: hard-to-reverse (would need force-push to recover commits)
+- confidence: high
+```
+
+### Mode Stacking
+
+`--alpha` is independent of `--forever`. Both can be set:
+
+| Flags | Behaviour |
+|-------|-----------|
+| (none) | Bounded mode + asks at gates (default — safest). |
+| `--alpha` | Bounded mode, zero asks, full decision log. **Default for unattended runs.** |
+| `--forever` | Loops past Phase 10, only `STOP_GOAL` halts. Still asks at gates. |
+| `--alpha --forever` | Pure autopilot — runs the operating loop indefinitely, decides everything, only `STOP_GOAL` halts. **Highest risk; use only when user explicitly authorizes.** |
+
+### Cross-reference: Forbidden Ask-Shapes
+
+The list under "When to Ask the User vs. Decide Yourself" gets stricter in
+alpha — **everything** is a forbidden ask-shape. Translate every would-be
+question into a `D-NNN` entry instead.
+
 ## Core Principles
 
 1. **Be the owner. Do not back-delegate.** Investigate before asking. Use the
