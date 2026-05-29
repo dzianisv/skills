@@ -44,31 +44,42 @@ so these can be added later without rework.
 
 ## Architecture
 
-Persistent daemon model (chosen over stateless approaches because autoConnect fires Chrome's
-permission dialog on **every new debugger client** — a daemon makes it fire **once per
-daemon lifetime**, which `my-browser` already proved is the only livable option).
+**Transparent CDP proxy + client-side logic.** A persistent connection-holder is required
+because autoConnect fires Chrome's permission dialog on **every new debugger client** — so all
+traffic funnels through one long-lived connection (the dialog fires **once per proxy
+lifetime**, as `my-browser` proved). But that process is a *dumb relay*: it forwards raw CDP
+frames and holds no command logic. **All request payloads (snapshot walker, selector queries,
+input event sequences, command parsing) are built client-side in the CLI.**
 
 ```
-Chrome (real profile) ──WS/CDP──▶ chrome-use-daemon (Unix socket; holds CDP conn + session state)
-                                       ▲
-                              chrome-use (cli.ts; one-shot; auto-starts daemon; parses argv)
+Chrome (real profile) ──WS/CDP──▶ chrome-use proxy (Unix socket; transparent CDP relay)
+                                       ▲   holds the single approved connection
+                              chrome-use (cli.ts; one-shot; ALL command logic + payloads)
 ```
+
+Key payoff: because command behavior lives in the CLI (a fresh process per invocation), it can
+change without restarting the proxy — so the approval prompt is never re-triggered during normal
+iteration. State that must outlive a one-shot CLI process lives outside it: the active-tab
+pointer is a file (`/tmp/chrome-use-active-<uid>`), and `@eN` refs live in the page
+(`window.__chromeUseRefs`), persisting across invocations and resetting on navigation. Page
+sessions are attached lazily (only the touched tab) and detached when the command finishes.
 
 ### Components (each independently testable)
 
 | File | Responsibility | Depends on |
 |------|----------------|------------|
 | `lib/devtools-port.ts` | Locate & parse `DevToolsActivePort` per-OS; build `ws://` endpoint | — |
-| `lib/cdp.ts` | Zero-dep CDP client over global `WebSocket`: request/response id matching, event subscription, target/session attach | `WebSocket` |
-| `lib/types.ts` | Shared types: `Command`, `CommandResult`, `Session`, CDP shapes | — |
-| `lib/session.ts` | Per-tab session: active target, CDP session id, snapshot ref registry (`@eN` → backendNodeId) | `cdp.ts` |
-| `lib/selectors.ts` | Resolve `@e1` (registry), CSS (`#id`/`.cls`/…), `text=…` → backendNodeId/objectId | `session.ts`, `cdp.ts` |
-| `lib/snapshot.ts` | Injected DOM/AX walk → indented ref tree; registers `@eN` → element | `cdp.ts`, `session.ts` |
-| `lib/input.ts` | Trusted input helpers: box → `Input.dispatchMouseEvent`; `Input.insertText` + `Input.dispatchKeyEvent` | `cdp.ts` |
-| `daemon.ts` | Owns single CDP connection (one dialog), tracks active tab + registries, dispatches commands, auto-daemonizes (double-fork) | all `lib/*` |
-| `cli.ts` | argv → `Command` → Unix socket → print result; auto-starts daemon (`ensureDaemon`) | `lib/types.ts` |
-| `commands/*.ts` | One handler per command group, registered into a dispatch map | `lib/*` |
-| `chrome-use` | Shell shim: `exec node "$DIR/cli.ts" "$@"` | — |
+| `lib/cdp.ts` | Zero-dep CDP client over global `WebSocket` (used by the proxy): id matching, target/session attach | `WebSocket` |
+| `lib/proxy-client.ts` | `CdpClient` that forwards raw CDP frames over the Unix socket to the proxy (used by the CLI) | `lib/types.ts` |
+| `lib/types.ts` | Shared types: `Command`, `CommandResult`, `BrowserState`, `Ctx`, CDP shapes | — |
+| `lib/session.ts` | Client-side `BrowserState`: lazy attach, file-backed active-tab pointer, tab list | `cdp client`, fs |
+| `lib/selectors.ts` | Resolve `@e1` (page-side `window.__chromeUseRefs`), CSS, `text=…` → objectId | `cdp client` |
+| `lib/snapshot.ts` | Injected DOM walk → indented ref tree; installs `window.__chromeUseRefs` in the page | `cdp client` |
+| `lib/input.ts` | Trusted input helpers: box → `Input.dispatchMouseEvent`; `insertText` + `dispatchKeyEvent` (+ editor commands) | `cdp client` |
+| `proxy.ts` | Transparent relay: holds the single approved CDP connection (one dialog), forwards raw frames, auto-daemonizes (double-fork) | `cdp.ts`, `devtools-port.ts` |
+| `cli.ts` | argv → dispatch command handler **in-process**; auto-starts proxy; opens `proxy-client`; prints result | `lib/*`, `commands/*` |
+| `commands/*.ts` | One handler per command group, run client-side; build raw CDP payloads | `lib/*` |
+| `chrome-use` | Shell shim: `exec node "$DIR/scripts/cli.ts" "$@"` | — |
 
 ### Selector resolution
 
