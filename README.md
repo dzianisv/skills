@@ -20,6 +20,8 @@ agent when to load it.
 | [`readiness-check`](skills/readiness-check) | Verify all OpenCode plugin services (Whisper, TTS, Supabase, Telegram, etc.) are healthy and ready. |
 | [`vercel-lfs`](skills/vercel-lfs) | Deploy a site with Git LFS assets (videos, images) to Vercel without serving 15-byte pointer files. Covers the prebuilt-deploy workflow and required GitHub secrets. |
 | [`skills-sh`](skills/skills-sh) | Publish, register, and troubleshoot skills on [skills.sh](https://www.skills.sh), the public agent-skills directory. |
+| [`opencode-api`](skills/opencode-api) | Control OpenCode through the REST API exposed by `opencode serve`. Sessions, prompts, SSE events, permissions, and automation. |
+| [`google-workspace-cli`](skills/google-workspace-cli) | Interact with all Google Workspace APIs (Drive, Gmail, Calendar, Sheets, Docs, Chat, etc.) via the `gws` CLI. |
 
 ## Install
 
