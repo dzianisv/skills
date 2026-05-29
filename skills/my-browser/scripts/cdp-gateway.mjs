@@ -1,44 +1,30 @@
 #!/usr/bin/env node
 /**
- * CDP autoConnect gateway.
+ * CDP autoConnect gateway — runs as a daemon by default.
  *
  * Connects to Chrome ONCE via DevToolsActivePort (triggers dialog once),
  * keeps that connection alive, and serves tool commands over a Unix socket.
  * No new browser connections per request = no repeated Chrome dialogs.
  *
- * Exits immediately if another instance is already running on the same socket.
+ * Daemonizes automatically (double-fork) unless CDP_GATEWAY_NO_DAEMON=1.
+ * Exits with code 0 if another instance is already running on the same socket.
  *
  * Usage:
  *   node cdp-gateway.mjs [channel] [userDataDir]
  *   Examples:
- *     node cdp-gateway.mjs              # stable Chrome, default profile
+ *     node cdp-gateway.mjs              # stable Chrome, daemonizes
  *     node cdp-gateway.mjs canary       # Chrome Canary
- *     node cdp-gateway.mjs stable /path/to/profile
+ *     CDP_GATEWAY_NO_DAEMON=1 node cdp-gateway.mjs  # foreground
  *
  * Socket: /tmp/cdp-gateway-<uid>.sock  (overridable via CDP_GATEWAY_SOCKET env)
  * Requires: npm install puppeteer
- *
- * Command protocol — send one JSON line per connection, receive one JSON line:
- *   {"method":"status"}
- *   {"method":"list_pages"}
- *   {"method":"new_page","url":"https://..."}
- *   {"method":"navigate","url":"https://..."}              (uses active page)
- *   {"method":"navigate","url":"https://...","index":2}   (by page index)
- *   {"method":"eval","expression":"document.title"}
- *   {"method":"eval","expression":"...","index":0}
- *   {"method":"get_text"}
- *   {"method":"get_text","index":0}
- *   {"method":"screenshot"}                                (returns base64)
- *   {"method":"screenshot","filePath":"/tmp/s.png"}
- *   {"method":"screenshot","index":0}
- *   {"method":"close_page","index":0}
- *   {"method":"stop"}
  */
 import puppeteer from 'puppeteer';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import net from 'node:net';
+import { spawn } from 'node:child_process';
 
 const SOCKET_PATH = process.env.CDP_GATEWAY_SOCKET
   ?? `/tmp/cdp-gateway-${os.userInfo().uid}.sock`;
@@ -257,8 +243,25 @@ const [,, channel = 'stable', userDataDir] = process.argv;
 
 const alreadyRunning = await checkAlreadyRunning();
 if (alreadyRunning) {
-  log(`Another instance is already running on ${SOCKET_PATH}. Exiting.`);
-  process.exit(1);
+  // Exit 0 — not an error, gateway is healthy
+  process.exit(0);
+}
+
+// ── Daemonize (double-fork) unless already a daemon or disabled ───────────────
+const isDaemon  = process.env.CDP_GATEWAY_DAEMON  === '1';
+const noDaemon  = process.env.CDP_GATEWAY_NO_DAEMON === '1';
+
+if (!isDaemon && !noDaemon) {
+  // Spawn a detached child that IS the daemon, then exit the parent immediately.
+  const child = spawn(process.execPath, process.argv.slice(1), {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, CDP_GATEWAY_DAEMON: '1' },
+  });
+  child.unref();
+  // Give the daemon ~100 ms to write the socket then exit cleanly.
+  await new Promise(r => setTimeout(r, 100));
+  process.exit(0);
 }
 
 startServer(channel, userDataDir);
