@@ -14,6 +14,7 @@ agent when to load it.
 
 | Skill | What it does |
 |-------|--------------|
+| [`my-browser`](skills/my-browser) | Control your real running Chrome (live sessions, cookies, auth) via a persistent Puppeteer gateway using autoConnect mode. No `--remote-debugging-port` needed. |
 | [`own`](skills/own) | Take full ownership of a task end-to-end: issue → design → plan → implement → review → real-feature test → PR → CI → final review → merge ask. Forbids back-delegation to the user when a tool or credential store can resolve the blocker. |
 | [`duckdns-domain`](skills/duckdns-domain) | Register a free DuckDNS subdomain and point it at a server IP via Chrome DevTools browser automation. Useful when you need a public DNS name for a dev server and no managed DNS is available. |
 | [`readiness-check`](skills/readiness-check) | Verify all OpenCode plugin services (Whisper, TTS, Supabase, Telegram, etc.) are healthy and ready. |
