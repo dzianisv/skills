@@ -141,6 +141,19 @@ File format: two lines — port number, then WebSocket path:
 | `/json/version` connection refused | Expected in autoConnect mode | Use `DevToolsActivePort` + direct WebSocket; do not curl the HTTP API |
 | Another debugger attached error | DevTools panel open on the same tab | Close DevTools panels / disconnect other debuggers |
 
+## Testing
+
+A zero-dependency golden eval suite lives in `scripts/test/`. It launches a throwaway
+headless Chrome (no approval dialog) + a local fixture server and drives the real CLI:
+
+```bash
+cd scripts && npm test     # or: node --test test/unit.test.ts test/evals.test.ts
+```
+
+8 unit tests (argv/port/selector parsing) + 20 end-to-end golden cases (open, snapshot
+`@e1` trees, click/fill/type/press, selectors, get, screenshot, eval, wait, tabs,
+cookies). See `scripts/test/README.md`.
+
 ## Do NOT
 
 - Kill or restart a **healthy proxy** — it forces a new Chrome permission dialog. The CLI probes and reuses it automatically. (Changing *command* logic does not require a proxy restart — only changes to `proxy.ts` do.)

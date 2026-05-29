@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Dynamic Fixture</title></head>
+<body>
+  <h1>Dynamic</h1>
+  <div id="host"></div>
+  <button id="nav" onclick="setTimeout(() => { location.href = '/content.html'; }, 300)">Navigate soon</button>
+  <script>
+    // Appears ~600ms after load — exercises `wait <selector>` and `wait --text`.
+    setTimeout(() => {
+      const el = document.createElement('p');
+      el.id = 'ready';
+      el.textContent = 'Loaded marker';
+      document.getElementById('host').appendChild(el);
+    }, 600);
+  </script>
+</body>
+</html>

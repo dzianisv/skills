@@ -1,1 +1,7 @@
-{ "type": "module", "private": true }
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/unit.test.ts test/evals.test.ts"
+  }
+}

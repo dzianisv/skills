@@ -66,7 +66,11 @@ function ensureConnected(): Promise<void> {
   if (cdp?.connected) return Promise.resolve();
   if (connecting) return connecting;
   connecting = (async () => {
-    const ws = buildWsEndpoint();
+    // CHROME_USE_WS_ENDPOINT / CHROME_USE_USER_DATA_DIR let tests (and advanced
+    // users) point the proxy at a specific Chrome instead of the default profile.
+    const ws =
+      process.env.CHROME_USE_WS_ENDPOINT ||
+      buildWsEndpoint('stable', process.env.CHROME_USE_USER_DATA_DIR || undefined);
     log(`Connecting to ${ws}`);
     log('Chrome shows a one-time "Allow remote debugging?" dialog — click Allow (waits up to 5 min).');
     cdp = await Cdp.connect(ws, 300_000);
