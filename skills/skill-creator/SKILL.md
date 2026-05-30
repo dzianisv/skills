@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Create, edit, improve, audit, OR discover existing agent skills. Use when creating a new skill from scratch, improving/auditing an existing one, restructuring a skill dir, OR when the user asks "is there a skill for X", "find a skill", "how do I do X with a skill". Triggers: "create a skill", "author a skill", "tidy up a skill", "improve this skill", "review the skill", "audit the skill", "find a skill for X", "is there a skill that can…", "search skills.sh", "extend my capabilities".
+description: 'Create, edit, improve, audit, OR discover existing agent skills. Use when creating a new skill from scratch, improving/auditing an existing one, restructuring a skill dir, OR when the user asks "is there a skill for X", "find a skill", "how do I do X with a skill". Triggers: "create a skill", "author a skill", "tidy up a skill", "improve this skill", "review the skill", "audit the skill", "find a skill for X", "is there a skill that can…", "search skills.sh", "extend my capabilities".'
 ---
 
 # Skill Creator (+ Discovery)

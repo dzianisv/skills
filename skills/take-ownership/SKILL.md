@@ -54,6 +54,101 @@ Pattern: `[thing] [action] [reason]. [next step].`
 
 Resume caveman after the clarity-required part is done.
 
+## Definition of Done — Hardening Rules (READ FIRST)
+
+These rules override anything below them. They exist because past runs
+shipped code, declared "complete," and were proven wrong when the user
+tested through the actual user-facing channel. Treat each rule as a gate;
+violating one = task is not done.
+
+### R1. Write the user's success metric BEFORE Phase 1
+
+Before opening an issue, write one sentence to `.tasks/$ID/success.md`:
+
+> Task is done when **`<exact command/action the USER would run>`** produces
+> **`<exact observable result>`** in **`<the real user-facing channel>`**.
+
+Examples — note the channel anchoring:
+
+- ❌ "skill is registered in openclaw.json"
+- ❌ "API `/v1/responses` returns the skill name"
+- ❌ "unit tests pass" / "CI green"
+- ✅ "DM `@OpenClawBoxBot` 'isolate this group' from Telegram and within 60s
+   the bot replies with the new agentId and a binding diff"
+- ✅ "open the deployed URL in a fresh browser, click Login, observe redirect
+   to dashboard"
+
+If you cannot write R1 with a real channel, ask the user **once** — this is
+the only ask allowed before Phase 1. After that, R1 is law.
+
+### R2. Verification Ladder — never skip the top rung
+
+```
+unit test  →  internal API  →  production internal  →  REAL USER-FACING CHANNEL
+                                                       (the R1 channel — REQUIRED)
+```
+
+You may add lower rungs for speed. You may **never** call the task done at
+a lower rung. If the top rung is blocked (auth, network, infra) — **fix the
+infra**. Do not redefine "done" downward.
+
+Smell-test phrases that mean you're cheating: "API-level proof is
+sufficient," "internal verification is enough," "the real channel test is
+flaky so I'll trust the unit tests," "the success metric is met *in
+principle*."
+
+### R3. Post-deploy hygiene — runtime user must read your bytes
+
+After every `scp`, `rsync`, `docker cp`, remote `cat >`, or any path that
+puts files where a service will load them, you MUST:
+
+1. `ls -la <path>` on the target — record owner, group, mode.
+2. Confirm runtime user can read it: `sudo -u <runtime_user> cat <path>
+   >/dev/null && echo OK` (or container exec equivalent).
+3. Tail the service log for a positive "loaded" line, not just "no error."
+
+Common gotcha: `scp` writes as the SSH user (often root); the service runs
+as `node` / `www-data` / container UID. Always `chown -R <runtime_user>:`
+the deployed tree before restart.
+
+### R4. `task_complete` (or any "done" tool) is BANNED unless ALL true
+
+- R1 success metric was executed in the real channel **this turn or last**.
+- The exact output is pasted verbatim in the completion summary.
+- No `error`, `not found`, `permission denied`, `unauthorized`, `❌`, or
+  `<exited with code [1-9]>` appears in the last 20 tool results without
+  explicit resolution.
+
+**If the user asks "did you complete it?" — the answer is no.** They are
+asking because they already saw evidence it isn't done. Re-run the R1
+metric end-to-end before answering. Do not list phases that "passed." Do
+not list checkboxes. Run the real channel test, paste the output, then
+answer.
+
+### R5. Honest status vocabulary
+
+| Word        | Means                                                |
+|-------------|------------------------------------------------------|
+| Shipped     | Code merged.                                          |
+| Deployed    | Bytes are on the target machine.                      |
+| Loaded      | The runtime process sees it (positive log evidence).  |
+| Verified    | R1 metric was observed succeeding in the R1 channel.  |
+| Complete    | All four above, plus no follow-up needed.             |
+
+Never use "verified" for "loaded." Never use "complete" for "verified once
+through the wrong channel." Never write "fully verified E2E" unless the E
+ends at the R1 channel.
+
+### R6. Bash failure recognition
+
+`Command not executed`, `entity not found`, exit code ≥ 1, or unexpectedly
+empty output = **stop and diagnose**. After **two** failed retries on the
+same command class: read the tool's source, list available entities, or
+check assumptions about ids/paths/escaping. Do not try a third syntactic
+variant of the same command.
+
+---
+
 ## Persistence Contract (Goal-Oriented; Adapted from `/forever-goal`)
 
 You are an **agent** running an operating loop. **Do not stop, pause, hand back,
@@ -151,6 +246,11 @@ merge ask, Hard Checkpoint).
 - "I think the test is flaky" → reproduce, fix, prove.
 - "The PR is up, ready for your review" → CI watch + final-review + merge ask
   is **your** job, not the user's.
+- **"API-level proof is sufficient"** → no. R2 ladder. Run R1 channel.
+- **"Mostly yes, but with a caveat"** when the user asks "did you complete?"
+  → no. The caveat IS the answer. Stop talking, re-run R1, paste output.
+- **"Task is fully verified E2E ✅" without R1-channel evidence in the same
+  turn** → forbidden. Show the R1 command and its output, or do not claim it.
 
 ## Autopilot (`--autopilot`)
 
@@ -281,12 +381,12 @@ inside `.tasks/$ID/design.md` (you'll expand it in Phase 3):
 ## Goal
 <what the world looks like after this ships>
 
-## Success Metric
-<one measurable signal. Examples:
- - "feature X works end-to-end in browser test Y"
- - "CI pass rate on Z suite returns to ≥99%"
- - "p95 latency on endpoint /foo drops below 200ms"
- - "manual smoke per protocol .tasks/$ID/smoke.md passes">
+## Success Metric (R1 — copy verbatim from .tasks/$ID/success.md)
+Task is done when **`<exact command/action the USER would run>`** produces
+**`<exact observable result>`** in **`<real user-facing channel>`**.
+
+(NOT "CI green," NOT "unit tests pass," NOT "API returns 200." Anchor in
+the channel the user would actually touch.)
 
 ## Out of Scope
 <things adjacent but not in this task>
@@ -517,21 +617,29 @@ Update STATE: `phase: 5b-pass` or `phase: 5b-loop-N`.
 ## Phase 5c — Real Feature Testing (subagent)
 
 **No unit tests with mocks count as feature tests.** Unit tests are nice as a
-side-effect; they are not the bar. The bar is: the real feature works against
-the real system.
+side-effect; they are not the bar. The bar is: **R1 succeeds in the R1 channel.**
 
-Decide the testing modality from a tree:
+R2 ladder applies. You may run lower-rung tests first, but the **top rung —
+the R1 channel — is required**. The phase is not passable without it.
 
-- **CLI / library / API endpoint** → write a `pytest` / `vitest` integration
-  test that hits a real test instance (sandboxed DB, real network if safe, no
-  mocks of the unit under test).
-- **UI / web app** → spawn a Computer-Use or `agent-browser` subagent to drive
-  the real browser through the feature.
-- **Background job / cron / queue** → enqueue a real message, observe real
-  effect (DB row, file, downstream call).
-- **Multi-step protocol that's hard to automate** → write a short test skill
-  (`testing-protocol.md` in `.tasks/$ID/`) and have a subagent execute the
-  protocol while logging each step.
+Decide the testing modality from a tree, then **always cap with the R1
+channel test**:
+
+- **CLI / library / API endpoint** → integration test against a real
+  instance — **AND** end-to-end probe via the deployed endpoint the user
+  would call.
+- **UI / web app** → drive the real browser at the production URL via
+  Computer-Use / `agent-browser`. Screenshot the final state.
+- **Background job / cron / queue** → enqueue a real message **from the
+  same producer the user would use** (not a synthetic test producer).
+- **Channel-bound bot / agent** (Telegram, Slack, Discord, WhatsApp) →
+  **the R1 channel test is sending a message via that channel as a real
+  user and observing the bot's reply.** Internal `/v1/responses` or
+  webhook-simulator probes are NOT a substitute. They are diagnostic
+  scaffolding; they prove the unit, not the feature.
+- **Multi-step protocol that's hard to automate** → write a short test
+  protocol (`testing-protocol.md` in `.tasks/$ID/`) and execute it,
+  logging each step.
 
 Write `.tasks/$ID/test-plan.md`:
 ```markdown
@@ -693,8 +801,26 @@ After merge:
 ## Phase 9 — Post-Merge Production Verification
 
 **CI green ≠ done.** Done = the runtime path the issue claims to fix is
-proven working in prod. Many "fixed" PRs revealed broken pods only after
-merge because no one looked at the live system.
+proven working in prod through the R1 channel. Many "fixed" PRs revealed
+broken pods only after merge because no one looked at the live system.
+
+**Mandatory pre-verify deploy hygiene check (R3)** — before the verifier
+even runs the R1 metric, do this on the live target:
+
+```bash
+# 1. Confirm bytes landed where the runtime user can read them.
+ssh <target> 'ls -la <deployed_path>'
+# 2. Confirm the runtime user (often not your SSH user) can actually read.
+ssh <target> 'sudo -u <runtime_user> cat <deployed_path> >/dev/null && echo OK'
+# 3. Confirm the runtime PROCESS loaded it (positive log evidence).
+ssh <target> 'journalctl -u <service> -n 200 | grep -iE "loaded|registered|<artifact_name>"'
+```
+
+If any of the three fails — fix the deploy (most often `chown -R
+<runtime_user>:<runtime_user> <path>` + service restart), then re-run all
+three. Do NOT proceed to the R1 channel test until all three are green;
+running the R1 test against a half-deployed system wastes time and
+produces a false negative.
 
 Spawn a verifier subagent (cross-link: this is the dedicated
 `post-merge-verify` workflow):

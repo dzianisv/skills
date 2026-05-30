@@ -1,6 +1,6 @@
 ---
 name: bitwarden-cli
-description: Use when storing, retrieving, listing, or organizing secrets in Bitwarden using the bw CLI. Triggers on: "store a secret", "get the password for", "save credentials", "list vault items", "create a folder in Bitwarden", "read from Bitwarden", "load API key from vault".
+description: 'Use when storing, retrieving, listing, or organizing secrets in Bitwarden using the bw CLI. Triggers on: "store a secret", "get the password for", "save credentials", "list vault items", "create a folder in Bitwarden", "read from Bitwarden", "load API key from vault".'
 ---
 
 # bitwarden-cli
@@ -81,8 +81,12 @@ bw list items --session "$BW_SESSION" | jq '[.[] | {id, name, type}]'
 # Search by name
 bw list items --search "github" --session "$BW_SESSION" | jq '[.[] | {id, name}]'
 
-# List folders
-bw list folders --session "$BW_SESSION" | jq '[.[] | {id, name}]'
+# List collections (org)
+bw list collections --session "$BW_SESSION" | jq '[.[] | {id, name}]'
+
+# Items in a specific collection
+COLL_ID=$(bw list collections --session "$BW_SESSION" | jq -r '.[] | select(.name=="openclawbot") | .id')
+bw list items --collectionid "$COLL_ID" --session "$BW_SESSION" | jq '[.[] | {id, name, type}]'
 ```
 
 Types: `1`=Login, `2`=SecureNote, `3`=Card, `4`=Identity
@@ -122,21 +126,30 @@ bw get template item.login \
   | bw encode | bw create item --session "$BW_SESSION" | jq '{id, name}'
 ```
 
-**Specific folder** — get folder ID first, add `--folderid`:
+**Into a collection (org)** — resolve collection + org IDs first:
 ```bash
-FOLDER_ID=$(bw list folders --session "$BW_SESSION" | jq -r '.[] | select(.name=="MyProject") | .id')
+ORG_ID=$(bw list organizations --session "$BW_SESSION" | jq -r '.[0].id')
+COLL_ID=$(bw list collections --organizationid "$ORG_ID" --session "$BW_SESSION" \
+  | jq -r '.[] | select(.name=="openclawbot") | .id')
+
+# Create secure note in the collection
 bw get template item.secureNote \
-  | jq --arg n "DB_PASSWORD" --arg v "s3cr3t" --arg f "$FOLDER_ID" \
-    '.name=$n | .notes=$v | .folderId=$f' \
-  | bw encode | bw create item --session "$BW_SESSION"
+  | jq --arg n "CRYPTO_CALLBACK_SECRET" --arg v "my-secret-value" \
+       --arg org "$ORG_ID" --argjson colls "[\"$COLL_ID\"]" \
+    '.name=$n | .notes=$v | .organizationId=$org | .collectionIds=$colls' \
+  | bw encode | bw create item --session "$BW_SESSION" | jq '{id, name}'
 ```
 
-## Create a folder
+> **Note:** Items in org collections require `organizationId` AND `collectionIds` array.
+> Personal vault items use folders; shared/project secrets use org collections.
+
+## Create a collection (org)
 
 ```bash
-FOLDER_ID=$(echo '{"name":"MyProject"}' \
-  | bw encode | bw create folder --session "$BW_SESSION" | jq -r '.id')
-echo "Folder ID: $FOLDER_ID"
+ORG_ID=$(bw list organizations --session "$BW_SESSION" | jq -r '.[0].id')
+# Create collection in the org
+echo "{\"name\":\"openclawbot\",\"organizationId\":\"$ORG_ID\"}" \
+  | bw encode | bw create org-collection --organizationid "$ORG_ID" --session "$BW_SESSION" | jq '{id, name}'
 ```
 
 ## Update an item

@@ -1,6 +1,6 @@
 ---
 name: skills-sh
-description: Use when publishing, registering, or troubleshooting skills on skills.sh — the agent skills directory. Triggers on: "publish skill to skills.sh", "my skill doesn't appear on skills.sh", "how to list skill on skills.sh", "skill shows 0 on website", "request indexing skills.sh".
+description: 'Use when publishing, registering, or troubleshooting skills on skills.sh — the agent skills directory. Triggers on: "publish skill to skills.sh", "my skill doesn''t appear on skills.sh", "how to list skill on skills.sh", "skill shows 0 on website", "request indexing skills.sh".'
 ---
 
 # skills-sh

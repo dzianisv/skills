@@ -1,8 +1,8 @@
 ---
 name: no-github-backlog
 description: Drain a GitHub issue backlog autonomously. Spawns isolated subagents per issue across 7 stages (investigate, implement, review, security-review, qa, fix, merge), logs every stage to backlog.csv. Use when user asks to clear, drain, close, or resolve an issue backlog.
-argument-hint: [owner/repo] [optional filter, e.g. "state:open label:bug"]
-allowed-tools: Bash(gh *) Bash(git *) Bash(mkdir *) Bash(printf *) Bash(date *) Bash(flock *) Bash(jq *) Read Write Edit Grep Glob
+argument-hint: '[owner/repo] [optional filter, e.g. "state:open label:bug"]'
+allowed-tools: 'Bash(gh *) Bash(git *) Bash(mkdir *) Bash(printf *) Bash(date *) Bash(flock *) Bash(jq *) Read Write Edit Grep Glob'
 ---
 
 # no-github-backlog
