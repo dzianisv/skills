@@ -67,6 +67,7 @@ Tabs & cookies:
 
 Other:
   status                          proxy + browser health
+  stop                            stop the proxy (next command reconnects)
   help                            this message
 
 Global: add --json for structured output where supported.`;
@@ -122,6 +123,19 @@ async function main(): Promise<void> {
 
   if (command.name === 'help' || command.name === '--help') {
     process.stdout.write(USAGE + '\n');
+    return;
+  }
+
+  // `stop` shuts the proxy down (forces a fresh connect + approval next time).
+  if (command.name === 'stop') {
+    try {
+      const c = await ProxyClient.open(SOCKET_PATH, 3000);
+      await c.send('__stop', {});
+      c.close();
+      process.stdout.write('proxy stopped\n');
+    } catch {
+      process.stdout.write('no proxy running\n');
+    }
     return;
   }
 

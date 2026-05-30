@@ -1,45 +1,45 @@
 # chrome-use eval suite
 
-A golden test set that proves chrome-use actually drives a browser. Zero dependencies
-— Node's built-in `node:test`, run via native TypeScript.
+A golden test set that proves chrome-use actually drives a browser — **my-browser
+style**: it exercises the real connection path (DevToolsActivePort autoConnect), not a
+`--remote-debugging-port` instance. Zero dependencies (Node's built-in `node:test`).
 
 ```bash
 cd skills/chrome-use/scripts
 npm test                  # or: node --test test/unit.test.ts test/evals.test.ts
 ```
 
+## Requirements
+
+The eval suite drives your **real running Chrome** through the chrome-use proxy:
+
+- Chrome running with remote debugging allowed (`chrome://inspect/#remote-debugging` →
+  Allow). The first run auto-starts the proxy and may show the approval dialog once.
+- It is **not isolated and not CI-runnable** — that's the my-browser model (a real,
+  approved browser). It is safe, though: every test runs in a **dedicated tab it
+  creates and closes**, identified by a `cufix` marker, so your own tabs are never
+  touched and the proxy is never stopped.
+
 ## What runs
 
-- **`unit.test.ts`** — pure functions, no browser: argv parsing, `DevToolsActivePort`
-  parsing, selector classification. Fast.
-- **`evals.test.ts`** — black-box end-to-end against the **real CLI**. 20 golden cases
-  covering: open / back / forward / reload, `snapshot -i` and full (exact golden trees),
+- **`unit.test.ts`** (8) — pure functions, no browser: argv parsing,
+  `DevToolsActivePort` parsing, selector classification. Fast.
+- **`evals.test.ts`** (19) — black-box end-to-end against the real CLI: open /
+  back / forward / reload, `snapshot -i` and full (exact golden trees),
   `snapshot --json` / `-s`, `@e1` / CSS / `text=` selectors, stale-ref error, `get`,
-  `fill` (exact value), `Control+a` editor chord, trusted `type`+`click`, checkbox toggle,
-  `scroll`, `wait` (ms/selector/text), `eval` (value + exception), `screenshot` (PNG),
-  `cookies`, and `tab` new/list/close.
+  `fill` (exact value), `Control+a` editor chord, trusted `type`+`click`, checkbox
+  toggle, `scroll`, `wait` (ms / selector / text), `eval` (value + exception),
+  `screenshot` (PNG), and `tab` new/list/close.
 
-## Hermetic harness (`harness.ts`)
+## Fixtures are `data:` URLs (host/VM safe)
 
-Each run is fully isolated and never touches your real Chrome:
+Chrome may run on the host while the harness runs on a VM, so a VM-served
+`http://127.0.0.1` origin is unreachable by the browser. Fixtures in `fixtures/*.html`
+are therefore loaded as **`data:` URLs** (rendered entirely in the browser, no network).
+Each fixture carries a `cufix` marker so the harness only ever closes its own tabs, and
+uses absolute hrefs so snapshot URLs stay deterministic.
 
-1. launches a **throwaway headless Chrome** (own temp profile, `--remote-debugging-port`,
-   so there is **no approval dialog**),
-2. serves `fixtures/*.html` from a **local zero-dep HTTP server**,
-3. starts the chrome-use **proxy** pointed at that Chrome via `CHROME_USE_WS_ENDPOINT`,
-   on a unique socket + active-tab file,
-4. exposes an **async** `cu(...)` runner (must be async — the fixture server shares this
-   process, so a blocking child would deadlock any navigation), and tears everything down.
+## Not covered automatically
 
-### Environment overrides
-
-- `CHROME_USE_TEST_BIN` — path to the Chrome/Chromium binary (default `/snap/bin/chromium`).
-- `CHROME_USE_TEST_PROFILE_ROOT` — where throwaway profiles are created (snap builds must
-  use a path under the snap home; defaults handle `/snap/` automatically).
-
-## Fixtures
-
-Static, deterministic pages so golden snapshot trees are exact: `index.html` (links),
-`form.html` (input + checkbox + submit button that echoes the value into the title),
-`content.html` (heading/paragraph/link), `dynamic.html` (element + text appear ~600ms
-after load, for `wait`).
+- **`cookies`** — needs a real http(s) origin, which `data:` URLs can't provide and a
+  VM-served origin can't reach the host browser. Verify cookie set/list/clear manually.

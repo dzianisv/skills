@@ -143,16 +143,19 @@ File format: two lines — port number, then WebSocket path:
 
 ## Testing
 
-A zero-dependency golden eval suite lives in `scripts/test/`. It launches a throwaway
-headless Chrome (no approval dialog) + a local fixture server and drives the real CLI:
+A zero-dependency golden eval suite lives in `scripts/test/`. It exercises the **real
+connection path** (DevToolsActivePort autoConnect) by driving the CLI against your
+running Chrome through the proxy — *my-browser style*, not `--remote-debugging-port`:
 
 ```bash
 cd scripts && npm test     # or: node --test test/unit.test.ts test/evals.test.ts
 ```
 
-8 unit tests (argv/port/selector parsing) + 20 end-to-end golden cases (open, snapshot
-`@e1` trees, click/fill/type/press, selectors, get, screenshot, eval, wait, tabs,
-cookies). See `scripts/test/README.md`.
+8 unit tests (argv/port/selector parsing) + 19 end-to-end golden cases (open/back/
+forward/reload, snapshot `@e1` trees, click/fill/type/press, selectors, get, screenshot,
+eval, wait, tabs). Each test runs in a dedicated tab it creates and closes (never touches
+your tabs); fixtures are `data:` URLs (host/VM safe). Needs your approved Chrome running —
+not isolated/CI. See `scripts/test/README.md`.
 
 ## Do NOT
 
