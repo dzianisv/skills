@@ -42,6 +42,38 @@ your request, or you can invoke it explicitly (e.g. `/my-browser`, `/own`).
 | [`skills-sh`](skills/skills-sh) | Publish, register, and troubleshoot skills on [skills.sh](https://www.skills.sh), the public agent-skills directory. | `npx -y skills add dzianisv/skills skills-sh` |
 | [`opencode-api`](skills/opencode-api) | Control OpenCode through the REST API exposed by `opencode serve`. Sessions, prompts, SSE events, permissions, and automation. | `npx -y skills add dzianisv/skills opencode-api` |
 | [`google-workspace-cli`](skills/google-workspace-cli) | Interact with all Google Workspace APIs (Drive, Gmail, Calendar, Sheets, Docs, Chat, etc.) via the `gws` CLI. | `npx -y skills add dzianisv/skills google-workspace-cli` |
+| [`claude-sessions`](skills/claude-sessions) | Find a past Claude Code session by project or topic and summarize what was done in it — "which session did I work on X in?". Cheaply ranks local transcripts, then fans the heavy reads out to subagents so multi-MB sessions never flood your context. | `npx -y skills add dzianisv/skills claude-sessions` |
+
+## How `claude-sessions` works
+
+Claude Code stores every session as a JSONL transcript under
+`~/.claude/projects/<dashified-cwd>/<sessionId>.jsonl` (the directory name is the
+project's working directory with `/` and `.` replaced by `-`). These files grow
+to **tens of MB**, so reading them directly blows up an agent's context.
+
+This skill avoids that in three steps:
+
+1. **Rank cheaply.** `scripts/rank_sessions.py` makes a single streaming pass
+   over each transcript, scoring it by keyword hits in its title / last prompt /
+   first message plus a whole-file hit count, and prints the top candidates as
+   JSON. It handles sibling project dirs (`…-OpenClawBot`, `…-OpenClawBot-2`) and
+   supports `--project`, `--days`, and `--limit`.
+2. **Deep-read with subagents.** The agent dispatches one subagent per top
+   candidate, in parallel — each greps within its assigned file and reads only
+   the surrounding lines, then reports whether it matches and a short summary.
+   The large transcripts stay out of the main context.
+3. **Present the best match** with its summary, `session_id`, path, and date
+   (resume it with `claude --resume <session_id>`).
+
+Try the ranker directly:
+
+```bash
+python3 ~/.claude/skills/claude-sessions/scripts/rank_sessions.py \
+  --project ~/workspace/OpenClawBot "merge gate" enforce testing
+```
+
+Or just ask your agent: *"Find the session where I worked on PR merge-gate
+enforcement testing in ~/workspace/OpenClawBot and summarize it."*
 
 ## Install
 
