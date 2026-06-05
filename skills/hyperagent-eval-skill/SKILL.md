@@ -136,6 +136,54 @@ quality* of a single advisory turn, not literal multi-round execution. The live
 `SKILL.md` is never auto-overwritten — shipping is gated on a human-confirmed `cp`.
 See `driver/README.md`.
 
+## Run it continuously with `/goal` (no human in the loop)
+
+Drive the whole thing from Claude Code's goal hook
+([`/goal`](https://code.claude.com/docs/en/goal)). `/goal <condition>` installs a
+**Stop hook** that re-invokes you every turn until the condition holds — so the
+improve-loop survives turn-end and runs until the skill hits the bar *by itself*.
+You are the **meta-orchestrator only**: set the goal, launch the driver, read the
+result, decide the next round. The doer/judge/**meta** are all `claude -p` agents —
+the meta agent writes the skill, you do not.
+
+```bash
+# the bar is an EVAL outcome the loop can prove, not a vibe
+/goal "solo-founder skill scores >= 4.8 mean on evals/holdout AND the meta agent
+       produces no holdout gain for 2 consecutive rounds (converged), per
+       skills/solo-founder/evals/driver/scores.json"
+# then, each turn the hook fires, advance the loop:
+python3 driver/driver.py            # doer→judge→meta→archive; resumes from disk
+# add a frozen case when the set saturates, then let the hook fire again
+```
+
+The hook keeps you in the loop until the eval proves the bar — that is "the skill
+solves it without human help," made measurable.
+
+### Meta-agent-only discipline (each rule = a mistake to avoid; learned the hard way)
+
+1. **Never hand-edit the skill.** The *meta agent* writes every change. If you edit
+   `SKILL.md` yourself, you've corrupted the experiment: you're now measuring a
+   *human-perfected* skill, not a *self-improved* one — and the loop will converge
+   instantly with nothing to show.
+2. **Measure self-improvement from a PRE-TUNED (weak) baseline.** Seed v0 with the
+   *original* skill (`git show HEAD:path/SKILL.md`), not your tuned copy, and let the
+   meta agent *earn* the climb. A loop that starts at the ceiling proves nothing.
+   Demonstrated: seeded with the *original un-tuned* solo-founder skill (v0 = 4.53), the meta
+   agent autonomously climbed it to **4.83 train / 4.60 holdout** across v1–v3 — and the dip at
+   v1 (4.22) → recovery at v2/v3 is the open-ended search escaping a local minimum, exactly the
+   DGM-H mechanic. Every variant was written by the meta agent, not the human.
+3. **Sandbox the doer — `cwd` is NOT containment.** A doer with `Bash`/`Edit` escapes
+   a git worktree *and* a fresh clone: it `cd`s to the user's real repos and commits
+   there (observed twice). Run the doer **read-only** (`--allowedTools Read` — evaluate
+   its *response*, which is exactly what `/goal … evaluate agent response` asks) or in
+   a real OS container. Never give an unattended doer write access to a dev machine.
+4. **One hung doer must not kill the run.** Wrap each `claude -p` doer call so a
+   timeout/failure degrades that case to a low score, not a whole-run crash.
+5. **Converging is success; don't pad.** When holdout plateaus and the meta agent
+   can't beat the best variant for 2 rounds, stop. To go further, the *one* thing you
+   (orchestrator) may author is a **new frozen case** for a real, uncovered failure
+   mode (harvest from real sessions via `driver/harvest.py`) — never a skill edit.
+
 ## Worked example
 
 `~/.agents/skills/solo-founder/evals/` is a complete run of this loop: 7-dimension `RUBRIC.md`, 6 frozen cases, `iterations/iter-1..4.md`, and a `scores.md` trajectory 4.25 → 4.61 → 4.82 → 4.97 with a CONVERGED verdict and a named residual. Copy its structure.
