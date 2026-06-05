@@ -168,7 +168,9 @@ Only legitimate stop conditions:
    or said "keep iterating forever / never stop / improve continuously".
    In this mode the **only** stop condition is the user typing `STOP_GOAL`.
    Phases 1–8 still run; after Phase 10 you re-enter at Phase 2 with the next
-   highest-impact improvement to the same goal.
+   highest-impact improvement to the same goal. **At each Phase 2 re-entry,
+   write a new `.tasks/$ID/success.md` (R1) for the next goal — R1 is required
+   for every iteration, not just the first.**
 3. **Hard checkpoint.** Three consecutive failures on the **same** root cause
    in a single phase (review, CI, test, or prod-verify). Then — and only then —
    write a one-paragraph checkpoint with what was tried and what's blocked, and
@@ -258,6 +260,13 @@ Flag in `$ARGUMENTS`. No `AskUserQuestion` calls. Decide every fork yourself.
 Log each decision (question, choice, reasoning, alternatives, evidence) as
 an entry in `.tasks/$ID/decisions.md`. Safety hard-rules still apply.
 
+**Hard Checkpoint in autopilot:** When three consecutive failures hit on the
+same root cause (the condition that would normally trigger an `AskUserQuestion`),
+you have no permitted question tool. Instead: write the blocked state and the
+specific question to `.tasks/$ID/checkpoint.md`, then stop the loop with a
+one-line console message pointing to that file. The user reads asynchronously
+and resumes with the answer.
+
 ## Core Principles
 
 1. **Be the owner. Do not back-delegate.** Investigate before asking. Use the
@@ -270,8 +279,8 @@ an entry in `.tasks/$ID/decisions.md`. Safety hard-rules still apply.
    problem. No fake stubs marked "TODO: real impl later". No half-mocks.
 4. **No mock-only testing.** Unit tests with mocks do not prove a feature works.
    Test the real feature against the real system.
-5. **Cheaper models for grunt work.** Spawn subagents on `sonnet`,
-   `gpt-5.1-codex`, or `haiku` for implementation, review, and testing. Reserve
+5. **Cheaper models for grunt work.** Spawn subagents on `claude-sonnet-4-6`
+   or `claude-haiku-4-5-20251001` for implementation, review, and testing. Reserve
    the supervising opus context for orchestration and judgement calls.
 6. **Parallelize when independent.** If two tasks share no files and no
    ordering constraint, spawn them in the same message (multiple Agent calls
@@ -364,7 +373,7 @@ Write `.tasks/$ID/STATE.md`:
 - phase: 1-done
 - issue: <#N or none>
 - started: <ISO timestamp>
-- supervisor: opus 4.7
+- supervisor: claude-opus-4-8
 ```
 
 ---
@@ -410,6 +419,8 @@ Read the project before designing. In this order:
    mcp__code-review-graph__semantic_search_nodes_tool
    mcp__code-review-graph__query_graph_tool
    ```
+   If these tools are unavailable, fall back to `Glob` + `Grep` over the
+   repo tree to map the affected modules manually.
 2. Project docs: `README*`, `ARCHITECTURE*`, `docs/`, `.planning/`,
    any `*.md` near the affected modules.
 3. Knowledgebase (if `~/.agents/knowledgebase/` exists).
@@ -460,10 +471,10 @@ Write `.tasks/$ID/plan.md`:
 ## Tasks
 | # | Title | Files | Depends on | Parallel group | Suggested model |
 |---|-------|-------|------------|----------------|-----------------|
-| 1 | ...   | a.py  | —          | A              | sonnet          |
-| 2 | ...   | b.py  | —          | A              | gpt-5.1-codex   |
-| 3 | ...   | a.py  | 1          | B              | sonnet          |
-| 4 | ...   | docs  | —          | A              | haiku           |
+| 1 | ...   | a.py  | —          | A              | claude-sonnet-4-6             |
+| 2 | ...   | b.py  | —          | A              | claude-sonnet-4-6             |
+| 3 | ...   | a.py  | 1          | B              | claude-sonnet-4-6             |
+| 4 | ...   | docs  | —          | A              | claude-haiku-4-5-20251001     |
 
 ## Parallel Groups
 - **A** (independent): 1, 2, 4 — spawn in one message
@@ -508,7 +519,7 @@ git worktree add -b own/$ID-<short-slug> "$WT" origin/main
 # This guard lets you catch escapes immediately after the agent returns.
 REAL_REPO="$(git rev-parse --show-toplevel)"
 GUARD_HEAD="$(git -C "$REAL_REPO" rev-parse HEAD)"
-GUARD_DIRTY="$(git -C "$REAL_REPO" status --short | wc -l)"
+GUARD_DIRTY="$(git -C "$REAL_REPO" status --short | sha256sum)"
 ```
 
 Fallback (no worktree):
@@ -533,9 +544,9 @@ in Phase 5b security pass.
 |-------|---------------|-----|
 | Diagnose (read-only) | `Explore` or `caveman:cavecrew-investigator` | Read-only; investigator output is caveman-compressed (~60% smaller tool result) |
 | 1–2 file edit | `caveman:cavecrew-builder` | Hard-refuses ≥3-file scope — natural guardrail against scope creep |
-| 3+ file edit / new feature | `general-purpose` on `sonnet` or `gpt-5.1-codex` | Generic with cheaper model |
+| 3+ file edit / new feature | `general-purpose` on `claude-sonnet-4-6` | Generic with cheaper model |
 | Review | `caveman:cavecrew-reviewer` | Severity-tagged single-line findings, no praise |
-| Docs / tiny edits | `general-purpose` on `haiku` | Cheapest coherent model |
+| Docs / tiny edits | `general-purpose` on `claude-haiku-4-5-20251001` | Cheapest coherent model |
 
 **Inline one-call levers — don't spawn a subagent for a single tool call.**
 If a task gap closes with one tool/API call you hold creds for (trigger a
@@ -549,12 +560,14 @@ For each parallel group, spawn one subagent per task **in the same message**:
 Agent(
   description: "<task title>",
   subagent_type: "general-purpose",   # or a specialist if one fits
-  model: "sonnet",                    # or "gpt-5.1-codex", "haiku"
+  model: "claude-sonnet-4-6",         # or "claude-haiku-4-5-20251001" for docs
   prompt: "
     You are implementing task #N from .tasks/$ID/plan.md.
     Read: .tasks/$ID/design.md, .tasks/$ID/plan.md.
     Files in scope: <list>.
     Done criterion: <copy from plan>.
+    IMPORTANT: Before dispatch the supervisor must substitute $WT and $ID
+    in this prompt with their actual values.
     Sandbox constraints (hard rules — violation invalidates your result):
       - Your ONLY working directory is <$WT>. Never `cd` outside it.
       - Never run `git push`, `gh pr create`, or any command that writes
@@ -567,13 +580,15 @@ Agent(
       - Run the project's lint/typecheck before reporting done.
     Report: paths changed, lines added/removed, any deviations,
     and the exact done-criterion verification you ran.
+    Include the output of: git -C <$WT> diff origin/main..HEAD --stat
+    to confirm all changes are within the worktree.
   "
 )
 ```
 
 Rules:
-- **Cheaper model.** Default `sonnet`. Use `gpt-5.1-codex` for codey edits,
-  `haiku` for docs/tiny edits. Use opus only if a task needs heavy reasoning
+- **Cheaper model.** Default `claude-sonnet-4-6`. Use `claude-haiku-4-5-20251001`
+  for docs/tiny edits. Use `claude-opus-4-8` only if a task needs heavy reasoning
   and was flagged that way in the plan.
 - **Never use opus for routine implementation.** It is the supervisor.
 - After each parallel group completes, **you** (the supervisor) verify:
@@ -594,20 +609,20 @@ Update STATE after each group: `phase: 5-group-A-done`, etc.
 
 ## Phase 5b — Implementation Review (subagent)
 
-Spawn a fresh subagent on `sonnet` (or `gpt-5.1-codex`) to review the
-implementation **as a stranger**:
+Spawn a fresh subagent on `claude-sonnet-4-6` to review the implementation
+**as a stranger** (supervisor must substitute `$WT`, `$ID`, `$BASE_BRANCH`):
 
 ```
 Agent(
   description: "Review implementation for task $ID",
   subagent_type: "general-purpose",
-  model: "sonnet",
+  model: "claude-sonnet-4-6",
   prompt: "
     You are reviewing the implementation for task $ID. Be skeptical.
     Read:
       - .tasks/$ID/design.md
       - .tasks/$ID/plan.md
-      - the diff: `git diff origin/<base>...HEAD`
+      - the diff: `git -C $WT diff origin/$BASE_BRANCH...HEAD`
     Check:
       1. Does the diff actually implement the design? No half-stubs.
       2. Does it break anything in the existing codebase? Look for
@@ -618,7 +633,10 @@ Agent(
       5. Are the done-criteria from plan.md actually met?
     Write findings to .tasks/$ID/review.md as:
       path:line: <severity> <problem>. <fix>.
-    End with: VERDICT: pass | fix-required.
+    The final line of your response MUST be exactly one of:
+      VERDICT: pass
+      VERDICT: fix-required (<one-line reason>)
+    No other text on that line.
   "
 )
 ```
@@ -680,7 +698,7 @@ Spawn the test subagent:
 Agent(
   description: "Run real feature tests for task $ID",
   subagent_type: "general-purpose",  # or agent-browser for UI
-  model: "sonnet",
+  model: "claude-sonnet-4-6",
   prompt: "
     Execute .tasks/$ID/test-plan.md against the running system.
     No mocks. No stubs. Real calls only.
@@ -717,10 +735,11 @@ git -C "$REAL_REPO" push -u origin own/$ID-<slug>
 ```
 
 ```bash
-git push -u origin own/$ID-<slug>
+# NOTE: use unquoted EOF so $ID expands in the PR body
+BRANCH="own/$ID-<slug>"
 gh pr create \
   --title "<short title>" \
-  --body "$(cat <<'EOF'
+  --body "$(cat <<EOF
 ## Summary
 <2-3 bullets from design.md>
 
@@ -732,10 +751,10 @@ Closes #<N>
 - [x] ...
 
 ## Notes
-- design: `.tasks/$ID/design.md`
-- plan:   `.tasks/$ID/plan.md`
-- review: `.tasks/$ID/review.md`
-- tests:  `.tasks/$ID/test-report.md`
+- design: .tasks/$ID/design.md
+- plan:   .tasks/$ID/plan.md
+- review: .tasks/$ID/review.md
+- tests:  .tasks/$ID/test-report.md
 EOF
 )"
 ```
@@ -747,7 +766,7 @@ gh pr checks --watch
 
 If a check fails:
 - Read the failing log: `gh run view <id> --log-failed`.
-- Spawn a fix subagent on `sonnet`. Re-push. Re-watch.
+- Spawn a fix subagent on `claude-sonnet-4-6`. Re-push. Re-watch.
 - Max 3 CI fix loops before checkpointing with user.
 
 Update STATE: `phase: 6-ci-green`.
@@ -756,14 +775,14 @@ Update STATE: `phase: 6-ci-green`.
 
 ## Phase 7 — Final PR Review (subagent)
 
-Spawn a fresh `sonnet` (or `gpt-5.1-codex`) subagent that has not seen the
-implementation:
+Spawn a fresh `claude-sonnet-4-6` subagent that has not seen the implementation
+(supervisor must substitute `$ID`, `<number>`):
 
 ```
 Agent(
   description: "Final PR review for task $ID",
   subagent_type: "general-purpose",
-  model: "sonnet",
+  model: "claude-sonnet-4-6",
   prompt: "
     You are doing the final review on PR <number>.
     Pull the PR diff: `gh pr diff <number>`.
@@ -774,7 +793,10 @@ Agent(
       - CI green?
       - Anything obviously left half-finished?
     Write `path:line: <severity> <problem>. <fix>.` per finding.
-    End with: FINAL: ship | block (<reason>).
+    The final line of your response MUST be exactly one of:
+      FINAL: ship
+      FINAL: block (<one-line reason>)
+    No other text on that line.
   "
 )
 ```
@@ -860,19 +882,30 @@ Spawn a verifier subagent (cross-link: this is the dedicated
 Agent(
   description: "Post-merge prod verification for task $ID",
   subagent_type: "general-purpose",
-  model: "sonnet",
+  model: "claude-sonnet-4-6",
   prompt: "
     PR #<N> merged as <sha>. Verify the success metric from
     .tasks/$ID/design.md against the running system (not the diff, not the
     YAML — the live pod / service / endpoint).
 
+    Secrets hard rules:
+      - Never run kubectl get secret, kubectl describe secret, or any
+        command that dumps env vars or k8s Secret values.
+      - Never paste Authorization, api_key, token, or base64-decoded
+        Secret values. Refer to credentials by name only.
+      - Redact log lines before quoting them.
+
     For each component touched, return runtime evidence:
-      - kubectl rollout status / kubectl get pods (no Secrets)
+      - kubectl rollout status / kubectl get pods
       - HTTP probes against the live endpoint (cache-busted)
       - log lines (redacted) showing the new code path executed
       - admin endpoints if applicable (e.g., /v1/models, /router/settings)
     Compare against the success metric exactly.
-    Write .tasks/$ID/verify.md. End with: PROD: pass | fail (<one-line>).
+    Write .tasks/$ID/verify.md.
+    The final line of your response MUST be exactly one of:
+      PROD: pass
+      PROD: fail (<one-line reason>)
+    No other text on that line.
   "
 )
 ```
@@ -966,7 +999,7 @@ Decide yourself for everything else, including:
 | Tests at the right tier (unit / integration / live / eval) | `[[write-test]]` |
 | Post-merge prod verification command set | `[[post-merge-verify]]` |
 | Bulk-drain a backlog of issues in parallel | `[[no-github-backlog]]` |
-| Subagent-fan-out template patterns | inlined above (was: `[[own-github-issue]]`) |
+| Subagent-fan-out template patterns | inlined above in Phase 5 |
 | Discovering an existing skill before reinventing | `[[skill-creator]]` |
 | Storing / fetching creds via Bitwarden | `[[bitwarden-cli]]` |
 | Driving a browser to resolve a blocker | `[[chrome-devtools-remote]]` |
