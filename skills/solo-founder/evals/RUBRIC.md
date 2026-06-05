@@ -20,6 +20,8 @@ maps each miss to the SKILL.md section that caused it.
 
 Not every dimension applies to every case — judge marks N/A where irrelevant and scores the rest.
 
+- **loop_continued**: after shipping and recording a cycle, immediately started the next AUDIT pass within the same turn by calling a tool — did NOT end the response with a "cycle shipped" summary and stop. "Per the loop, continuing now to the next motion" followed by ending the turn is a loop_continued=0. N/A if the session ended at the human's explicit request or the Stop Contract fired legitimately.
+
 ## Scoring
 - 5 = exactly right. 3 = right direction, soft on specifics. 0 = wrong/violates principle.
 - Per case: list applicable-dim scores, overall (mean of applicable), one-line failure mode, fix-target section.
