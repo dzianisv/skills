@@ -15,19 +15,19 @@ agent when to load it.
 Install all skills at once:
 
 ```bash
-npx -y skills add dzianisv/skills
+npx -y skills add dzianisv/skills -g
 ```
 
 Or install a single skill by name:
 
 ```bash
-npx -y skills add dzianisv/skills -s <skill-name>
+npx -y skills add dzianisv/skills -s <skill-name> -g
 # example:
-npx -y skills add dzianisv/skills -s my-browser
+npx -y skills add dzianisv/skills -s my-browser -g
 ```
 
 The `-s` flag preselects the skill; without it the CLI prompts you to pick one.
-Add `-g` to install globally for your runtime instead of into the current project.
+`-g` installs globally for your runtime; drop it (or use `-p`) to install into the current project.
 
 After install, the agent autoloads a skill when its description/triggers match
 your request, or you can invoke it explicitly (e.g. `/my-browser`, `/own`).
@@ -36,18 +36,18 @@ your request, or you can invoke it explicitly (e.g. `/my-browser`, `/own`).
 
 | Skill | What it does | Install |
 |-------|--------------|---------|
-| [`my-browser`](skills/my-browser) | Control your real running Chrome (live sessions, cookies, auth) via a persistent Puppeteer gateway using autoConnect mode. No `--remote-debugging-port` needed. | `npx -y skills add dzianisv/skills -s my-browser` |
-| [`chrome-use`](skills/chrome-use) | Drive your real running Chrome with [agent-browser](https://skills.volces.com/skills/vercel-labs/agent-browser)-style commands (`open`, `snapshot -i`, `click @e1`, `fill`, `screenshot`). Zero-dependency TypeScript speaking CDP directly over the built-in WebSocket; connects via autoConnect like `my-browser`. | `npx -y skills add dzianisv/skills -s chrome-use` |
-| [`own`](skills/own) | Take full ownership of a task end-to-end: issue → design → plan → implement → review → real-feature test → PR → CI → final review → merge ask. Forbids back-delegation to the user when a tool or credential store can resolve the blocker. | `npx -y skills add dzianisv/skills -s own` |
-| [`duckdns-domain`](skills/duckdns-domain) | Register a free DuckDNS subdomain and point it at a server IP via Chrome DevTools browser automation. Useful when you need a public DNS name for a dev server and no managed DNS is available. | `npx -y skills add dzianisv/skills -s duckdns-domain` |
-| [`readiness-check`](skills/readiness-check) | Verify all OpenCode plugin services (Whisper, TTS, Supabase, Telegram, etc.) are healthy and ready. | `npx -y skills add dzianisv/skills -s readiness-check` |
-| [`vercel-lfs`](skills/vercel-lfs) | Deploy a site with Git LFS assets (videos, images) to Vercel without serving 15-byte pointer files. Covers the prebuilt-deploy workflow and required GitHub secrets. | `npx -y skills add dzianisv/skills -s vercel-lfs` |
-| [`skills-sh`](skills/skills-sh) | Publish, register, and troubleshoot skills on [skills.sh](https://www.skills.sh), the public agent-skills directory. | `npx -y skills add dzianisv/skills -s skills-sh` |
-| [`opencode-api`](skills/opencode-api) | Control OpenCode through the REST API exposed by `opencode serve`. Sessions, prompts, SSE events, permissions, and automation. | `npx -y skills add dzianisv/skills -s opencode-api` |
-| [`google-workspace-cli`](skills/google-workspace-cli) | Interact with all Google Workspace APIs (Drive, Gmail, Calendar, Sheets, Docs, Chat, etc.) via the `gws` CLI. | `npx -y skills add dzianisv/skills -s google-workspace-cli` |
-| [`claude-sessions`](skills/claude-sessions) | Find a past Claude Code session by project or topic and summarize what was done in it — "which session did I work on X in?". Cheaply ranks local transcripts, then fans the heavy reads out to subagents so multi-MB sessions never flood your context. | `npx -y skills add dzianisv/skills -s claude-sessions` |
-| [`solo-founder`](skills/solo-founder) | Operate as an autonomous solo-founder / CEO meta-agent: decide what matters, spawn doer subagents across product / growth / distribution, evaluate + improve them, ship and verify. Bundles a cross-session run registry (`PreToolUse` hook) + an LLM-judge evaluator so its runs can be scored later. | `npx -y skills add dzianisv/skills -s solo-founder` |
-| [`solo-founder-meta-agent`](skills/solo-founder-meta-agent) | Evaluate and improve the `solo-founder` skill from its REAL recent runs (the `~/.local/run/solo-founder/` registry + OpenCode sessions): score each session, diagnose the dominant failure, harvest it into a frozen eval case, and run the DGM-H improve-loop so a meta agent rewrites `SKILL.md`. | `npx -y skills add dzianisv/skills -s solo-founder-meta-agent` |
+| [`my-browser`](skills/my-browser) | Control your real running Chrome (live sessions, cookies, auth) via a persistent Puppeteer gateway using autoConnect mode. No `--remote-debugging-port` needed. | `npx -y skills add dzianisv/skills -s my-browser -g` |
+| [`chrome-use`](skills/chrome-use) | Drive your real running Chrome with [agent-browser](https://skills.volces.com/skills/vercel-labs/agent-browser)-style commands (`open`, `snapshot -i`, `click @e1`, `fill`, `screenshot`). Zero-dependency TypeScript speaking CDP directly over the built-in WebSocket; connects via autoConnect like `my-browser`. | `npx -y skills add dzianisv/skills -s chrome-use -g` |
+| [`own`](skills/own) | Take full ownership of a task end-to-end: issue → design → plan → implement → review → real-feature test → PR → CI → final review → merge ask. Forbids back-delegation to the user when a tool or credential store can resolve the blocker. | `npx -y skills add dzianisv/skills -s own -g` |
+| [`duckdns-domain`](skills/duckdns-domain) | Register a free DuckDNS subdomain and point it at a server IP via Chrome DevTools browser automation. Useful when you need a public DNS name for a dev server and no managed DNS is available. | `npx -y skills add dzianisv/skills -s duckdns-domain -g` |
+| [`readiness-check`](skills/readiness-check) | Verify all OpenCode plugin services (Whisper, TTS, Supabase, Telegram, etc.) are healthy and ready. | `npx -y skills add dzianisv/skills -s readiness-check -g` |
+| [`vercel-lfs`](skills/vercel-lfs) | Deploy a site with Git LFS assets (videos, images) to Vercel without serving 15-byte pointer files. Covers the prebuilt-deploy workflow and required GitHub secrets. | `npx -y skills add dzianisv/skills -s vercel-lfs -g` |
+| [`skills-sh`](skills/skills-sh) | Publish, register, and troubleshoot skills on [skills.sh](https://www.skills.sh), the public agent-skills directory. | `npx -y skills add dzianisv/skills -s skills-sh -g` |
+| [`opencode-api`](skills/opencode-api) | Control OpenCode through the REST API exposed by `opencode serve`. Sessions, prompts, SSE events, permissions, and automation. | `npx -y skills add dzianisv/skills -s opencode-api -g` |
+| [`google-workspace-cli`](skills/google-workspace-cli) | Interact with all Google Workspace APIs (Drive, Gmail, Calendar, Sheets, Docs, Chat, etc.) via the `gws` CLI. | `npx -y skills add dzianisv/skills -s google-workspace-cli -g` |
+| [`claude-sessions`](skills/claude-sessions) | Find a past Claude Code session by project or topic and summarize what was done in it — "which session did I work on X in?". Cheaply ranks local transcripts, then fans the heavy reads out to subagents so multi-MB sessions never flood your context. | `npx -y skills add dzianisv/skills -s claude-sessions -g` |
+| [`solo-founder`](skills/solo-founder) | Operate as an autonomous solo-founder / CEO meta-agent: decide what matters, spawn doer subagents across product / growth / distribution, evaluate + improve them, ship and verify. Bundles a cross-session run registry (`PreToolUse` hook) + an LLM-judge evaluator so its runs can be scored later. | `npx -y skills add dzianisv/skills -s solo-founder -g` |
+| [`solo-founder-meta-agent`](skills/solo-founder-meta-agent) | Evaluate and improve the `solo-founder` skill from its REAL recent runs (the `~/.local/run/solo-founder/` registry + OpenCode sessions): score each session, diagnose the dominant failure, harvest it into a frozen eval case, and run the DGM-H improve-loop so a meta agent rewrites `SKILL.md`. | `npx -y skills add dzianisv/skills -s solo-founder-meta-agent -g` |
 
 ## How `claude-sessions` works
 
