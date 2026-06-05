@@ -1,0 +1,12 @@
+# Eval run artifacts can reference private sessions/metrics — never commit them here.
+scores.md
+scores.json
+memory.json
+evals.csv
+iterations/
+runs/
+driver/archive/
+driver/iterations/
+driver/runs/
+driver/scores.md
+driver/scores.json

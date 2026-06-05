@@ -46,6 +46,7 @@ your request, or you can invoke it explicitly (e.g. `/my-browser`, `/own`).
 | [`opencode-api`](skills/opencode-api) | Control OpenCode through the REST API exposed by `opencode serve`. Sessions, prompts, SSE events, permissions, and automation. | `npx -y skills add dzianisv/skills -s opencode-api` |
 | [`google-workspace-cli`](skills/google-workspace-cli) | Interact with all Google Workspace APIs (Drive, Gmail, Calendar, Sheets, Docs, Chat, etc.) via the `gws` CLI. | `npx -y skills add dzianisv/skills -s google-workspace-cli` |
 | [`claude-sessions`](skills/claude-sessions) | Find a past Claude Code session by project or topic and summarize what was done in it — "which session did I work on X in?". Cheaply ranks local transcripts, then fans the heavy reads out to subagents so multi-MB sessions never flood your context. | `npx -y skills add dzianisv/skills -s claude-sessions` |
+| [`solo-founder`](skills/solo-founder) | Operate as an autonomous solo-founder / CEO meta-agent: decide what matters, spawn doer subagents across product / growth / distribution, evaluate + improve them, ship and verify. Bundles a cross-session run registry (`PreToolUse` hook) + an LLM-judge evaluator so its runs can be scored later. | `npx -y skills add dzianisv/skills -s solo-founder` |
 
 ## How `claude-sessions` works
 
