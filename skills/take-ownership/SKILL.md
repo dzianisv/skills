@@ -503,7 +503,12 @@ git fetch origin main
 WT="${TMPDIR:-/tmp}/wt-$ID.$$"
 mkdir -m 700 "$WT"                       # 700 — not world-readable
 git worktree add -b own/$ID-<short-slug> "$WT" origin/main
-cd "$WT"
+# Snapshot real-repo state BEFORE spawning any write subagent.
+# Write subagents escape worktrees by cd-ing elsewhere (observed twice).
+# This guard lets you catch escapes immediately after the agent returns.
+REAL_REPO="$(git rev-parse --show-toplevel)"
+GUARD_HEAD="$(git -C "$REAL_REPO" rev-parse HEAD)"
+GUARD_DIRTY="$(git -C "$REAL_REPO" status --short | wc -l)"
 ```
 
 Fallback (no worktree):
@@ -532,6 +537,12 @@ in Phase 5b security pass.
 | Review | `caveman:cavecrew-reviewer` | Severity-tagged single-line findings, no praise |
 | Docs / tiny edits | `general-purpose` on `haiku` | Cheapest coherent model |
 
+**Inline one-call levers — don't spawn a subagent for a single tool call.**
+If a task gap closes with one tool/API call you hold creds for (trigger a
+deploy, call a submit endpoint, apply a one-liner patch), fire it inline in
+the supervisor context and record the result. Subagent fan-out is for multi-step
+scopes; one-call levers you execute directly, then advance the STATE.
+
 For each parallel group, spawn one subagent per task **in the same message**:
 
 ```
@@ -544,7 +555,13 @@ Agent(
     Read: .tasks/$ID/design.md, .tasks/$ID/plan.md.
     Files in scope: <list>.
     Done criterion: <copy from plan>.
-    Constraints:
+    Sandbox constraints (hard rules — violation invalidates your result):
+      - Your ONLY working directory is <$WT>. Never `cd` outside it.
+      - Never run `git push`, `gh pr create`, or any command that writes
+        to origin or a remote. Commit only to your local worktree branch.
+      - Never reference or touch paths in ~/workspace, ~/, or anywhere
+        outside your assigned worktree.
+    Code constraints:
       - No new dependencies without flagging back.
       - No mock-only impl. Real code.
       - Run the project's lint/typecheck before reporting done.
@@ -560,7 +577,8 @@ Rules:
   and was flagged that way in the plan.
 - **Never use opus for routine implementation.** It is the supervisor.
 - After each parallel group completes, **you** (the supervisor) verify:
-  - Each agent's claimed changes actually landed (`git status`, `git diff`).
+  - Real repo untouched: `[[ "$(git -C "$REAL_REPO" rev-parse HEAD)" == "$GUARD_HEAD" ]]` and dirty-count unchanged. If either fails, the subagent escaped — do NOT push its work until you audit what it touched.
+  - Each agent's claimed changes actually landed in `$WT` (`git -C "$WT" log --oneline -5`, `git -C "$WT" diff origin/main..HEAD --stat`).
   - The repo still builds / typechecks.
   - If a subagent says "done" but the artifact doesn't exist, redo the task.
 
@@ -684,6 +702,19 @@ Update STATE: `phase: 5c-pass`.
 ---
 
 ## Phase 6 — Pull Request + CI
+
+**Ship the worktree branch without disturbing the real working tree.**
+Never ask the subagent to push — the supervisor fetches from the worktree
+into the real repo and pushes from there. This keeps `HEAD` and the working
+tree of the main checkout provably untouched:
+
+```bash
+# Bring the branch ref into the real repo (no checkout, no working-tree change)
+git -C "$REAL_REPO" fetch "$WT" own/$ID-<slug>:own/$ID-<slug>
+# Confirm real repo HEAD still == GUARD_HEAD before pushing
+[[ "$(git -C "$REAL_REPO" rev-parse HEAD)" == "$GUARD_HEAD" ]] || { echo "HEAD changed — audit before push"; exit 1; }
+git -C "$REAL_REPO" push -u origin own/$ID-<slug>
+```
 
 ```bash
 git push -u origin own/$ID-<slug>
@@ -921,6 +952,9 @@ Decide yourself for everything else, including:
 - "Inlined a phase 'to save tokens'." — No. That is exactly the failure mode
   this skill exists to stop.
 - "Used `--no-verify` to skip a failing hook." — No. Investigate the hook.
+- "Spawned a write subagent without a guard snapshot." — No. Always record `GUARD_HEAD` + `GUARD_DIRTY` before any write subagent, verify both unchanged after. Subagents escape worktrees by `cd`-ing out (observed twice — committed to user's real repos). The guard is the trip-wire.
+- "Trusted the subagent's self-report that it stayed in bounds." — No. Check `GUARD_HEAD` and verify artifacts exist in `$WT`. Evidence, not assertion.
+- "Asked the subagent to `git push` / `gh pr create`." — No. Supervisor fetches from worktree into real repo and pushes (`git fetch <worktree> <branch>:<branch>`). Subagents must never have push access to origin.
 - "Force-pushed a shared branch." — No. `--force-with-lease` on feature
   branches only; never on `main`/`master`/`release/*`.
 - "Amended a published commit." — No. New commits on top.
