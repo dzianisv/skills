@@ -35,22 +35,23 @@ from pathlib import Path
 
 # ────────────────────────────── config ──────────────────────────────
 SKILL_NAME = "solo-founder"
-SUT_PATH   = Path("/Users/engineer/workspace/skills-internal/skills/solo-founder")
+SUT_PATH   = Path.home() / ".claude/skills/solo-founder"
 EVALS      = SUT_PATH / "evals"
 ARCHIVE    = EVALS / "driver/archive"      # isolated from hand-run artifacts
 RUNS       = EVALS / "driver/runs"
 SCORES_MD  = EVALS / "driver/scores.md"
 ITERS_DIR  = EVALS / "driver/iterations"
 
-MODEL_DOER  = "sonnet"      # cheap roles
-MODEL_JUDGE = "sonnet"
-MODEL_META  = "opus"        # the edit is the hard part — spend here
-MAX_ITERS   = 4
-BUDGET_USD  = 22.0
+MODEL_DOER  = "claude-sonnet-4-6"      # cheap roles
+MODEL_JUDGE = "claude-sonnet-4-6"
+MODEL_META  = "claude-opus-4-8"        # the edit is the hard part — spend here
+MAX_ITERS   = 3             # continuous loop: a few meta attempts per generation (1-shot regresses
+BUDGET_USD  = 16.0          # too often), kept small + repeated each cycle so gains compound
 HOLDOUT_EVERY = 3           # score best variant on holdout every N iters
 PLATEAU_DELTA = 0.1         # mean rise <= this for 2 rounds = plateau
 PARALLEL    = 6
 TIMEOUT_S   = 600
+MAX_TURNS   = 8             # cap each role's agent loop — keeps a generation to minutes, not hours
 ALLOWED_TOOLS_RO = "Read"             # doer/judge: read-only
 ALLOWED_TOOLS_RW = "Read,Write,Edit"  # meta: edits variant only
 
@@ -64,7 +65,8 @@ def run_agent(prompt, system="", model="sonnet", cwd=None, allowed=ALLOWED_TOOLS
     cmd = ["claude", "-p", prompt,
            "--output-format", "json",
            "--model", model,
-           "--allowedTools", allowed]
+           "--max-turns", str(MAX_TURNS),   # bound agent loop: a frozen-case response needs
+           "--allowedTools", allowed]        # only a few turns; uncapped Read loops run minutes
     sysfile = None
     if system:
         sysfile = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False)
@@ -207,7 +209,7 @@ JUDGE_SYS = ("You are a strict evaluator. Score ONLY the response against the ru
 
 DIMS = ["audit_first", "leverage_pick", "ship_real", "verify_real_channel",
         "state_record", "no_overengineering", "proceed_vs_pause", "blocked_routing",
-        "never_stall_rotation", "feasibility_gate", "doer_verification"]
+        "never_stall_rotation", "feasibility_gate", "doer_verification", "loop_continued", "prevent_stop_structurally"]
 
 META_SYS = (
     "You are the meta agent in a self-improving skill loop. You receive the current "
