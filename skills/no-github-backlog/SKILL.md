@@ -2,7 +2,6 @@
 name: no-github-backlog
 description: Drain a GitHub issue backlog autonomously. Spawns isolated subagents per issue across 7 stages (investigate, implement, review, security-review, qa, fix, merge), logs every stage to backlog.csv. Use when user asks to clear, drain, close, or resolve an issue backlog.
 argument-hint: '[owner/repo] [optional filter, e.g. "state:open label:bug"]'
-allowed-tools: 'Bash(gh *) Bash(git *) Bash(mkdir *) Bash(printf *) Bash(date *) Bash(flock *) Bash(jq *) Read Write Edit Grep Glob'
 ---
 
 # no-github-backlog
@@ -20,8 +19,8 @@ Only stop condition: user explicitly says `STOP_GOAL` (or equivalent: "stop", "h
 
 ## Inputs
 
-- `$REPO` — repo `owner/name` (e.g. `VibeTechnologies/VibeWebAgent`); first skill argument
-- `$FILTER` — optional `gh issue list` flags (default: `--state open`); second skill argument
+- `$REPO` — repo `owner/name` (e.g. `VibeTechnologies/VibeWebAgent`); resolved from the first `owner/repo` slug in the args, else the current repo (`gh repo view` / `git remote origin`)
+- `$FILTER` — optional `gh issue list` flags (default: `--state open`); any non-slug args, ignored if not flag-style
 
 > **Note:** Orchestrator uses `$ISSUE` for the issue number internally. Templates receive `$ISSUE_NUMBER` as a substituted parameter — orchestrator sets `ISSUE_NUMBER=$ISSUE` when building each template prompt.
 
@@ -52,8 +51,46 @@ Set `STAGE_START=$(date +%s)` immediately before each Agent spawn. Reset per sta
 Before fanning out, check for an unfinished prior run.
 
 ```!
-REPO="${1:?'Usage: /no-github-backlog owner/repo [optional-filter]'}"
-FILTER="${2:---state open}"
+# Repo resolution — the skill is invoked with the user's free-text args, not a clean
+# positional owner/repo slug. Never hard-fail on a missing $1. Precedence:
+#   1. an explicit owner/repo slug anywhere in the args, else
+#   2. the current repo (gh, then git remote origin), else
+#   3. clear usage error.
+# Any args that are NOT the repo slug become the optional gh-issue-list filter; if that
+# leftover text isn't valid filter flags it's ignored gracefully rather than erroring.
+ARGS="$*"
+REPO=""
+for tok in $ARGS; do
+  if printf '%s' "$tok" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'; then
+    REPO="$tok"; break
+  fi
+done
+if [ -z "$REPO" ]; then
+  REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || REPO=""
+fi
+if [ -z "$REPO" ]; then
+  REPO=$(git remote get-url origin 2>/dev/null \
+    | sed -E 's#^.*github\.com[:/]##; s#\.git$##') || REPO=""
+  printf '%s' "$REPO" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || REPO=""
+fi
+if [ -z "$REPO" ]; then
+  echo "ERROR: could not resolve a repo. Usage: /no-github-backlog [owner/repo] [optional-filter]" >&2
+  exit 1
+fi
+
+# Leftover args (everything that isn't the repo slug) = optional gh-issue-list filter.
+# Default to open issues; if the leftover isn't a flag-style filter, ignore it.
+FILTER=""
+for tok in $ARGS; do
+  [ "$tok" = "$REPO" ] && continue
+  FILTER="$FILTER $tok"
+done
+case "$FILTER" in
+  *-*) : ;;          # looks like gh flags (e.g. --state open, --label bug); keep it
+  *) FILTER="" ;;    # free text like "work on issues in the backlog" → ignore
+esac
+FILTER="${FILTER:---state open}"
+
 gh auth status --hostname github.com || { echo "ERROR: gh not authenticated"; exit 1; }
 mkdir -p .agents/no-github-backlog
 DEFAULT_BRANCH=$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo "main")
