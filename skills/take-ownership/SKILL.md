@@ -54,6 +54,41 @@ Pattern: `[thing] [action] [reason]. [next step].`
 
 Resume caveman after the clarity-required part is done.
 
+## Task Kickoff Contract — emit these THREE before anything else
+
+Your **first substantive response to any task** — no matter how small, urgent, or
+ambiguous it looks, and even if the user says "this is small, just do X" — MUST
+contain these three artifacts, written out explicitly. Caveman mode does NOT
+exempt them; they are the carve-out. Skipping any one is the single most common
+way this skill scores low.
+
+1. **The R1 success line, verbatim and runnable** —
+   > Done when **`<exact command/action the USER runs>`** produces
+   > **`<exact observable>`** in **`<real user-facing channel>`**.
+   Then one line ruling out the false bars: "NOT done at: CI green / unit tests
+   pass / API returns 200 / a subagent says so." A login bug → "login succeeds
+   for a real account at the prod URL," not "auth tests pass." If the task is so
+   ambiguous you cannot write a runnable command, that is the one allowed
+   pre-Phase-1 question — ask it, don't proceed on a vague metric. This applies
+   equally to **diagnosis-framed tasks** ("why is X failing," "debug this"): the
+   R1 metric is the symptom *gone*, observed in the real channel — write it
+   before diagnosing.
+
+2. **The STATE.md skeleton + the boundary promise** — show
+   `.tasks/$ID/STATE.md` with `phase:`, `issue:`, `success-metric:`, and state
+   plainly: "I update STATE.md + worklog at EVERY phase boundary with enough
+   detail that a cold resume from STATE.md alone continues without asking the
+   user." Recovery-only mention does not count — the promise is *incremental
+   writes during the run*.
+
+3. **The phase list you will run** — name the phases (define → design → plan →
+   implement → review → real-channel test → PR → CI → final review → merge →
+   prod-verify), scaled to size. "Small" shrinks each phase; it never deletes
+   one and never merges design+plan+review into one blob. If you're tempted to
+   skip a phase, that temptation is the failure mode — keep it, make it tiny.
+
+These three cost a few lines and are what separate ownership from "just coding."
+
 ## Definition of Done — Hardening Rules (READ FIRST)
 
 These rules override anything below them. They exist because past runs
@@ -607,10 +642,53 @@ Update STATE after each group: `phase: 5-group-A-done`, etc.
 
 ---
 
+## The Review Bar — Five Questions (Phases 5b + 7 both enforce)
+
+A good review is the whole point of this skill. Both the pre-PR review (5b)
+and the final PR review (7) must answer **all five questions below**, each with
+`path:line` evidence, before returning a pass/ship verdict. A review that skips
+a question is not a review — redo it. "Looks good" / "LGTM" is never an answer.
+
+1. **Why do we need this?** Every hunk must trace to the issue's actual problem
+   and move the R1 success metric. Flag for removal anything that doesn't:
+   unrequested scope, "while I'm here" edits, speculative generality, dead code.
+2. **Is it the optimal implementation?** Simplest correct approach for THIS
+   problem. Flag over-engineering (needless abstraction, premature config) AND
+   under-engineering (copy-paste, wrong data structure). Name any existing repo
+   helper/pattern it should reuse instead of reinventing.
+3. **No bullshit workarounds or fallbacks.** Hunt and reject: `try/except` or
+   `catch` that swallows errors, default-value fallbacks that mask a real
+   failure, `|| true`, retries hiding a broken call, hard-coded values dodging
+   the real lookup, mock/stub left in the runtime path, `TODO: real impl later`,
+   dead branches. The deeper test: **does this fix the fundamental problem, or
+   paper over a symptom that will resurface elsewhere?** A symptom-patch is a
+   fix-required finding — name the line and the real fix.
+4. **Will it break production?** Check regressions to existing callers, changed
+   signatures/return shapes, removed exports, backward-incompatible
+   schema/migrations, config the deploy doesn't set, blast radius beyond the
+   touched module. For each risk: is it mitigated, and which monitor/user would
+   surface it if not?
+5. **Will it pass ALL CI checks — for real?** Not "green right now." Reject
+   skipped/`xfail`/`.only`/disabled tests, `--no-verify`, and lint suppressions
+   added to dodge a rule. Every new behavior must have a test that fails without
+   the change. CI green via a weakened check is a fix-required finding.
+
+**Review engine: use `/code-review`, not `/review`, as the primary.**
+`/code-review` takes an effort knob (`high`/`max`/`ultra` — `ultra` is a deep
+multi-agent cloud review), runs on the diff, and supports `--comment` (post
+inline) and `--fix` (apply). `/review` only does a single PR pass with no depth
+control — keep it as an *optional independent second opinion* at the final gate,
+never the primary. The five questions above are the bar `/code-review`'s output
+is graded against; the skill adds the why-needed and won't-break-prod lenses a
+pure correctness pass misses.
+
+---
+
 ## Phase 5b — Implementation Review (subagent)
 
-Spawn a fresh subagent on `claude-sonnet-4-6` to review the implementation
-**as a stranger** (supervisor must substitute `$WT`, `$ID`, `$BASE_BRANCH`):
+Review the worktree diff **before** opening the PR. Spawn a fresh skeptical
+subagent on `claude-sonnet-4-6` — fresh-eyes, did not write the code (supervisor
+must substitute `$WT`, `$ID`, `$BASE_BRANCH`):
 
 ```
 Agent(
@@ -618,21 +696,18 @@ Agent(
   subagent_type: "general-purpose",
   model: "claude-sonnet-4-6",
   prompt: "
-    You are reviewing the implementation for task $ID. Be skeptical.
-    Read:
-      - .tasks/$ID/design.md
-      - .tasks/$ID/plan.md
-      - the diff: `git -C $WT diff origin/$BASE_BRANCH...HEAD`
-    Check:
-      1. Does the diff actually implement the design? No half-stubs.
-      2. Does it break anything in the existing codebase? Look for
-         removed callers, changed signatures, broken imports.
-      3. Is there AI slop — code that looks right but cannot work
-         (wrong API calls, made-up modules, dead branches)?
-      4. Security: any new input handling, secrets, shell calls?
-      5. Are the done-criteria from plan.md actually met?
-    Write findings to .tasks/$ID/review.md as:
-      path:line: <severity> <problem>. <fix>.
+    Review the implementation for task $ID as a hostile stranger.
+    Read .tasks/$ID/design.md and .tasks/$ID/plan.md for intent.
+    1. Run the `/code-review` skill (Skill tool, skill: code-review, args:
+       'high') on the worktree diff `git -C $WT diff origin/$BASE_BRANCH...HEAD`
+       for a correctness + simplification pass.
+    2. THEN answer ALL FIVE QUESTIONS from the skill's 'Review Bar' section
+       (why-needed, optimal, no-bullshit-fallbacks, won't-break-prod,
+       passes-CI-for-real) against that diff — the five questions are the bar,
+       not the code-review output alone.
+    3. Confirm each plan.md done-criterion is actually met.
+    Write findings to .tasks/$ID/review.md, grouped by the five questions:
+      Q<n> path:line: <severity> <problem>. <real fix>.
     The final line of your response MUST be exactly one of:
       VERDICT: pass
       VERDICT: fix-required (<one-line reason>)
@@ -642,8 +717,10 @@ Agent(
 ```
 
 If `fix-required`:
-- For each finding, spawn an implementation subagent to fix (cheaper model).
-- Re-run review.
+- Spawn an implementation subagent (cheaper model) to address the findings —
+  pass it `.tasks/$ID/review.md`. Real fixes only; reject any finding "resolved"
+  by deleting a test or adding a suppression (it fails Q5 on the re-review).
+- Re-run the review subagent on the new diff.
 - Max 3 review cycles before checkpointing with the user.
 
 Update STATE: `phase: 5b-pass` or `phase: 5b-loop-N`.
@@ -773,26 +850,40 @@ Update STATE: `phase: 6-ci-green`.
 
 ---
 
-## Phase 7 — Final PR Review (subagent)
+## Phase 7 — Final PR Review (per-PR subagent + deep review)
 
-Spawn a fresh `claude-sonnet-4-6` subagent that has not seen the implementation
-(supervisor must substitute `$ID`, `<number>`):
+This is the gate that decides whether bullshit ships. Run it **per PR** — one
+review subagent per open PR in scope, then one fix subagent per PR that has
+findings. (Usually one PR; the per-PR shape matters when a task fanned out into
+several.) List the PRs in scope:
+
+```bash
+gh pr list --search "own/$ID" --json number,headRefName,title --jq '.[]'
+```
+
+For **each** PR number, spawn a fresh `claude-sonnet-4-6` review subagent that
+did not write the code (supervisor must substitute `$ID`, `<number>`):
 
 ```
 Agent(
-  description: "Final PR review for task $ID",
+  description: "Final review for PR <number> (task $ID)",
   subagent_type: "general-purpose",
   model: "claude-sonnet-4-6",
   prompt: "
-    You are doing the final review on PR <number>.
-    Pull the PR diff: `gh pr diff <number>`.
-    Read .tasks/$ID/design.md and .tasks/$ID/test-report.md.
-    Check:
-      - Does this PR deliver the success metric in design.md?
-      - Any regressions, security issues, data-loss risks?
-      - CI green?
-      - Anything obviously left half-finished?
-    Write `path:line: <severity> <problem>. <fix>.` per finding.
+    Final review on PR <number>. You are the last gate before merge.
+    Read .tasks/$ID/design.md and .tasks/$ID/test-report.md for intent.
+    1. Run the deepest review available via the Skill tool:
+       skill: code-review, args: 'ultra <number> --comment'. `ultra` is a deep
+       multi-agent cloud review; --comment posts inline so the audit trail lives
+       on the PR. If ultra is unavailable, use args: 'max <number> --comment'.
+    2. Answer ALL FIVE QUESTIONS from the skill's 'Review Bar' against
+       `gh pr diff <number>` — especially Q3 (real fix or a workaround papering
+       over a symptom?) and Q4 (does it break prod?).
+    3. Confirm CI is actually green AND not green via a weakened check (Q5):
+       `gh pr checks <number>`, then spot-check that disabled/skipped tests
+       weren't the reason.
+    Write findings to .tasks/$ID/final-review-<number>.md, grouped by question:
+      Q<n> path:line: <severity> <problem>. <real fix>.
     The final line of your response MUST be exactly one of:
       FINAL: ship
       FINAL: block (<one-line reason>)
@@ -801,13 +892,51 @@ Agent(
 )
 ```
 
-If `block`: fix and re-run from Phase 5b. If `ship`: continue.
+Optional independent second opinion on a high-stakes PR: also run `/review` (a
+single-pass PR reviewer, different lens) and fold any new findings in. It does
+not replace `/code-review ultra`.
+
+For each PR returning `block`: spawn one **fix subagent per PR** (cheaper model),
+pass it `.tasks/$ID/final-review-<number>.md`, then re-run that PR's review
+subagent. Real fixes only — a finding "resolved" by suppression re-blocks on Q5.
+Max 3 cycles per PR before checkpointing with the user.
+
+Only when every in-scope PR returns `FINAL: ship` do you continue.
 
 Update STATE: `phase: 7-ship-recommended`.
 
 ---
 
 ## Phase 8 — Ask About Merge
+
+### 8a. Merge double-think — should this ship AT ALL? (gate before the safety dance)
+
+Before any merge mechanics, stop and answer two questions in writing to
+`.tasks/$ID/merge-decision.md`. A green, reviewed PR is **not** automatically a
+mergeable PR. The most expensive mistake is merging a change that shouldn't
+exist.
+
+1. **Do we genuinely need this change?** Tie it back to the R1 success metric
+   and the issue's root problem. "It's already built" and "CI is green" are not
+   reasons to merge.
+2. **Is this the real fix, or a bullshit workaround?** Ask: does it solve the
+   **fundamental** problem, or mask a symptom that will resurface — possibly
+   worse, somewhere harder to see? If it's a symptom-patch, the right move is
+   often to NOT merge: reopen the design (Phase 3) on the real root cause and
+   file the deeper problem as its own issue. Prefer a small correct fix to a
+   large plausible one.
+3. **Consequences of merging** — write them out, do not hand-wave:
+   - Blast radius: who/what depends on the touched code; what breaks if the
+     review's Q4 risks are real.
+   - Reversibility: clean revert, or does this include a migration / data change
+     / public-contract change that can't be undone?
+   - Failure surface in prod: which monitor or user sees it first if it's wrong.
+
+If the answer to (1) is no or (2) is "workaround," **do not merge.** Say so
+plainly, propose the real fix, and ask the user how to proceed. Shipping nothing
+beats shipping a workaround that buries the real problem.
+
+### 8b. Merge mechanics
 
 **Merge is irreversible.** Even when the user has pre-authorized, do the
 following safety dance BEFORE running `gh pr merge`:
@@ -970,7 +1099,20 @@ Decide yourself for everything else, including:
 - "I'll just write unit tests with mocks and call it tested." — No. See 5c.
 - "Opus for everything." — No. Opus is the supervisor.
 - "Skip review, the implementation looks fine." — No. Fresh-eyes subagent always.
+- "Ran `/review`, it said LGTM, shipped." — No. `/code-review ultra` is the primary
+  gate; grade the diff against the five Review-Bar questions. `/review` is a secondary
+  opinion only.
+- "CI green + ship verdict, so I merged." — No. Phase 8a first: is the change genuinely
+  needed, and is it a real fix or a workaround papering over a symptom? Merge nothing that
+  doesn't solve the fundamental problem.
 - "Skip the design doc, the task is small." — No. Tiny tasks get tiny design docs.
+- "User said 'this is small, just add it,' so I went straight to code." — No. That
+  is the compression trap. Acknowledge, then still emit the Kickoff Contract (R1 +
+  STATE skeleton + scaled phase list) and run every phase shrunk, none deleted.
+- "Defined the success metric implicitly / in my head." — No. Write the literal R1
+  line in the response AND rule out CI-green / unit-tests / API-200 as the bar.
+- "Explained how I'd recover from a lost STATE.md." — Not enough. Show STATE.md
+  being written at each phase boundary during the run, resume-sufficient.
 - "Merge while CI is still running." — No.
 - "Ask the user for every uncertainty." — No. You own this. Investigate first.
 - "Merged CI-green; didn't check the pod." — No. Phase 9 prod verify is required.

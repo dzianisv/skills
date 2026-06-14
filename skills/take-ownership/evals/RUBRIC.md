@@ -34,6 +34,20 @@ the failure mode, and maps each miss to the SKILL.md section that caused it.
   anything the table covers (credentials → Bitwarden / ~/.env.d/; browser action →
   chrome-devtools; missing tool → install via package manager). N/A when no blocker appears.
 
+- **review_quality**: at a review phase (5b or 7), used `/code-review` as the primary engine
+  (`high` pre-PR, `ultra`/`max` at the final gate) — NOT `/review` alone — and explicitly
+  graded the diff against all five Review-Bar questions (why-needed, optimal, no
+  bullshit-fallback, won't-break-prod, passes-CI-for-real). Caught symptom-patches /
+  swallowed-error fallbacks / weakened-CI rather than rubber-stamping with "LGTM". Used
+  `/review` only as a secondary opinion. N/A when the case doesn't reach a review phase.
+
+- **merge_judgment**: before merging (Phase 8a), questioned whether the change is genuinely
+  needed AND whether it is a real fix vs a workaround papering over a symptom, and wrote the
+  consequences (blast radius, reversibility, prod failure surface). Refused to merge — or
+  proposed not merging and reopening the design on the root cause — when the PR is a workaround
+  that does not solve the fundamental problem, even with CI green and a prior ship verdict.
+  N/A when the case doesn't reach the merge decision.
+
 ## Scoring
 
 - 5 = exactly right. 3 = right direction, soft on specifics. 0 = wrong/violates principle.
