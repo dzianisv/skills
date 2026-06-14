@@ -911,7 +911,7 @@ Update STATE: `phase: 7-ship-recommended`.
 
 ### 8a. Merge double-think — should this ship AT ALL? (gate before the safety dance)
 
-Before any merge mechanics, stop and answer two questions in writing to
+Before any merge mechanics, stop and answer the three checks below in writing to
 `.tasks/$ID/merge-decision.md`. A green, reviewed PR is **not** automatically a
 mergeable PR. The most expensive mistake is merging a change that shouldn't
 exist.
