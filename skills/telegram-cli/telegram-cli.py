@@ -72,34 +72,59 @@ def _ensure_session_schema() -> None:
     Telethon 1.43+ needs tmp_auth_key (column 6); 1.40.x only knows 5 columns
     and breaks if tmp_auth_key is present. Only add/keep tmp_auth_key for 1.43+."""
     import sqlite3 as _sqlite3
-    import telethon
-    _parts = telethon.__version__.split(".")
-    needs_tmp = (int(_parts[0]), int(_parts[1])) >= (1, 43)
+    try:
+        import telethon
+        _parts = telethon.__version__.split(".")
+        needs_tmp = (int(_parts[0]), int(_parts[1])) >= (1, 43)
+    except (ImportError, ValueError, IndexError):
+        # Can't determine the Telethon version safely (e.g. an unexpected
+        # version string) — leave the session alone and let Telethon proceed.
+        return
 
     db_path = SESSION_PATH + '.session'
     if not os.path.exists(db_path):
         return
+    conn = None
     try:
-        conn = _sqlite3.connect(db_path)
+        # isolation_level=None → autocommit; we drive transactions explicitly so
+        # the table rebuild below is atomic. Python's sqlite3 otherwise
+        # auto-commits before each DDL, which would make DROP+RENAME separable
+        # and lose the auth_key session on a crash between them.
+        conn = _sqlite3.connect(db_path, isolation_level=None)
         cur = conn.cursor()
         cur.execute("PRAGMA table_info(sessions)")
         cols = [r[1] for r in cur.fetchall()]
         if not cols:
-            conn.close()
             return
         has_tmp = 'tmp_auth_key' in cols
         if needs_tmp and not has_tmp:
             cur.execute('ALTER TABLE sessions ADD COLUMN tmp_auth_key BLOB')
-            conn.commit()
         elif not needs_tmp and has_tmp:
-            # Telethon 1.40 can't handle tmp_auth_key — rebuild without it
-            cur.execute("CREATE TABLE sessions_bak AS SELECT dc_id, server_address, port, auth_key, takeout_id FROM sessions")
+            # Telethon <1.43 can't unpack a 6-column sessions row — rebuild the
+            # table without tmp_auth_key, in one EXCLUSIVE transaction so a crash
+            # mid-rebuild rolls back and the original auth_key survives. Clear any
+            # sessions_bak orphaned by a previously interrupted run first.
+            cur.execute('DROP TABLE IF EXISTS sessions_bak')
+            cur.execute('BEGIN EXCLUSIVE')
+            cur.execute("CREATE TABLE sessions_bak AS "
+                        "SELECT dc_id, server_address, port, auth_key, takeout_id FROM sessions")
             cur.execute("DROP TABLE sessions")
             cur.execute("ALTER TABLE sessions_bak RENAME TO sessions")
-            conn.commit()
-        conn.close()
+            cur.execute('COMMIT')
     except Exception:
-        pass  # best-effort; Telethon will surface its own error if still broken
+        # best-effort; roll back any open transaction so a partial rebuild never
+        # persists, then let Telethon surface its own error if still broken.
+        try:
+            if conn is not None:
+                conn.execute('ROLLBACK')
+        except Exception:
+            pass
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def _make_client() -> "TelegramClient":
