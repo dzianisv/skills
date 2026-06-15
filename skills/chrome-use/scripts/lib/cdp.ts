@@ -19,6 +19,8 @@ export class Cdp implements CdpClient {
   #listeners = new Map<string, Set<(params: any, sessionId?: string) => void>>();
   #open: Promise<void>;
   #closed = false;
+  #closeFired = false;
+  #onCloseCbs = new Set<() => void>();
 
   private constructor(ws: WebSocket) {
     this.#ws = ws;
@@ -27,11 +29,33 @@ export class Cdp implements CdpClient {
       ws.addEventListener('error', () => reject(new Error('WebSocket connection error')), { once: true });
     });
     ws.addEventListener('message', (ev) => this.#onMessage(String((ev as MessageEvent).data)));
-    ws.addEventListener('close', () => {
-      this.#closed = true;
-      for (const { reject } of this.#pending.values()) reject(new Error('CDP connection closed'));
-      this.#pending.clear();
-    });
+    // A dropped socket fires 'close' (and usually 'error' first); either marks the
+    // client dead so the proxy can null its cached handle and reconnect on the next
+    // command. #fireClose is idempotent so close/error can't double-run it.
+    ws.addEventListener('close', () => this.#fireClose());
+    ws.addEventListener('error', () => this.#fireClose());
+  }
+
+  #fireClose(): void {
+    if (this.#closeFired) return;
+    this.#closeFired = true;
+    this.#closed = true;
+    for (const { reject } of this.#pending.values()) reject(new Error('CDP connection closed'));
+    this.#pending.clear();
+    for (const cb of this.#onCloseCbs) {
+      try { cb(); } catch { /* onClose callbacks are non-fatal */ }
+    }
+  }
+
+  /**
+   * Register a callback fired once when the connection drops (ws close/error).
+   * Lets the proxy discard its cached client and lazily reconnect. Returns an
+   * unsubscribe fn. If already closed, the callback runs immediately.
+   */
+  onClose(cb: () => void): () => void {
+    this.#onCloseCbs.add(cb);
+    if (this.#closed) { try { cb(); } catch { /* non-fatal */ } }
+    return () => this.#onCloseCbs.delete(cb);
   }
 
   /** Connect to a browser-level ws endpoint and resolve once the socket is open. */
