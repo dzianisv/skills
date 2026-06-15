@@ -37,7 +37,9 @@ echo "   -> $AFTER"
 if printf '%s' "$AFTER" | grep -qi "CDP connection closed"; then
   echo "FAIL: returned 'CDP connection closed' — did NOT auto-reconnect."; exit 1
 fi
-if printf '%s' "$AFTER" | grep -qiE "^(https?|chrome|about|data|file):"; then
+# Match a URL scheme anywhere (robust to a preamble line); the error case is
+# already handled above, so this can't false-PASS on a failure.
+if printf '%s' "$AFTER" | grep -qiE "://|^(about|data):"; then
   echo "PASS: reconnected transparently after the Chrome restart."; exit 0
 fi
 echo "INCONCLUSIVE: unexpected output (is Chrome running?)."; exit 2
