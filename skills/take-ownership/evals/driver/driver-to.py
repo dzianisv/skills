@@ -16,9 +16,11 @@ import argparse
 import concurrent.futures as cf
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
+import statistics
 import sys
 import tempfile
 from pathlib import Path
@@ -41,6 +43,10 @@ HOLDOUT_EVERY = 3
 PLATEAU_DELTA = 0.1
 PARALLEL    = 6
 TIMEOUT_S   = 600
+# N independent judge votes per case; the per-dimension MEDIAN is taken to cut the
+# judge's run-to-run variance (~σ/√N). Default 1 (cost parity); set 3 for release
+# scoring. Env override: JUDGE_VOTES.
+JUDGE_VOTES = max(1, int(os.environ.get("JUDGE_VOTES", "1")))
 ALLOWED_RO  = "Read"
 ALLOWED_RW  = "Read,Write,Edit"
 
@@ -236,6 +242,45 @@ def run_doer(body, case_path, n, mode):
         return (f"[doer failed: {type(e).__name__}]", 0.0)
 
 
+def aggregate_votes(votes):
+    """Merge N judge votes for one case into a single result by taking the
+    per-dimension MEDIAN across votes (cuts judge variance ~σ/√N). The failure
+    /fix_target text is taken from the vote closest to the merged scores (the most
+    central opinion). With a single vote, returns it verbatim — so N=1 is a no-op.
+    """
+    votes = [v for v in votes if v]
+    if not votes:
+        return {"dims": {}, "failure": "no votes", "fix_target": ""}
+    if len(votes) == 1:
+        return votes[0]
+    keys = set()
+    for v in votes:
+        keys.update((v.get("dims") or {}).keys())
+    dims = {}
+    for d in keys:
+        vals = []
+        for v in votes:
+            try:
+                vals.append(float((v.get("dims") or {}).get(d)))
+            except (TypeError, ValueError):
+                continue
+        if vals:
+            dims[d] = round(statistics.median(vals), 2)
+    def dist(v):
+        vd = v.get("dims") or {}
+        s = 0.0
+        for d in dims:
+            if d in vd:
+                try:
+                    s += abs(float(vd[d]) - dims[d])
+                except (TypeError, ValueError):
+                    continue
+        return s
+    central = min(votes, key=dist)
+    return {"dims": dims, "failure": central.get("failure", ""),
+            "fix_target": central.get("fix_target", ""), "case": votes[0].get("case", "")}
+
+
 def round_once(n, body, cases, rubric, mode):
     cost = 0.0
     with cf.ThreadPoolExecutor(max_workers=PARALLEL) as ex:
@@ -247,17 +292,32 @@ def round_once(n, body, cases, rubric, mode):
         cname, (resp, _) = args
         applies, case = parse_case(next(c for c in cases if c.name == cname))
         cost_acc = 0.0
-        for _ in range(2):
-            txt, jc = run_agent(judge_prompt(case, resp, rubric, applies),
-                                system=JUDGE_SYS, model=MODEL_JUDGE, allowed=ALLOWED_RO)
-            cost_acc += jc
-            try:
-                j = extract_json(txt); j["case"] = cname
-                return j, cost_acc
-            except (ValueError, json.JSONDecodeError):
-                continue
-        return ({"dims": {d: 0 for d in applies}, "failure": "judge parse failed",
-                 "fix_target": "", "case": cname}, cost_acc)
+        votes = []
+        for _vote in range(JUDGE_VOTES):
+            v = None
+            for _ in range(2):  # parse-retry within a single vote
+                txt, jc = run_agent(judge_prompt(case, resp, rubric, applies),
+                                    system=JUDGE_SYS, model=MODEL_JUDGE, allowed=ALLOWED_RO)
+                cost_acc += jc
+                try:
+                    v = extract_json(txt); break
+                except (ValueError, json.JSONDecodeError):
+                    continue
+            if v is not None:
+                v["case"] = cname
+                votes.append(v)
+        if not votes:
+            return ({"dims": {d: 0 for d in applies}, "failure": "judge parse failed",
+                     "fix_target": "", "case": cname}, cost_acc)
+        # Signal degraded vote count (parse failures cut us below the requested N)
+        # so a single-vote result isn't silently passed off as an N-vote median.
+        if len(votes) < JUDGE_VOTES:
+            print(f"[judge] {cname}: only {len(votes)}/{JUDGE_VOTES} votes parsed",
+                  file=sys.stderr)
+        agg = aggregate_votes(votes)
+        agg["case"] = cname
+        agg["n_votes"] = len(votes)
+        return agg, cost_acc
 
     with cf.ThreadPoolExecutor(max_workers=PARALLEL) as ex:
         judged_out = list(ex.map(judge_one, zip([r[0] for r in responses], doer_out)))
