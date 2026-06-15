@@ -10,7 +10,7 @@ Outputs (in the git repo, so they are committed alongside the skill):
   evals/score-history.jsonl   append-only ledger, one JSON record per run
   evals/SCOREBOARD.md         human-readable table, newest run on top
 """
-import csv, importlib.util, json, os, subprocess, sys, datetime
+import csv, importlib.util, json, os, statistics, subprocess, sys, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -25,6 +25,26 @@ REPO_SKILL = Path(os.environ.get("TO_REPO_SKILL", str(HERE.parents[1])))
 LEDGER = REPO_SKILL / "evals" / "score-history.jsonl"
 BOARD  = REPO_SKILL / "evals" / "SCOREBOARD.md"
 CSV    = REPO_SKILL / "evals" / "score-history.csv"
+
+
+def regression_delta(prev_means, new_mean, k=3, threshold=0.1):
+    """Noise-robust regression check.
+
+    Compare new_mean against the MEDIAN of the last k prior-run means (not the
+    single immediately-prior run — the LLM judge has σ≈0.1, so one prior sample
+    is too noisy a reference and false-flags on identical input).
+
+    prev_means: list of prior runs' overall means, oldest→newest, EXCLUDING the
+    current run. Returns dict {ref_median, delta, regression, n}. With fewer than
+    2 prior runs there is no reliable reference, so regression is False.
+    """
+    n = len(prev_means)
+    if n < 2:
+        return {"ref_median": None, "delta": None, "regression": False, "n": n}
+    ref = statistics.median(prev_means[-k:])
+    delta = round(new_mean - ref, 3)
+    return {"ref_median": round(ref, 3), "delta": delta,
+            "regression": delta < -threshold, "n": n}
 
 
 def rewrite_csv(rows):
@@ -97,24 +117,24 @@ def main():
     with open(LEDGER, "a") as f:
         f.write(json.dumps(record) + "\n")
 
-    # regression check vs the most recent prior run (the row just before this one)
-    prev = None
-    if LEDGER.exists():
-        rows = [json.loads(l) for l in LEDGER.read_text().splitlines() if l.strip()]
-        for r in reversed(rows[:-1]):
-            prev = r; break
+    # regression check vs the MEDIAN of the last K prior runs (noise-robust)
+    all_rows = [json.loads(l) for l in LEDGER.read_text().splitlines() if l.strip()]
+    prev_means = [r["mean"] for r in all_rows[:-1]]   # exclude the row we just wrote
+    rd = regression_delta(prev_means, mean)
     delta_note = ""
-    if prev:
-        d = round(mean - prev["mean"], 3)
-        flag = "  ⚠ REGRESSION" if d < -0.1 else ""
-        delta_note = f" (Δ {d:+.2f} vs {prev['commit']}){flag}"
-        print(f"prev {prev['commit']} mean={prev['mean']:.2f} → now {mean:.2f}{delta_note}")
+    if rd["delta"] is not None:
+        flag = "  ⚠ REGRESSION" if rd["regression"] else ""
+        delta_note = f" (Δ {rd['delta']:+.2f} vs median {rd['ref_median']:.2f}){flag}"
+        print(f"median(last {min(3, rd['n'])} of {rd['n']} prior) = {rd['ref_median']:.2f}"
+              f" → now {mean:.2f}{delta_note}")
+    else:
+        print(f"now {mean:.2f} (no regression check — only {rd['n']} prior run(s))")
 
     # rewrite SCOREBOARD.md newest-first
     rows = [json.loads(l) for l in LEDGER.read_text().splitlines() if l.strip()]
     lines = ["# take-ownership eval scoreboard", "",
-             "Judge mean per commit (higher = better). A drop > 0.1 vs the prior "
-             "clean run is a regression — do not ship it. See AGENTS.md.", "",
+             "Judge mean per commit (higher = better). A drop > 0.1 vs the median "
+             "of the last 3 prior runs is a regression — do not ship it. See AGENTS.md.", "",
              "| date (UTC) | commit | dirty | mean | cost | per-dim |",
              "|---|---|---|---|---|---|"]
     for r in reversed(rows):
