@@ -102,8 +102,9 @@ low = iter([3.92, 3.95])
 def resample_low():
     calls[0] += 1; return next(low)
 rdb, samples = cr(PRIOR, 3.90, resample_low, n_total=3)
-check("sustained low across 3 samples -> stays FLAGGED", rdb["regression"],
-      f"new_median={rdb['new_median']} delta={rdb['delta']} samples={samples}")
+check("sustained low -> resampled (2 calls) AND stays FLAGGED",
+      calls[0] == 2 and rdb["regression"],
+      f"calls={calls[0]} new_median={rdb['new_median']} delta={rdb['delta']} samples={samples}")
 
 # guard: too little prior history -> never resamples, never flags
 calls = [0]
