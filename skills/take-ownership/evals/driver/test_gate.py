@@ -64,5 +64,52 @@ check("last-3 median drops the oldest sample", r["ref_median"] == 4.3,
 check("  -> healthy run near recent median, no flag", not r["regression"],
       f"delta={r['delta']}")
 
+# ── regression_delta with a LIST of new samples (median of new side) ──────────
+r = rd([4.3, 4.32, 4.31], [4.18, 4.40, 4.39])   # new median 4.39, not the low 4.18
+check("list new_means uses the NEW median (4.39) -> no flag", not r["regression"],
+      f"new_median={r['new_median']} delta={r['delta']}")
+r = rd([4.3, 4.32, 4.31], [3.9, 3.95, 4.0])     # all new low -> median 3.95
+check("list new_means all-low (median 3.95) -> FLAG", r["regression"],
+      f"new_median={r['new_median']} delta={r['delta']}")
+
+# ── confirm_regression: resample ONLY on an initial flag ─────────────────────
+cr = so.confirm_regression
+PRIOR = [4.30, 4.32, 4.31]   # median 4.31
+
+# (c) no initial flag -> resample_fn NEVER called, single sample kept
+calls = [0]
+def never():
+    calls[0] += 1; return 0.0
+rdc, samples = cr(PRIOR, 4.30, never, n_total=3)
+check("no initial flag -> resample_fn not called", calls[0] == 0 and len(samples) == 1,
+      f"calls={calls[0]} samples={samples}")
+check("  -> not a regression", not rdc["regression"], f"delta={rdc['delta']}")
+
+# (a) initial flag (4.18 vs 4.31) but resamples recover -> reverts to no-flag
+calls = [0]
+recover = iter([4.40, 4.39])
+def resample_recover():
+    calls[0] += 1; return next(recover)
+rda, samples = cr(PRIOR, 4.18, resample_recover, n_total=3)
+check("initial flag, resamples recover -> resample_fn called twice", calls[0] == 2,
+      f"calls={calls[0]} samples={samples}")
+check("  -> noisy-low single sample REVERTS (no flag)", not rda["regression"],
+      f"new_median={rda['new_median']} delta={rda['delta']}")
+
+# (b) initial flag AND sustained low -> stays flagged
+calls = [0]
+low = iter([3.92, 3.95])
+def resample_low():
+    calls[0] += 1; return next(low)
+rdb, samples = cr(PRIOR, 3.90, resample_low, n_total=3)
+check("sustained low across 3 samples -> stays FLAGGED", rdb["regression"],
+      f"new_median={rdb['new_median']} delta={rdb['delta']} samples={samples}")
+
+# guard: too little prior history -> never resamples, never flags
+calls = [0]
+rdg, samples = cr([4.3], 2.0, lambda: (calls.__setitem__(0, calls[0]+1) or 4.3), n_total=3)
+check("<2 prior runs -> no resample, no flag", calls[0] == 0 and not rdg["regression"],
+      f"calls={calls[0]}")
+
 print(f"\n{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
