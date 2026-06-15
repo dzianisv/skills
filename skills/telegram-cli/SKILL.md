@@ -45,6 +45,12 @@ python3 "{baseDir}/telegram-cli.py" login --phone +15551234  # pre-seed phone; o
 
 Re-run `login` whenever a command reports `session not authenticated`.
 
+The tool auto-migrates the session DB schema to match the installed Telethon version
+(Telethon 1.43+ adds a `tmp_auth_key` column that 1.40.x can't read). This is transparent
+and crash-safe. If you ever hit a persistent SQLite / `too many values to unpack` error on
+connect, delete the session file (`~/.config/telethon/<profile>/session.dat.session`) and
+re-run `login`.
+
 ## Multiple accounts (profiles)
 
 Each profile is an isolated account with its own session file. Set the profile env var on **every** command for that account — `login`, `send`, `read`, `ask`, and media commands alike — or the command silently targets the default account.
