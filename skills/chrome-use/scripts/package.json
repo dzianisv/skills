@@ -2,6 +2,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node --test test/unit.test.ts test/evals.test.ts"
+    "test": "node --test test/unit.test.ts test/reconnect.test.ts test/evals.test.ts",
+    "test:offline": "node --test test/unit.test.ts test/reconnect.test.ts"
   }
 }
