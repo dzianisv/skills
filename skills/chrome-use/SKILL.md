@@ -151,6 +151,7 @@ running Chrome through the proxy — *my-browser style*, not `--remote-debugging
 ```bash
 cd scripts && npm test          # unit + reconnect + golden eval cases (needs Chrome)
 cd scripts && npm run test:offline   # unit + reconnect only — no Chrome, CI-safe
+cd scripts && npm run live-smoke     # guided live reconnect smoke (needs Chrome + 1 Allow click)
 ```
 
 8 unit tests (argv/port/selector parsing) + a real-socket **reconnect** regression test
