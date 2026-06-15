@@ -14,16 +14,21 @@ Run from inside the main repo directory. The main repo's directory name is resol
 ```bash
 BRANCH=$1
 MAIN="$(basename "$(git rev-parse --show-toplevel)")"   # the main repo's dir name
-git worktree add "../$BRANCH"
+git fetch origin
+# Create the worktree directly ON the branch — never check out afterwards (that
+# would detach HEAD and abandon $BRANCH).
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git worktree add "../$BRANCH" "$BRANCH"                # existing local branch
+else
+  git worktree add -b "$BRANCH" "../$BRANCH" origin/main # new branch off main
+fi
 cd "../$BRANCH"
 ln -snf "../$MAIN/node_modules" .
 ln -snf "../$MAIN/.env" .
 [ -f "../$MAIN/.env.prod" ] && ln -snf "../$MAIN/.env.prod" .   # only if it exists
-git fetch
-git checkout origin/main 2>/dev/null || git checkout origin/master
 ```
 
-The symlinks are relative to the worktree dir, so `../$MAIN/` resolves to the sibling main-repo checkout the worktree was created next to.
+The worktree is now checked out on `$BRANCH` (a new branch off `origin/main`, or the existing one). The symlinks are relative to the worktree dir, so `../$MAIN/` resolves to the sibling main-repo checkout the worktree was created next to.
 
 ## Rules
 
