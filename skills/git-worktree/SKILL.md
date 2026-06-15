@@ -1,0 +1,41 @@
+---
+name: git-worktree
+description: 'Create a git worktree for isolated branch work by symlinking node_modules and .env files from the main repo — no reinstall. Use when asked to "create a worktree", "add worktree", "work on a branch without reinstalling", "set up worktree for branch". Never run npm/yarn/pnpm install inside the worktree unless package.json changed on the branch.'
+---
+
+# git-worktree
+
+Create worktrees that reuse the main repo's installed packages via symlinks. Reinstalling is never needed unless the branch changes `package.json`.
+
+## Steps
+
+Run from inside the main repo directory. The main repo's directory name is resolved dynamically — no hardcoded repo name:
+
+```bash
+BRANCH=$1
+MAIN="$(basename "$(git rev-parse --show-toplevel)")"   # the main repo's dir name
+git worktree add "../$BRANCH"
+cd "../$BRANCH"
+ln -snf "../$MAIN/node_modules" .
+ln -snf "../$MAIN/.env" .
+[ -f "../$MAIN/.env.prod" ] && ln -snf "../$MAIN/.env.prod" .   # only if it exists
+git fetch
+git checkout origin/main 2>/dev/null || git checkout origin/master
+```
+
+The symlinks are relative to the worktree dir, so `../$MAIN/` resolves to the sibling main-repo checkout the worktree was created next to.
+
+## Rules
+
+- **Never run `npm install` / `yarn` / `pnpm install`** inside the worktree unless `package.json` differs from main.
+- Only symlink files that exist in main — the `[ -f ... ]` guard skips a missing `.env.prod`.
+- Remove when done: `git worktree remove "../<branch>"`.
+
+## Verify
+
+```bash
+MAIN="$(basename "$(git rev-parse --show-toplevel)")"
+ls -la node_modules .env
+# node_modules -> ../<MAIN>/node_modules
+# .env -> ../<MAIN>/.env
+```
