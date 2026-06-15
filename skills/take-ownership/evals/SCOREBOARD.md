@@ -4,6 +4,7 @@ Judge mean per commit (higher = better). A drop > 0.1 vs the median of the last 
 
 | date (UTC) | commit | dirty | mean | cost | per-dim |
 |---|---|---|---|---|---|
+| 2026-06-15T07:21:17Z | 7bc6786 | 1 | 4.48 | $2.35 | blocker_resolved=5.0 merge_judgment=5.0 no_fake_done=4.8 phase_discipline=4.2 r1_defined=3.75 real_testing=5.0 review_quality=4.0 state_persisted=4.5 |
 | 2026-06-15T04:24:35Z | c1521a3 | 2 | 4.67 | $2.32 | blocker_resolved=5.0 merge_judgment=5.0 no_fake_done=5.0 phase_discipline=4.4 r1_defined=3.75 real_testing=5.0 review_quality=4.5 state_persisted=5.0 |
 | 2026-06-14T22:27:51Z | 8d8bf41 | 0 | 4.24 | $2.35 | blocker_resolved=5.0 merge_judgment=5.0 no_fake_done=4.6 phase_discipline=3.4 r1_defined=3.75 real_testing=5.0 review_quality=4.5 state_persisted=4.5 |
 | 2026-06-14T22:17:45Z | 6099328 | 2 | 4.30 | $2.34 | blocker_resolved=5.0 merge_judgment=5.0 no_fake_done=4.8 phase_discipline=4.2 r1_defined=3.5 real_testing=5.0 review_quality=5.0 state_persisted=2.5 |
