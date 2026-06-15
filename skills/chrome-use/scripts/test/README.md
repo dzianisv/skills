@@ -6,8 +6,25 @@ style**: it exercises the real connection path (DevToolsActivePort autoConnect),
 
 ```bash
 cd skills/chrome-use/scripts
-npm test                  # or: node --test test/unit.test.ts test/evals.test.ts
+npm test                  # unit + reconnect + golden eval cases (needs Chrome)
+npm run test:offline      # unit + reconnect only — no Chrome, CI-safe
+npm run live-smoke        # guided LIVE reconnect smoke (needs Chrome + 1 Allow click)
 ```
+
+## Reconnect / live smoke
+
+`reconnect.test.ts` (in `test:offline`) is the **automated** gate for CDP
+auto-reconnect: it spawns the real proxy against an in-process CDP WebSocket server,
+drops the socket, repoints `DevToolsActivePort`, and asserts the next command
+reconnects — no Chrome, CI-safe.
+
+`npm run live-smoke` is the **end-to-end** version against your real Chrome (it can't
+be fully automated because Chrome's one-time "Allow remote debugging?" dialog needs a
+human click). It walks you through: (1) open a page (approve the dialog if shown),
+(2) **fully restart Chrome** (drops the CDP socket + assigns a new debug port),
+(3) run another command — which must auto-reconnect (no `CDP connection closed`, no
+manual `stop`). It uses an isolated socket and stops its own proxy on exit, so your
+everyday chrome-use proxy is untouched.
 
 ## Requirements
 
