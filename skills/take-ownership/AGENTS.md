@@ -30,9 +30,14 @@ Rules:
 
 - **Score before you edit** (baseline for the current commit) and **after you
   edit** (so the delta is attributable to your change).
-- **A drop of more than 0.1 in the judge mean vs the prior clean run is a
-  regression — do not ship it.** Find which dimension fell (per-dim column),
-  fix the cause in `SKILL.md`, re-score until the mean recovers.
+- **A drop of more than 0.1 in the judge mean vs the median of the last 3 prior
+  runs is a regression — do not ship it.** The gate (`regression_delta()` in
+  `score_only.py`) compares against a median, not a single prior run, because the
+  LLM judge has σ≈0.1 and one prior sample false-flags on identical input (see
+  issue #4). Find which dimension fell (per-dim column), fix the cause in
+  `SKILL.md`, re-score until the mean recovers. The gate logic is itself tested
+  by `evals/driver/test_gate.py` (deterministic, no cost) — run it after editing
+  `score_only.py`.
 - **Commit `score-history.jsonl`, `score-history.csv`, and `SCOREBOARD.md`
   together with the `SKILL.md` change**, so the score is permanently tied to the
   commit that produced it and the history is auditable.
