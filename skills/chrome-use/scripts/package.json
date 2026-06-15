@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --test test/unit.test.ts test/reconnect.test.ts test/evals.test.ts",
-    "test:offline": "node --test test/unit.test.ts test/reconnect.test.ts"
+    "test:offline": "node --test test/unit.test.ts test/reconnect.test.ts",
+    "live-smoke": "bash test/live-smoke.sh"
   }
 }
