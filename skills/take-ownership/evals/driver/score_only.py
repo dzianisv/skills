@@ -27,24 +27,48 @@ BOARD  = REPO_SKILL / "evals" / "SCOREBOARD.md"
 CSV    = REPO_SKILL / "evals" / "score-history.csv"
 
 
-def regression_delta(prev_means, new_mean, k=3, threshold=0.1):
+def regression_delta(prev_means, new_means, k=3, threshold=0.1):
     """Noise-robust regression check.
 
-    Compare new_mean against the MEDIAN of the last k prior-run means (not the
-    single immediately-prior run — the LLM judge has σ≈0.1, so one prior sample
-    is too noisy a reference and false-flags on identical input).
+    Compare the MEDIAN of the new run(s) against the MEDIAN of the last k prior-run
+    means. Medianing the PRIOR side kills a noisy prior; medianing the NEW side
+    (when more than one new sample is supplied) kills a noisy new run — the LLM
+    judge has σ≈0.1, so a single sample on either side false-flags on identical
+    input (see issue #10 / #4).
 
     prev_means: list of prior runs' overall means, oldest→newest, EXCLUDING the
-    current run. Returns dict {ref_median, delta, regression, n}. With fewer than
+    current run. new_means: a float (single new run) OR a list of new-run means.
+    Returns {ref_median, new_median, delta, regression, n, n_new}. With fewer than
     2 prior runs there is no reliable reference, so regression is False.
     """
+    new_list = list(new_means) if isinstance(new_means, (list, tuple)) else [new_means]
+    new_ref = statistics.median(new_list)
     n = len(prev_means)
     if n < 2:
-        return {"ref_median": None, "delta": None, "regression": False, "n": n}
+        return {"ref_median": None, "new_median": round(new_ref, 3),
+                "delta": None, "regression": False, "n": n, "n_new": len(new_list)}
     ref = statistics.median(prev_means[-k:])
-    delta = round(new_mean - ref, 3)
-    return {"ref_median": round(ref, 3), "delta": delta,
-            "regression": delta < -threshold, "n": n}
+    delta = round(new_ref - ref, 3)
+    return {"ref_median": round(ref, 3), "new_median": round(new_ref, 3), "delta": delta,
+            "regression": delta < -threshold, "n": n, "n_new": len(new_list)}
+
+
+def confirm_regression(prev_means, first_mean, resample_fn, n_total=3, k=3, threshold=0.1):
+    """Two-stage gate: cheap initial check on a single new sample, then — ONLY if
+    it flags — draw more new samples and re-decide on their median. A single
+    noisy-low run reverts; a genuine sustained drop persists.
+
+    resample_fn() must return one fresh new-run overall mean (float). It is called
+    at most n_total-1 times, and ONLY when the initial sample flags (so the common
+    no-flag path costs nothing extra). Returns (rd_dict, samples_list).
+    """
+    samples = [first_mean]
+    rd = regression_delta(prev_means, samples, k, threshold)
+    if rd["regression"] and len(prev_means) >= 2:
+        while len(samples) < n_total:
+            samples.append(resample_fn())
+        rd = regression_delta(prev_means, samples, k, threshold)
+    return rd, samples
 
 
 def rewrite_csv(rows):
@@ -105,10 +129,43 @@ def main():
     print(f"OVERALL mean = {mean:0.2f}   cost = ${cost:0.2f}")
     print("per-dimension:", "  ".join(f"{d}={m}" for d, m in sorted(dim_means.items())))
 
+    # ── Regression gate: cheap single-sample check, resample ONLY on a flag ──────
+    # (computed before writing the row so the recorded mean is the representative
+    #  median of all samples drawn, which also de-noises future prior-medians.)
+    prev_means = ([json.loads(l)["mean"] for l in LEDGER.read_text().splitlines() if l.strip()]
+                  if LEDGER.exists() else [])
+    n_total = int(os.environ.get("RESAMPLE_N", "3"))
+    extra_cost = [0.0]
+    resampled = [0]
+    def resample_fn():
+        resampled[0] += 1
+        print(f"  ↻ flagged on the single sample — resampling to confirm "
+              f"(extra run {resampled[0]} of {n_total - 1})...")
+        _, rm, rc = drv.round_once("score", body, cases, rubric, "inject")
+        extra_cost[0] += rc
+        return rm
+    rd, samples = confirm_regression(prev_means, mean, resample_fn, n_total=n_total)
+    representative = round(statistics.median(samples), 3)
+    total_cost = round(cost + extra_cost[0], 2)
+
+    delta_note = ""
+    if rd["delta"] is not None:
+        flag = "  ⚠ REGRESSION" if rd["regression"] else ""
+        resn = (f" [{len(samples)} new samples → median {rd['new_median']:.2f}]"
+                if len(samples) > 1 else "")
+        delta_note = f" (Δ {rd['delta']:+.2f} vs median {rd['ref_median']:.2f}{resn}){flag}"
+        print(f"median(last {min(3, rd['n'])} of {rd['n']} prior) = {rd['ref_median']:.2f}"
+              f" → now {representative:.2f}{delta_note}")
+    else:
+        print(f"now {representative:.2f} (no regression check — only {rd['n']} prior run(s))")
+
+    # `mean` is the representative (median of samples); `dims`/`cases` are from the
+    # first sampling run (diagnostic — the gate decides on overall mean, not dims).
     record = {
         "ts": ts, "commit": commit, "dirty": dirty,
-        "mean": round(mean, 3), "cost_usd": round(cost, 2),
+        "mean": representative, "cost_usd": total_cost,
         "n_cases": len(cases), "dims": dim_means,
+        "samples": [round(s, 3) for s in samples],
         "cases": {j["case"]: {"mean": round(drv.dim_mean(j["dims"]), 2),
                               "dims": j["dims"], "failure": j.get("failure", "")}
                   for j in judged},
@@ -116,19 +173,6 @@ def main():
     LEDGER.parent.mkdir(parents=True, exist_ok=True)
     with open(LEDGER, "a") as f:
         f.write(json.dumps(record) + "\n")
-
-    # regression check vs the MEDIAN of the last K prior runs (noise-robust)
-    all_rows = [json.loads(l) for l in LEDGER.read_text().splitlines() if l.strip()]
-    prev_means = [r["mean"] for r in all_rows[:-1]]   # exclude the row we just wrote
-    rd = regression_delta(prev_means, mean)
-    delta_note = ""
-    if rd["delta"] is not None:
-        flag = "  ⚠ REGRESSION" if rd["regression"] else ""
-        delta_note = f" (Δ {rd['delta']:+.2f} vs median {rd['ref_median']:.2f}){flag}"
-        print(f"median(last {min(3, rd['n'])} of {rd['n']} prior) = {rd['ref_median']:.2f}"
-              f" → now {mean:.2f}{delta_note}")
-    else:
-        print(f"now {mean:.2f} (no regression check — only {rd['n']} prior run(s))")
 
     # rewrite SCOREBOARD.md newest-first
     rows = [json.loads(l) for l in LEDGER.read_text().splitlines() if l.strip()]
