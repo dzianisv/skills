@@ -58,6 +58,12 @@ Rules:
   (The noisy-*new*-run false-flag is now handled automatically — see the
   resample-on-flag behavior above, #10.)
 
+**De-noise scoring with judge votes.** The judge has σ≈0.1 per case. Set
+`JUDGE_VOTES=3` (env, default 1) to judge each case N times and take the
+per-dimension median (`aggregate_votes()` in `driver-to.py`) — variance drops
+~√N. Costs N× the judge calls, so use it for release scoring, not every run. The
+aggregation is tested by `evals/driver/test_votes.py` (deterministic, no cost).
+
 The full self-improving loop (`evals/driver/driver-to.py`) is a separate,
 expensive DGM-H meta-rewrite loop (~$22, opus). Use `score_only.py` for the
 regression gate; reserve the full driver for deliberate improvement runs.
