@@ -45,6 +45,20 @@ Rules:
   if it tests a new property, a new dimension in `evals/RUBRIC.md` — otherwise
   the score can't see whether the behavior works.
 
+**Known gate limitations (don't be fooled by either):**
+
+- **Dirty runs count toward the median.** The gate's reference median is the mean
+  of the last 3 prior ledger rows regardless of their `dirty` flag, so a score
+  taken with an uncommitted tree still shapes the bar. Prefer scoring on a clean
+  tree; treat the `dirty` column as a trust signal when reading history.
+- **A noisy-LOW *new* run can still false-flag.** `regression_delta()` medians the
+  *prior* runs (killing a noisy prior) but compares a *single* new run against it.
+  With judge σ≈0.1 a new run that lands low can show Δ<−0.1 with no real regression
+  (e.g. a 4.24 sample among a 4.3–4.4 cohort). Before believing a flag, re-score
+  2–3 times and compare the **median of the new runs** to the prior median — a real
+  regression persists; noise reverts. (Full median-of-N-new is the open hardening
+  in #4's spirit.)
+
 The full self-improving loop (`evals/driver/driver-to.py`) is a separate,
 expensive DGM-H meta-rewrite loop (~$22, opus). Use `score_only.py` for the
 regression gate; reserve the full driver for deliberate improvement runs.
