@@ -140,6 +140,7 @@ File format: two lines — port number, then WebSocket path:
 | `Daemon did not start in time` | Daemon failed to launch or Chrome not responding | Go to `chrome://inspect/#remote-debugging`, click **Allow**; check `./chrome-use status` |
 | `/json/version` connection refused | Expected in autoConnect mode | Use `DevToolsActivePort` + direct WebSocket; do not curl the HTTP API |
 | Another debugger attached error | DevTools panel open on the same tab | Close DevTools panels / disconnect other debuggers |
+| `CDP connection closed` after a Chrome restart / dropped socket | The CDP WebSocket dropped | Nothing — the proxy now auto-reconnects on the **next** command (re-reading `DevToolsActivePort` for Chrome's new port). No `stop`/restart needed. If it persists, Chrome isn't running. |
 
 ## Testing
 
@@ -148,14 +149,17 @@ connection path** (DevToolsActivePort autoConnect) by driving the CLI against yo
 running Chrome through the proxy — *my-browser style*, not `--remote-debugging-port`:
 
 ```bash
-cd scripts && npm test     # or: node --test test/unit.test.ts test/evals.test.ts
+cd scripts && npm test          # unit + reconnect + golden eval cases (needs Chrome)
+cd scripts && npm run test:offline   # unit + reconnect only — no Chrome, CI-safe
 ```
 
-8 unit tests (argv/port/selector parsing) + 19 end-to-end golden cases (open/back/
+8 unit tests (argv/port/selector parsing) + a real-socket **reconnect** regression test
+(spawns the proxy and drives it through a connect → drop → reconnect cycle against an
+in-process CDP server — no Chrome needed) + 19 end-to-end golden cases (open/back/
 forward/reload, snapshot `@e1` trees, click/fill/type/press, selectors, get, screenshot,
-eval, wait, tabs). Each test runs in a dedicated tab it creates and closes (never touches
-your tabs); fixtures are `data:` URLs (host/VM safe). Needs your approved Chrome running —
-not isolated/CI. See `scripts/test/README.md`.
+eval, wait, tabs). The golden cases each run in a dedicated tab they create and close
+(never touch your tabs); fixtures are `data:` URLs (host/VM safe) and need your approved
+Chrome. `test:offline` skips them. See `scripts/test/README.md`.
 
 ## Do NOT
 

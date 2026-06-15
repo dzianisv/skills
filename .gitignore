@@ -7,3 +7,6 @@ __pycache__/
 .env
 .env.local
 .env.*.local
+
+# take-ownership per-task working dirs (ephemeral STATE/worklog/design/plan)
+.tasks/
