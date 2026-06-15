@@ -69,17 +69,32 @@ function ensureConnected(): Promise<void> {
     // Always connect via DevToolsActivePort autoConnect (my-browser style).
     // CHROME_USE_USER_DATA_DIR optionally points at a non-default Chrome profile;
     // it still reads that profile's DevToolsActivePort — never a debugging port.
+    // Re-read on every (re)connect so a Chrome restart's new port/ws is picked up.
     const ws = buildWsEndpoint('stable', process.env.CHROME_USE_USER_DATA_DIR || undefined);
     log(`Connecting to ${ws}`);
     log('Chrome shows a one-time "Allow remote debugging?" dialog — click Allow (waits up to 5 min).');
-    cdp = await Cdp.connect(ws, 300_000);
-    const v = await cdp.send<any>('Browser.getVersion');
+    const client = await Cdp.connect(ws, 300_000);
+    cdp = client;
+    // When the socket drops, discard the dead handle so the next command lazily
+    // reconnects (re-reading DevToolsActivePort) instead of returning the cached
+    // closed client forever. Without this the proxy needs a manual stop to recover.
+    // Guard on identity: a late close from a SUPERSEDED connection must not null a
+    // freshly reconnected client (cdp may already point at a newer one).
+    client.onClose(() => { if (cdp === client) { cdp = null; connecting = null; } });
+    // Use the local `client` (not the module `cdp`, which onClose may have nulled)
+    // so the connect handshake completes cleanly even if the socket drops mid-setup.
+    const v = await client.send<any>('Browser.getVersion');
     log(`Connected. ${v?.product ?? 'Chrome'}`);
-  })().catch((err) => {
-    connecting = null;
-    cdp = null;
-    throw err;
-  });
+  })()
+    // Clear `connecting` on success too — not just on failure. Otherwise it keeps
+    // a resolved promise and the `if (connecting) return connecting` fast path
+    // short-circuits forever, so a dead `cdp` is never replaced.
+    .then(() => { connecting = null; })
+    .catch((err) => {
+      connecting = null;
+      cdp = null;
+      throw err;
+    });
   return connecting;
 }
 
