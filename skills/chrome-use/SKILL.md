@@ -16,26 +16,33 @@ A zero-dependency TypeScript CLI that drives the user's **real running Chrome** 
 
 ## Quick start
 
-The CLI auto-starts the proxy on first use, so you can jump straight to commands. Run via the shim (or alias it, e.g. `alias cu=./chrome-use`):
+Set `CHROME` once and use it throughout your session — **never call `node … cli.ts` directly**:
+
+```bash
+CHROME=/Users/engineer/.agents/skills/chrome-use/scripts/chrome-use
+# or alias it:  alias cu="$CHROME"
+```
+
+The CLI auto-starts the proxy on first use, so you can jump straight to commands:
 
 ```bash
 # 1. Open a page
-./chrome-use open https://example.com
+$CHROME open https://example.com
 
 # 2. Snapshot the interactive elements — assigns @eN refs
-./chrome-use snapshot -i
+$CHROME snapshot -i
 #   @e1 [textbox]  "Email"
 #   @e2 [textbox]  "Password"
 #   @e3 [button]   "Sign in"
 #   @e4 [link]     "Forgot password?"
 
 # 3. Act on the refs from that snapshot
-./chrome-use fill @e1 "me@example.com"
-./chrome-use fill @e2 "hunter2"
-./chrome-use click @e3
+$CHROME fill @e1 "me@example.com"
+$CHROME fill @e2 "hunter2"
+$CHROME click @e3
 
 # 4. Capture the result
-./chrome-use screenshot /tmp/out.png
+$CHROME screenshot /tmp/out.png
 ```
 
 ### The @e1 ref system
@@ -51,23 +58,23 @@ Acting on a stale ref returns a clear "page changed — re-run `snapshot`" error
 
 | Command | Example | Notes |
 |---------|---------|-------|
-| `open` / `goto` / `navigate` | `./chrome-use open https://example.com` | Aliases; no url → `about:blank` |
-| `back` / `forward` / `reload` | `./chrome-use back` | History navigation |
-| `close` | `./chrome-use close` | Close the active tab |
-| `snapshot` | `./chrome-use snapshot -i --json -s "#login"` | `-i` interactive-only; assigns `@eN`; `-s` scopes to a CSS root; `--json` structured output |
-| `click` | `./chrome-use click @e3 --new-tab` | Trusted mouse event; `--new-tab` opens link in a new tab |
-| `fill` | `./chrome-use fill @e1 "me@example.com"` | Clears the field, then inserts text |
-| `type` | `./chrome-use type @e1 "hello"` | Per-key key events (for inputs that watch keystrokes) |
-| `press` | `./chrome-use press Enter` | e.g. `Enter`, `Tab`, `Control+a` |
-| `focus` / `hover` | `./chrome-use hover @e4` | Move focus / hover at element center |
-| `get` | `./chrome-use get text "#main"` | `text\|html\|value\|attr\|url\|title [sel] [attr]`; `url`/`title` take no selector |
-| `screenshot` | `./chrome-use screenshot /tmp/out.png --full` | PNG; `--full` full-page; saves to a temp file if no path |
-| `eval` | `./chrome-use eval "document.title"` | `Runtime.evaluate`; returns JSON result |
-| `scroll` | `./chrome-use scroll down 800` | `up\|down\|left\|right [px]` |
-| `wait` | `./chrome-use wait "#ready" --text Done --url /dashboard` | Selector, ms duration, text, or url pattern |
-| `tab` | `./chrome-use tab new https://github.com` | `tab` (list) / `tab new [url]` / `tab <tN>` (switch) / `tab close [tN]` |
-| `cookies` | `./chrome-use cookies set session abc123` | `cookies` (list) / `cookies set <name> <val>` / `cookies clear`; scoped to active tab's URL |
-| `status` | `./chrome-use status` | Daemon + browser health, page count |
+| `open` / `goto` / `navigate` | `$CHROME open https://example.com` | Aliases; no url → `about:blank` |
+| `back` / `forward` / `reload` | `$CHROME back` | History navigation |
+| `close` | `$CHROME close` | Close the active tab |
+| `snapshot` | `$CHROME snapshot -i --json -s "#login"` | `-i` interactive-only; assigns `@eN`; `-s` scopes to a CSS root; `--json` structured output |
+| `click` | `$CHROME click @e3 --new-tab` | Trusted mouse event; `--new-tab` opens link in a new tab |
+| `fill` | `$CHROME fill @e1 "me@example.com"` | Clears the field, then inserts text |
+| `type` | `$CHROME type @e1 "hello"` | Per-key key events (for inputs that watch keystrokes) |
+| `press` | `$CHROME press Enter` | e.g. `Enter`, `Tab`, `Control+a` |
+| `focus` / `hover` | `$CHROME hover @e4` | Move focus / hover at element center |
+| `get` | `$CHROME get text "#main"` | `text\|html\|value\|attr\|url\|title [sel] [attr]`; `url`/`title` take no selector |
+| `screenshot` | `$CHROME screenshot /tmp/out.png --full` | PNG; `--full` full-page; saves to a temp file if no path |
+| `eval` | `$CHROME eval "document.title"` | `Runtime.evaluate`; returns JSON result |
+| `scroll` | `$CHROME scroll down 800` | `up\|down\|left\|right [px]` |
+| `wait` | `$CHROME wait "#ready" --text Done --url /dashboard` | Selector, ms duration, text, or url pattern |
+| `tab` | `$CHROME tab new https://github.com` | `tab` (list) / `tab new [url]` / `tab <tN>` (switch) / `tab close [tN]` |
+| `cookies` | `$CHROME cookies set session abc123` | `cookies` (list) / `cookies set <name> <val>` / `cookies clear`; scoped to active tab's URL |
+| `status` | `$CHROME status` | Daemon + browser health, page count |
 
 Output is human/AI-readable text by default; `--json` opts into structured JSON where useful.
 
