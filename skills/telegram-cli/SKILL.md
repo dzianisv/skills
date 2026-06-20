@@ -69,6 +69,56 @@ Session selection, most specific wins:
 
 Other env vars (defaults baked into the script, rarely changed): `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`.
 
+## Pairing an OpenClaw Telegram bot
+
+Safest workflow when pairing a Telegram bot account with your own Telegram user.
+
+### 1. Message the correct bot from your human account
+
+```bash
+python3 "{baseDir}/telegram-cli.py" ask @MonicaHallBot "/start" --wait 40
+```
+
+Expected result: bot replies with your Telegram user id, a pairing code, and an `openclaw pairing approve ...` hint.
+
+### 2. List pending pairing requests on the matching OpenClaw account
+
+```bash
+openclaw pairing list telegram --account monica-hall --json
+```
+
+Always pass `--account <accountId>` matching the bot you messaged. Mixing the default bot and a named account is the easiest way to pair the wrong bot.
+
+### 3. Approve the pairing code on the same account
+
+```bash
+openclaw pairing approve telegram <PAIRING_CODE> --account monica-hall --notify
+```
+
+### 4. Verify by messaging the same bot again
+
+```bash
+python3 "{baseDir}/telegram-cli.py" ask @MonicaHallBot "Who are you and what do you help with?" --wait 60
+```
+
+If routing is correct, the reply should come from the agent bound to `telegram:monica-hall`.
+
+## Account-routing guardrails
+
+When OpenClaw uses multiple Telegram bot accounts:
+
+- `channels.telegram.accounts.default` is the default bot account
+- named accounts such as `channels.telegram.accounts.monica-hall` are separate bots
+- `openclaw agents bind --agent <id> --bind telegram:<accountId>` routes that named bot to a specific agent
+- `openclaw pairing list/approve` must use the same `--account <accountId>` as the bot you messaged
+
+If you forget the account id, verify with:
+
+```bash
+openclaw channels status --probe
+openclaw agents bindings --json
+```
+
 ## Troubleshooting
 
 - `telethon not installed` → `pip install telethon` in the env running the script.
@@ -76,3 +126,19 @@ Other env vars (defaults baked into the script, rarely changed): `TELEGRAM_API_I
 - `file does not exist` → check the path passed to `send-image`/`send-file`/`send-voice`.
 - Voice note sent as plain audio → re-send with an `.ogg`/Opus file.
 - No reply within `--wait` timeout → confirm the target is online/running and raise `--wait`.
+- Bot returns pairing code repeatedly → you likely approved the code on the wrong OpenClaw Telegram account; rerun `openclaw pairing list telegram --account <accountId> --json`.
+- Bot replies with wrong persona → check `openclaw agents bindings --json` and `openclaw channels status --probe`; make sure bot username matches the named account you intended.
+- No reply within timeout during pairing → confirm the bot is running with `openclaw channels status --probe`; inspect gateway logs with `openclaw logs --limit 120 --plain`.
+
+## References from a real Monica Hall setup
+
+Commands used successfully in a real pairing:
+
+```bash
+python3 "{baseDir}/telegram-cli.py" ask @MonicaHallBot "/start" --wait 40
+openclaw pairing list telegram --account monica-hall --json
+openclaw pairing approve telegram 7PTE7AUN --account monica-hall --notify
+python3 "{baseDir}/telegram-cli.py" ask @MonicaHallBot "Monica, who are you and what do you help with?" --wait 60
+```
+
+The paired Monica Hall bot replied as the `vibe-growth-manager` agent, confirming the route and pairing were correct.
