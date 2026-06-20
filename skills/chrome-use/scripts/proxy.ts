@@ -22,7 +22,7 @@ import net from 'node:net';
 import { spawn } from 'node:child_process';
 
 import { Cdp } from './lib/cdp.ts';
-import { buildWsEndpoint } from './lib/devtools-port.ts';
+import { buildWsEndpoint, buildWsEndpointAuto } from './lib/devtools-port.ts';
 
 const SOCKET_PATH = process.env.CHROME_USE_SOCKET ?? `/tmp/chrome-use-${os.userInfo().uid}.sock`;
 
@@ -70,7 +70,13 @@ function ensureConnected(): Promise<void> {
     // CHROME_USE_USER_DATA_DIR optionally points at a non-default Chrome profile;
     // it still reads that profile's DevToolsActivePort — never a debugging port.
     // Re-read on every (re)connect so a Chrome restart's new port/ws is picked up.
-    const ws = buildWsEndpoint('stable', process.env.CHROME_USE_USER_DATA_DIR || undefined);
+    // If a specific profile dir is given, use it directly; otherwise auto-detect
+    // across all Chrome channels (stable, dev, beta, canary) and pick the first
+    // whose port is reachable — prevents stale/wrong-channel port file mismatches.
+    const userDataDir = process.env.CHROME_USE_USER_DATA_DIR || undefined;
+    const ws = userDataDir
+      ? buildWsEndpoint('stable', userDataDir)
+      : await buildWsEndpointAuto();
     log(`Connecting to ${ws}`);
     log('Chrome shows a one-time "Allow remote debugging?" dialog — click Allow (waits up to 5 min).');
     const client = await Cdp.connect(ws, 300_000);
