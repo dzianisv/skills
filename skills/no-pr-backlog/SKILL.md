@@ -48,10 +48,8 @@ if satisfied.
 |---|---|
 | Repo | `$1` arg → `gh repo view --json nameWithOwner` → `git remote get-url origin` |
 | Concurrency | `--concurrency N` (default: 8) |
-| Dry-run | `--dry-run` — review + report only, no merge/push |
-| Skip CI watch | `--skip-ci-watch` — skip post-merge CI monitoring loop |
 
-All `gh` CLI commands MUST use `GITHUB_TOKEN= gh ...` (unset the env var so
+All `gh` CLI commands MUST use `gh ...` (unset the env var so
 the CLI uses keyring auth).
 
 ---
@@ -102,7 +100,7 @@ load it and skip already-merged/closed PRs.
 ## Fetch Open PRs
 
 ```bash
-GITHUB_TOKEN= gh pr list --repo "$REPO" --state open --json number,title,author,headRefName,baseRefName,url,mergeable,statusCheckRollup,changedFiles,labels --limit 200
+gh pr list --repo "$REPO" --state open --json number,title,author,headRefName,baseRefName,url,mergeable,statusCheckRollup,changedFiles,labels --limit 200
 ```
 
 Sort PRs by ascending `number` (oldest first). Update `prs_found` in
@@ -157,11 +155,11 @@ If a subagent exceeds its timeout, treat as a stage failure.
 ### Worktree isolation
 Each fix-stage subagent works on a dedicated git worktree:
 ```bash
-git worktree add /tmp/pr-backlog-${PR_NUMBER} ${PR_BRANCH}
+git worktree add .worktree/pr-backlog-${PR_NUMBER} ${PR_BRANCH}
 ```
 Clean up after merge or quarantine:
 ```bash
-git worktree remove /tmp/pr-backlog-${PR_NUMBER} --force 2>/dev/null
+git worktree remove .worktree/pr-backlog-${PR_NUMBER} --force 2>/dev/null
 ```
 
 ### Merge gate
@@ -170,10 +168,6 @@ Before merging ANY PR:
 2. No merge conflicts (mergeable == MERGEABLE).
 3. The reflect stage must have returned `MERGE_READY`.
 If any condition fails, loop back to the fix stage (up to retry cap).
-
-### Dry-run mode
-If `--dry-run` is set, run review + reflect stages only. Log results to CSV
-but never push commits or merge. Skip fix, merge, and ci-watch stages.
 
 </constraints>
 
@@ -197,16 +191,21 @@ CI status: ${PR_CI_STATUS}
 Mergeable: ${PR_MERGEABLE}
 
 Tasks:
-1. Fetch the full diff: GITHUB_TOKEN= gh pr diff ${PR_NUMBER} --repo ${REPO}
-2. Fetch CI check details: GITHUB_TOKEN= gh pr checks ${PR_NUMBER} --repo ${REPO}
-3. Fetch review comments: GITHUB_TOKEN= gh pr view ${PR_NUMBER} --repo ${REPO} --json reviews,comments
+1. Fetch the full diff: gh pr diff ${PR_NUMBER} --repo ${REPO}
+2. Fetch CI check details: gh pr checks ${PR_NUMBER} --repo ${REPO}
+3. Fetch review comments: gh pr view ${PR_NUMBER} --repo ${REPO} --json reviews,comments
 4. Analyze:
+   - Does this PR solve the root cause?
+   - Did the PR owner identified a root cause in case of the bug? If no, then spawn a subagent to identify the root cause and put instructions with a fix plan.
    - Code correctness issues (bugs, logic errors, security)
    - Test coverage gaps
+   - No mock tests. No unit tests. They just give false-positives feeling that PR is good and code is safe.
+   - If this was a regression, a real end to end integration or g-eval test has to be added to the PR.
    - CI failures (identify root cause from check logs)
    - Merge conflicts
-   - Stale/abandoned state (no commits in 30+ days)
-5. Return a structured JSON report:
+   - Use /code-review or /review skills or alternative, if available.
+5. Comment on PR/line with the issue found.
+6. Return a structured JSON report:
    {
      "pr": ${PR_NUMBER},
      "verdict": "FIXABLE" | "READY" | "CLOSE" | "STALE",
@@ -217,9 +216,6 @@ Tasks:
      "close_reason": "<reason if CLOSE>"
    }
 
-If the PR is clearly abandoned (no activity 60+ days, author inactive),
-verdict = STALE. If it has unfixable design problems or targets a deleted
-branch, verdict = CLOSE.
 ```
 
 **Result routing:**
@@ -239,35 +235,36 @@ Spawn a subagent to address all findings from the review stage.
 ```
 You are fixing PR #${PR_NUMBER} in ${REPO}.
 Branch: ${PR_BRANCH}
-Working directory: /tmp/pr-backlog-${PR_NUMBER}
+Working directory: .worktree/pr-backlog-${PR_NUMBER}
 
 Review findings:
 ${REVIEW_REPORT_JSON}
 
 Tasks (in order):
 1. Check out the PR branch in the worktree:
-   git worktree add /tmp/pr-backlog-${PR_NUMBER} ${PR_BRANCH} 2>/dev/null || \
-   git -C /tmp/pr-backlog-${PR_NUMBER} checkout ${PR_BRANCH} && git -C /tmp/pr-backlog-${PR_NUMBER} pull
+   git worktree add .worktree/pr-backlog-${PR_NUMBER} ${PR_BRANCH} 2>/dev/null || \
+   git -C .worktree/pr-backlog-${PR_NUMBER} checkout ${PR_BRANCH} && git -C .worktree/pr-backlog-${PR_NUMBER} pull
 
 2. If conflicts exist:
-   - git -C /tmp/pr-backlog-${PR_NUMBER} merge origin/${PR_BASE}
+   - git -C .worktree/pr-backlog-${PR_NUMBER} merge origin/${PR_BASE}
    - Resolve conflicts by preferring the PR branch's intent.
    - Stage and commit: "fix: resolve merge conflicts with ${PR_BASE}"
 
 3. For each code issue in the review:
    - Apply the fix.
    - Commit with message: "fix: <concise description>"
+   - Reply to related github comment with the commit id.
 
 4. For each CI failure:
-   - Fetch the failed check log: GITHUB_TOKEN= gh run view <run_id> --repo ${REPO} --log-failed
+   - Fetch the failed check log: gh run view <run_id> --repo ${REPO} --log-failed
    - Identify root cause and apply fix.
    - Commit with message: "fix: resolve CI failure in <check_name>"
 
 5. Push all commits:
-   git -C /tmp/pr-backlog-${PR_NUMBER} push origin ${PR_BRANCH}
+   `git -C .worktree/pr-backlog-${PR_NUMBER} push origin ${PR_BRANCH}`
 
 6. Wait 30 seconds, then re-check CI:
-   GITHUB_TOKEN= gh pr checks ${PR_NUMBER} --repo ${REPO} --watch --fail-fast
+   `gh pr checks ${PR_NUMBER} --repo ${REPO} --watch --fail-fast`
 
 7. Return result:
    {
@@ -294,8 +291,8 @@ You are the merge gatekeeper for PR #${PR_NUMBER} in ${REPO}.
 
 Review report: ${REVIEW_REPORT_JSON}
 Fix report: ${FIX_REPORT_JSON} (null if skipped)
-Current CI status: (fetch live) GITHUB_TOKEN= gh pr checks ${PR_NUMBER} --repo ${REPO}
-Current mergeable state: GITHUB_TOKEN= gh pr view ${PR_NUMBER} --repo ${REPO} --json mergeable
+Current CI status: (fetch live) gh pr checks ${PR_NUMBER} --repo ${REPO}
+Current mergeable state: gh pr view ${PR_NUMBER} --repo ${REPO} --json mergeable
 
 Evaluate:
 1. Are all CI checks green?
@@ -303,6 +300,9 @@ Evaluate:
 3. Were all code issues from the review addressed?
 4. Is the diff reasonable (no extraneous changes, no secrets)?
 5. Does the PR title/description match what the code does?
+6. Does this PR makes sense at all? Or this is AI slop that is not solve the issue?
+7. Does this PR solves the root cause / fundamental isssue like a world class engineer? Or just a AI workaround?
+8. Make sure there is no fallbacks and workarounds in the code that AI coding agent created to pleasant itself.
 
 Return exactly one of:
 - MERGE_READY — all criteria met, safe to merge.
@@ -323,16 +323,17 @@ Merge the PR. This stage is NOT delegated to a subagent — execute directly.
 
 ```bash
 # Preferred: squash merge for clean history
-GITHUB_TOKEN= gh pr merge ${PR_NUMBER} --repo ${REPO} --squash --delete-branch --auto
+gh pr merge ${PR_NUMBER} --repo ${REPO} --squash --delete-branch --auto
 
 # If squash fails (e.g., branch protection requires specific method):
-GITHUB_TOKEN= gh pr merge ${PR_NUMBER} --repo ${REPO} --merge --delete-branch
+gh pr merge ${PR_NUMBER} --repo ${REPO} --merge --delete-branch
 ```
 
 After merge:
 1. Log success to CSV.
 2. Update status file: increment `merged` count.
 3. Clean up worktree if it exists.
+4. Close the related github or linear issue if exists.
 
 If merge fails (branch protection, required reviews, etc.):
 - If `--admin` flag could bypass: do NOT use it. Quarantine instead.
@@ -349,14 +350,14 @@ main branch CI. Skip if `--skip-ci-watch` is set.
 
 1. Fetch the latest `main` workflow run:
    ```bash
-   GITHUB_TOKEN= gh run list --repo ${REPO} --branch main --limit 1 --json status,conclusion,databaseId,name
+   gh run list --repo ${REPO} --branch main --limit 1 --json status,conclusion,databaseId,name
    ```
 
 2. If status is `completed` and conclusion is `success` → DONE.
 
 3. If status is `in_progress` or `queued`:
    ```bash
-   GITHUB_TOKEN= gh run watch <run_id> --repo ${REPO} --exit-status
+   gh run watch <run_id> --repo ${REPO} --exit-status
    ```
    Wait up to 15 minutes.
 
@@ -364,7 +365,7 @@ main branch CI. Skip if `--skip-ci-watch` is set.
    a. Spawn a subagent to investigate:
       ```
       Fetch the failed CI run logs for ${REPO} main branch:
-      GITHUB_TOKEN= gh run view <run_id> --repo ${REPO} --log-failed
+      gh run view <run_id> --repo ${REPO} --log-failed
 
       Identify the root cause. Return:
       {
@@ -383,7 +384,7 @@ main branch CI. Skip if `--skip-ci-watch` is set.
       2. Apply fixes per the diagnosis.
       3. Commit: "fix: resolve CI failure in <job_name>"
       4. Push: git push origin main
-      5. Wait for CI: GITHUB_TOKEN= gh run list --repo ${REPO} --branch main --limit 1 --watch
+      5. Wait for CI: gh run list --repo ${REPO} --branch main --limit 1 --watch
       ```
    c. Re-check CI status. If still failing, repeat (up to 3 CI-fix cycles).
    d. After 3 failed CI-fix cycles, report the failure in the summary and
@@ -419,7 +420,7 @@ Updated after each PR completes. Used for resume and observability.
 ```json
 {
   "run_id": "1750200000",
-  "repo": "VibeTechnologies/OpenClawBot",
+  "repo": "${repo}",
   "started": "2026-06-17T10:00:00Z",
   "prs_found": 12,
   "merged": 8,
@@ -442,7 +443,7 @@ Updated after each PR completes. Used for resume and observability.
 5. **Never modify `main` directly** except in the post-merge CI-fix stage
    (and only for CI-fix commits, never feature changes).
 6. **Always clean up worktrees** after merge, close, or quarantine.
-7. **All `gh` commands use `GITHUB_TOKEN= gh ...`** (unset env var).
+7. **All `gh` commands use `gh ...`**
 8. **Each subagent is a fresh Task** with `subagent_type: "general"` and a
    fully self-contained prompt (no reliance on parent context).
 9. **Log every stage to CSV** before moving to the next stage.
