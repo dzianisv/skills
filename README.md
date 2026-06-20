@@ -84,29 +84,24 @@ enforcement testing in ~/workspace/OpenClawBot and summarize it."*
 
 ## Install
 
-Pick whichever location your runtime expects:
+Install all skills into every detected agent runtime (Claude Code, OpenCode, Codex, Cursor, Windsurf, …):
 
 ```bash
-# Claude Code (global skills)
-git clone https://github.com/dzianisv/skills.git /tmp/skills
-cp -r /tmp/skills/skills/* ~/.claude/skills/
-
-# OpenCode
-cp -r /tmp/skills/skills/* ~/.config/opencode/skills/
-
-# Codex / generic
-cp -r /tmp/skills/skills/* ~/.agents/skills/
+npx -y skills add dzianisv/skills -g
 ```
 
-Or symlink individual skills:
+Install a single skill by name:
 
 ```bash
-ln -s "$(pwd)/skills/own" ~/.claude/skills/own
+npx -y skills add dzianisv/skills -s <skill-name> -g
+# example:
+npx -y skills add dzianisv/skills -s chrome-use -g
 ```
 
-After install, the agent will autoload a skill when its `description`/triggers
-match the user's request, or you can invoke it explicitly (`/own`, `/duckdns`,
-etc., depending on your runtime's slash-command conventions).
+`-g` installs globally. Drop it (or use `-p`) to install into the current project only.
+
+After install the agent autoloads a skill when its description/triggers match your request,
+or invoke it explicitly (e.g. `/chrome-use`, `/own`).
 
 ## Spec
 
