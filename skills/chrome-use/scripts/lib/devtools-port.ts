@@ -103,13 +103,14 @@ export async function buildWsEndpointAuto(userDataDir?: string): Promise<string>
         sock.destroy();
         resolve(true);
       });
-      sock.on('error', () => resolve(false));
-      sock.setTimeout(300, () => { sock.destroy(); resolve(false); });
+      let timer: ReturnType<typeof setTimeout>;
+      sock.on('error', () => { clearTimeout(timer); resolve(false); });
+      timer = setTimeout(() => { sock.destroy(); resolve(false); }, 300);
     });
     if (reachable) return endpoint;
   }
 
-  // All port files exist but none are reachable — return stable's endpoint and let
-  // the caller surface the connection error with the usual message.
+  // All port files exist but none are reachable — return the first candidate's
+  // endpoint and let the caller surface the connection error with the usual message.
   return candidates[0].endpoint;
 }
