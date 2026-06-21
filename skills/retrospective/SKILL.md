@@ -61,6 +61,16 @@ AI Agent ran `stripe webhook_endpoints list`, saw the correct URL, and declared 
 </examples>
 
 <stop_rules>
-- Stop after 3-5 sentences. Do not add headers, summaries, or lessons-learned sections.
+- Stop after appending to `.retrospective.md`. Do not add headers, summaries, or lessons-learned sections.
 - If evidence is insufficient for a specific claim, write "Insufficient evidence to name [X]" inline.
 </stop_rules>
+
+## After producing the retrospective
+
+Append one line to `.retrospective.md` in the project root:
+
+```
+YYYY-MM-DD: <3-5 sentence retrospective text on one line>
+```
+
+Use today's date. Create the file if it does not exist. Never overwrite existing entries.
