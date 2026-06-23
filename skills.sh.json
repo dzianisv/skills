@@ -1,0 +1,26 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Browser Automation",
+      "description": "Drive real and remote Chrome browsers via CDP — your live profile, cookies, sessions.",
+      "skills": ["chrome-use", "chrome-devtools-remote", "duckdns-domain", "spaceship-dns"]
+    },
+    {
+      "title": "Agent Workflows",
+      "description": "Autonomous agents for project management, task ownership, and backlog draining.",
+      "skills": ["solo-founder", "solo-founder-meta-agent", "take-ownership", "take-ownership-meta-agent", "no-github-backlog", "no-pr-backlog"]
+    },
+    {
+      "title": "Skill Engineering",
+      "description": "Write, evaluate, and improve AI agent skills.",
+      "skills": ["write-skill", "write-agents-md", "hyperagent-eval-skill", "retrospective"]
+    },
+    {
+      "title": "Tooling & Integrations",
+      "description": "CLI tools, secret management, messaging, and deploy helpers.",
+      "skills": ["agent-memory", "bitwarden-cli", "claude-sessions", "claude-max", "telegram-cli", "opencode-api", "vercel-lfs", "git-worktree", "mermaid2excalidraw", "macro-panel"]
+    }
+  ]
+}
