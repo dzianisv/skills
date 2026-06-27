@@ -246,12 +246,13 @@ Run this check on every instruction artifact you produce before declaring done:
 ## Process
 
 1. Get 2–3 concrete example tasks the instructions must handle.
-2. For skills: draft the description; test by asking — would this match the user's actual wording?
-3. For prompt refinement: extract outcome, surface constraints, structure with XML, add specifics, set autonomy, include self-check.
-4. Write the body to the minimum that lets a competent agent succeed on the examples.
-5. Pull schemas / long refs into `references/`; implement deterministic steps as `scripts/` and test by running.
-6. Use it on a real task; tighten where the agent struggled.
-7. Run the Self-Audit Checklist above before declaring done.
+2. **Read and apply guidelines.** Load `references/prompting-guidelines.md`; hold each item as an active constraint throughout drafting — not a post-hoc check.
+3. For skills: draft the description; test by asking — would this match the user's actual wording?
+4. For prompt refinement: extract outcome, surface constraints, structure with XML, add specifics, set autonomy, include self-check.
+5. Write the body to the minimum that lets a competent agent succeed on the examples.
+6. Pull schemas / long refs into `references/`; implement deterministic steps as `scripts/` and test by running.
+7. Use it on a real task; tighten where the agent struggled.
+8. **SELF-CHECK.** Before declaring done, verify the drafted SKILL.md against `references/prompting-guidelines.md`. Confirm: examples in `<example>` tags where format matters; XML tags for heterogeneous content; what-TO-do phrasing throughout; verifiable done condition (end state + check command); under 500 lines; each rule once; no trailing summaries or filler. Fix gaps. Then run the Self-Audit Checklist above.
 
 ---
 
