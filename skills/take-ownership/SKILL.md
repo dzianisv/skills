@@ -295,6 +295,22 @@ Flag in `$ARGUMENTS`. No `AskUserQuestion` calls. Decide every fork yourself.
 Log each decision (question, choice, reasoning, alternatives, evidence) as
 an entry in `.tasks/$ID/decisions.md`. Safety hard-rules still apply.
 
+**Supervisor setup (do once at autopilot kickoff, before Phase 1):**
+
+1. Copy the rubric into the project so the supervisor can enforce done-criteria:
+   ```bash
+   mkdir -p .supervisor
+   for d in ~/.agents/skills/take-ownership ~/.claude/skills/take-ownership; do
+     [[ -f "$d/references/supervisor-rubric.md" ]] && \
+       cp "$d/references/supervisor-rubric.md" .supervisor/rubric.md && break
+   done
+   ```
+2. Arm goal mode with the task's done condition (fill in the R1 metric after
+   Phase 2 once you have written `success.md`):
+   ```
+   /supervisor:goal "STATE.md reads phase: 10-closed AND verify.md ends with PROD: pass"
+   ```
+
 **Hard Checkpoint in autopilot:** When three consecutive failures hit on the
 same root cause (the condition that would normally trigger an `AskUserQuestion`),
 you have no permitted question tool. Instead: write the blocked state and the
