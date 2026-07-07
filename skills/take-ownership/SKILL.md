@@ -59,8 +59,7 @@ Resume caveman after the clarity-required part is done.
 Your **first substantive response to any task** — no matter how small, urgent, or
 ambiguous it looks, and even if the user says "this is small, just do X" — MUST
 contain these three artifacts, written out explicitly. Caveman mode does NOT
-exempt them; they are the carve-out. Skipping any one is the single most common
-way this skill scores low.
+exempt them; they are the carve-out.
 
 1. **The R1 success line, verbatim and runnable** —
    > Done when **`<exact command/action the USER runs>`** produces
@@ -87,14 +86,9 @@ way this skill scores low.
    one and never merges design+plan+review into one blob. If you're tempted to
    skip a phase, that temptation is the failure mode — keep it, make it tiny.
 
-These three cost a few lines and are what separate ownership from "just coding."
-
 ## Definition of Done — Hardening Rules (READ FIRST)
 
-These rules override anything below them. They exist because past runs
-shipped code, declared "complete," and were proven wrong when the user
-tested through the actual user-facing channel. Treat each rule as a gate;
-violating one = task is not done.
+These rules override everything. Each is a hard gate.
 
 ### R1. Write the user's success metric BEFORE Phase 1
 
@@ -134,17 +128,7 @@ principle*."
 
 ### R3. Post-deploy hygiene — runtime user must read your bytes
 
-After every `scp`, `rsync`, `docker cp`, remote `cat >`, or any path that
-puts files where a service will load them, you MUST:
-
-1. `ls -la <path>` on the target — record owner, group, mode.
-2. Confirm runtime user can read it: `sudo -u <runtime_user> cat <path>
-   >/dev/null && echo OK` (or container exec equivalent).
-3. Tail the service log for a positive "loaded" line, not just "no error."
-
-Common gotcha: `scp` writes as the SSH user (often root); the service runs
-as `node` / `www-data` / container UID. Always `chown -R <runtime_user>:`
-the deployed tree before restart.
+After every deploy, confirm the runtime user can read the deployed files and the service log shows a positive "loaded" line. See Phase 9 for the full checklist.
 
 ### R4. `task_complete` (or any "done" tool) is BANNED unless ALL true
 
@@ -211,41 +195,16 @@ Only legitimate stop conditions:
    write a one-paragraph checkpoint with what was tried and what's blocked, and
    ask the user **one** focused question. Resume immediately on their reply.
 
-Outside the Stop Contract, do **not** call any "completion" signal.
-
 ### Operating Loop
 
-After each phase artifact lands, immediately:
+After each phase artifact lands:
+- Inspect state → identify highest-impact next action → implement/dispatch/verify.
+- Save evidence: STATE.md, commit, worklog append.
+- Continue. Do not stop to narrate.
 
-1. Inspect current state (`git status`, `.tasks/$ID/STATE.md`, latest artifact).
-2. Identify the highest-impact next action toward the success metric.
-3. Implement / dispatch / verify (a complete vertical slice, not half).
-4. Run the verification the artifact promised (lint/typecheck/test/probe).
-5. Save evidence: append to STATE.md, commit, push if branch is shared.
-6. Update worklog (`.tasks/$ID/worklog.md` — append-only, one bullet per cycle).
-7. Continue to the next cycle. Do not stop to narrate progress to the user.
+### If Stuck
 
-### If Stuck — Do Not Stop, Reduce Uncertainty Instead
-
-Stuck = "I don't know what to do next" or "the obvious move didn't work".
-**Never** treat stuck as a stop signal. Walk this ladder until unstuck:
-
-- **Reproduce** the failure deterministically (script it).
-- **Read logs / errors** in full — not just the last line.
-- **Search code + docs** — Grep, code-review-graph, project README,
-  knowledge graph, web.
-- **Add instrumentation** — log lines, breakpoints, `-v`/`--debug` flags.
-- **Try an alternate implementation path** — the chosen approach may be wrong;
-  pivot to one of the Phase 3 alternatives.
-- **Reduce uncertainty with a smaller test** — isolate the failing unit.
-- **Improve adjacent useful behavior toward the same goal** — when fully
-  blocked on path A, advance path B that also moves the success metric.
-- **Record** what failed, with evidence, into `worklog.md` and STATE.md.
-- **Continue** with the next attempt. Looping is the work; reporting a loop
-  as "done" is the failure mode.
-
-Only after three failures on the **same root cause** in the same phase does
-the Hard Checkpoint clause apply.
+Stuck → walk Blocker Resolution Table. Three failures same root cause → Hard Checkpoint.
 
 ### Resume Behavior
 
@@ -286,14 +245,28 @@ merge ask, Hard Checkpoint).
 - **"API-level proof is sufficient"** → no. R2 ladder. Run R1 channel.
 - **"Mostly yes, but with a caveat"** when the user asks "did you complete?"
   → no. The caveat IS the answer. Stop talking, re-run R1, paste output.
-- **"Task is fully verified E2E ✅" without R1-channel evidence in the same
-  turn** → forbidden. Show the R1 command and its output, or do not claim it.
 
 ## Autopilot (`--autopilot`)
 
 Flag in `$ARGUMENTS`. No `AskUserQuestion` calls. Decide every fork yourself.
 Log each decision (question, choice, reasoning, alternatives, evidence) as
 an entry in `.tasks/$ID/decisions.md`. Safety hard-rules still apply.
+
+**Supervisor setup (do once at autopilot kickoff, before Phase 1):**
+
+1. Copy the rubric into the project so the supervisor can enforce done-criteria:
+   ```bash
+   mkdir -p .supervisor
+   for d in ~/.agents/skills/take-ownership ~/.claude/skills/take-ownership; do
+     [[ -f "$d/references/supervisor-rubric.md" ]] && \
+       cp "$d/references/supervisor-rubric.md" .supervisor/rubric.md && break
+   done
+   ```
+2. Arm goal mode with the task's done condition (fill in the R1 metric after
+   Phase 2 once you have written `success.md`):
+   ```
+   /supervisor:goal "STATE.md reads phase: 10-closed AND verify.md ends with PROD: pass"
+   ```
 
 **Hard Checkpoint in autopilot:** When three consecutive failures hit on the
 same root cause (the condition that would normally trigger an `AskUserQuestion`),
@@ -439,6 +412,112 @@ the channel the user would actually touch.)
 If the success metric is fuzzy and **cannot** be sharpened from existing docs,
 ask the user **one** question to pin it down. Otherwise commit to it.
 
+### Feature requests
+
+If the issue is a feature request (label `feature`/`enhancement`, or body describes new capability):
+
+**1. Update `docs/prd.md`** (single source of truth for all features):
+
+```bash
+# If docs/prd.md doesn't exist, create it with a header:
+# # Product Requirements
+```
+
+Add or update a section for this feature:
+
+```markdown
+## <Feature name> <!-- issue #$ID -->
+
+### User
+- Who: <named role — "developer calling the CLI", not "a user">
+- Context: <what they're doing when they hit this need>
+
+### Usage
+1. <user action>
+2. <system response>
+3. <observable confirmation>
+
+### Acceptance Criteria
+- [ ] <user-visible, measurable outcome>
+
+### Out of Scope
+- <explicit exclusions>
+```
+
+Rule: if a section for this feature already exists in `docs/prd.md`, update it — do not create a duplicate. Search by feature name or issue number comment.
+
+`docs/prd.md` section gates Phase 3 — no design without a concrete user and usage path.
+
+**2. Update `docs/tdd.md`** via subagent:
+
+```
+Agent(
+  description: "Update docs/tdd.md for feature $ID",
+  subagent_type: "general-purpose",
+  model: "claude-sonnet-4-6",
+  prompt: "
+    Read the section for issue #$ID in docs/prd.md and the relevant codebase modules.
+    Append to docs/tdd.md (create if absent) a section:
+
+    ## <Feature name> <!-- issue #$ID -->
+    - Approach: <how to implement — one line per decision point>
+    - Affected modules: <file or module names>
+    - Key decisions: <tradeoffs made>
+    - Testing: <how to verify in the real channel>
+
+    If section already exists, update it. Under 20 lines. Bullets only. No prose.
+  "
+)
+```
+
+**3. Spawn an implementation planner:**
+
+```
+Agent(
+  description: "Implementation plan + GitHub issues for $ID",
+  subagent_type: "general-purpose",
+  model: "claude-sonnet-4-6",
+  prompt: "
+    Read the section for issue #$ID in docs/prd.md and docs/tdd.md.
+    1. Write .tasks/$ID/plan.md — tasks, parallel groups, done criteria.
+    2. If any parallel group has 2+ independent tasks, create one GitHub issue
+       per task:
+         gh issue create --title '<task>' --body '<done criterion>' --label 'agent-owned'
+    3. Return issue numbers (if any) and plan summary.
+    One issue is fine when work is fully sequential.
+  "
+)
+```
+
+### Bugs
+
+When issue is a bug (label `bug`, or body describes unexpected behavior):
+
+**Reproduce first.** Write `.tasks/$ID/bug.md`:
+```markdown
+## Bug: <short title>
+
+### Symptoms
+<exact error message / unexpected behavior — quoted verbatim>
+
+### Reproduce
+```bash
+<minimal repro command or steps>
+```
+Confirmed: <yes / not yet>
+
+### Root Cause
+<fill after investigation>
+
+### Regression Test
+<test file:line that fails before fix and passes after — fill before writing any fix code>
+```
+
+Rules:
+- No fix code until `Reproduce: Confirmed: yes` and `Regression Test` filled.
+- Regression test must fail on the unfixed codebase, pass after fix.
+- `bug.md` gates Phase 3 for bugs.
+
 Update STATE: `phase: 2-done`.
 
 ---
@@ -482,6 +561,14 @@ Then write the full `.tasks/$ID/design.md`:
 ## Touched Surface
 <list of files/dirs that will change, plus any new files>
 ```
+
+**Feature design checklist** (run before marking Phase 3 done):
+- [ ] API contract defined: endpoints / function signatures / events (add to `design.md`)
+- [ ] Data model changes identified: schema diffs, migration needed? (yes/no)
+- [ ] Auth / permissions: who can call this, what gates it
+- [ ] Error states: what can go wrong, what the caller sees
+- [ ] Backward compatibility: does this break existing callers? if yes, migration path?
+- [ ] Observability: what metrics / logs prove this is working in prod
 
 **Ask the user only if** after graph + docs + knowledgebase + web you still have
 a question whose answer changes the design. When you do ask, batch all
@@ -535,6 +622,138 @@ Rules for decomposition:
 Wait for explicit `go` (or equivalent) before Phase 5.
 
 Update STATE: `phase: 4-done, awaiting-go` then `phase: 4-approved` on go.
+
+---
+
+## Validation Strategy (define BEFORE implementing)
+
+Before writing any code, write `.tasks/$ID/validation.md`. No exceptions.
+Mock and unit tests give false-positive confidence — a passing mock proves nothing about the real system.
+
+### Validation tiers (pick the highest applicable)
+
+**Tier 1 — Smoke test**
+Fastest proof the feature/fix exists and doesn't crash.
+```bash
+# Example: new CLI flag
+<binary> <new-flag> --help   # exits 0, shows expected output
+# Example: new endpoint
+curl -sf https://<host>/<endpoint> -d '<minimal valid payload>' | jq .
+```
+Required for every change. Not sufficient alone for features.
+
+**Tier 2 — E2E test**
+Real inputs → real system → real outputs. No mocks. No stubs. No synthetic producers.
+- Run against the deployed env (staging or prod-like).
+- Covers the full user path from the R1 success metric.
+- Must FAIL on the unfixed/unimplemented codebase, PASS after.
+
+```bash
+# Example: user registration feature
+curl -X POST https://staging.<domain>/auth/register \
+  -d '{"email":"test@example.com","password":"s3cr3t"}' | jq .token
+# Then: login with those creds, confirm session works
+```
+
+**Tier 3 — LLM-judge evaluation**
+Only for agent/AI applications — outputs that aren't a boolean pass/fail (agent responses, summaries, decisions, generated content). Do NOT apply to plain CRUD endpoints or CLI tools — use Tier 1/2 there.
+
+Two subagents in sequence: **runner** then **judge**. Never combine.
+
+**Step 1 — Runner subagent** (executes test cases, captures raw output):
+```
+Agent(
+  description: "Eval runner for $ID",
+  subagent_type: "general-purpose",
+  model: "claude-sonnet-4-6",
+  prompt: "
+    Read .tasks/$ID/eval-cases/. Each file is one test case: input + expected behavior.
+    For each case:
+      1. Send the input to the live system (real endpoint, no mocks).
+      2. Capture the full raw output.
+      3. Write to .tasks/$ID/eval-outputs.jsonl — one JSON object per line:
+         {\"case\": \"<filename>\", \"input\": \"...\", \"output\": \"...\", \"ts\": \"<ISO>\"}
+    Do NOT score. Do NOT judge. Capture only.
+    Final line: RUNNER: done (<N> cases)
+  "
+)
+```
+
+**Step 2 — Judge subagent** (scores outputs, appends to eval.csv):
+```
+Agent(
+  description: "Eval judge for $ID",
+  subagent_type: "general-purpose",
+  model: "claude-sonnet-4-6",
+  prompt: "
+    Read .tasks/$ID/eval-outputs.jsonl and .tasks/$ID/eval-rubric.md.
+    For each output, score against every rubric dimension (0.0–1.0).
+    Compute mean score across all cases and dimensions.
+
+    Append ONE row to .tasks/$ID/eval.csv (create with header if absent):
+      commit_id,score,feedback
+      <git rev-parse HEAD>,<mean 0.0-1.0>,\"<one sentence: what passed, what failed>\"
+
+    Write per-case detail to .tasks/$ID/eval-results.md.
+    Final line: EVAL: pass (mean=<score>) | EVAL: fail (mean=<score>, reason=<dim>)
+  "
+)
+```
+
+Gate: mean score ≥ threshold in `validation.md`. `eval.csv` is append-only — history persists across runs.
+
+**Tier 4 — CUA-driven test (web app / mobile app)**
+For features with a real UI. Uses [agentprobe](https://github.com/dzianisv/agentprobe) — drives browser or mobile via CUA model.
+
+```bash
+# Install once
+pip install agentprobe   # or: git clone + pip install -e .
+
+# Run a probe against a web app
+agentprobe run \
+  --url https://staging.<domain> \
+  --task ".tasks/$ID/eval-cases/<case>.md" \
+  --output .tasks/$ID/eval-outputs.jsonl
+```
+
+Each `eval-cases/<case>.md` is a natural-language task description:
+```markdown
+## Task: <feature name>
+1. Open the app at <url>.
+2. <user action>.
+3. Verify: <observable outcome>.
+Pass criterion: <exact text / element / state to confirm>.
+```
+
+After runner completes, feed `eval-outputs.jsonl` into the Judge subagent (Step 2 above) — same pattern.
+
+### `validation.md` template
+
+```markdown
+## Validation plan for $ID
+
+### Tier
+<smoke | e2e | llm-judge | cua | e2e + llm-judge>
+Note: llm-judge and cua only for agent/AI/UI applications.
+
+### Test cases
+| # | Input | Expected behavior | Channel |
+|---|-------|-------------------|---------|
+| 1 | ...   | ...               | <real endpoint / CLI / UI / browser> |
+
+### Pass criterion
+<must match R1 success metric — NOT "tests pass">
+
+### Eval rubric (Tier 3 only)
+- <dimension>: <what good looks like>
+- Score threshold: ≥ <0.0–1.0>
+
+### eval.csv location
+.tasks/$ID/eval.csv   — append-only, commit_id,score,feedback
+```
+
+`validation.md` gates Phase 5. No implementation without a defined validation plan.
+Validation runs in Phase 5c — not before, not skipped.
 
 ---
 
@@ -644,10 +863,7 @@ Update STATE after each group: `phase: 5-group-A-done`, etc.
 
 ## The Review Bar — Five Questions (Phases 5b + 7 both enforce)
 
-A good review is the whole point of this skill. Both the pre-PR review (5b)
-and the final PR review (7) must answer **all five questions below**, each with
-`path:line` evidence, before returning a pass/ship verdict. A review that skips
-a question is not a review — redo it. "Looks good" / "LGTM" is never an answer.
+Phases 5b and 7 must answer **all five questions below**, each with `path:line` evidence, before returning a pass/ship verdict. "Looks good" / "LGTM" is never an answer.
 
 1. **Why do we need this?** Every hunk must trace to the issue's actual problem
    and move the R1 success metric. Flag for removal anything that doesn't:
@@ -701,10 +917,7 @@ Agent(
     1. Run the `/code-review` skill (Skill tool, skill: code-review, args:
        'high') on the worktree diff `git -C $WT diff origin/$BASE_BRANCH...HEAD`
        for a correctness + simplification pass.
-    2. THEN answer ALL FIVE QUESTIONS from the skill's 'Review Bar' section
-       (why-needed, optimal, no-bullshit-fallbacks, won't-break-prod,
-       passes-CI-for-real) against that diff — the five questions are the bar,
-       not the code-review output alone.
+    2. Answer all five Review Bar questions against that diff.
     3. Confirm each plan.md done-criterion is actually met.
     Write findings to .tasks/$ID/review.md, grouped by the five questions:
       Q<n> path:line: <severity> <problem>. <real fix>.
@@ -852,10 +1065,7 @@ Update STATE: `phase: 6-ci-green`.
 
 ## Phase 7 — Final PR Review (per-PR subagent + deep review)
 
-This is the gate that decides whether bullshit ships. Run it **per PR** — one
-review subagent per open PR in scope, then one fix subagent per PR that has
-findings. (Usually one PR; the per-PR shape matters when a task fanned out into
-several.) List the PRs in scope:
+Run **per PR** — one review subagent per PR, one fix subagent per PR with findings. List PRs in scope:
 
 ```bash
 gh pr list --search "own/$ID" --json number,headRefName,title --jq '.[]'
@@ -870,15 +1080,13 @@ Agent(
   subagent_type: "general-purpose",
   model: "claude-sonnet-4-6",
   prompt: "
-    Final review on PR <number>. You are the last gate before merge.
+    Final review on PR <number>.
     Read .tasks/$ID/design.md and .tasks/$ID/test-report.md for intent.
     1. Run the deepest review available via the Skill tool:
        skill: code-review, args: 'ultra <number> --comment'. `ultra` is a deep
        multi-agent cloud review; --comment posts inline so the audit trail lives
        on the PR. If ultra is unavailable, use args: 'max <number> --comment'.
-    2. Answer ALL FIVE QUESTIONS from the skill's 'Review Bar' against
-       `gh pr diff <number>` — especially Q3 (real fix or a workaround papering
-       over a symptom?) and Q4 (does it break prod?).
+    2. Answer all five Review Bar questions against `gh pr diff <number>`.
     3. Confirm CI is actually green AND not green via a weakened check (Q5):
        `gh pr checks <number>`, then spot-check that disabled/skipped tests
        weren't the reason.
@@ -1062,6 +1270,127 @@ Update STATE: `phase: 10-closed`.
 
 ---
 
+## Troubleshooting Protocol
+
+When behavior is unexpected, wrong, or broken — before writing any fix:
+
+### Step 1: Read full logs
+```bash
+# Tail service logs — last 500 lines
+journalctl -u <service> -n 500 --no-pager
+# or container logs
+docker logs <container> --tail 500 2>&1
+# or app log file
+tail -500 <logfile>
+```
+Read the FULL message. Root cause is almost never on the last line.
+
+### Step 2: Reproduce with minimal case
+- Strip down inputs until failure is isolated to one call / one file / one config value.
+- Write the minimal repro as a one-liner or short script.
+- If can't reproduce → environment difference. Check: OS, runtime version, env vars, config, time-dependent state.
+
+### Step 3: Bisect (if regression)
+```bash
+git bisect start
+git bisect bad HEAD
+git bisect good <last-known-good-sha>
+git bisect run <repro-script>
+```
+Identifies the commit that introduced the bug. Read that commit's diff.
+
+### Step 4: Add instrumentation
+- Log the value of every variable in the failing path.
+- Add a trace point at the deepest level before the failure.
+- Remove instrumentation before committing.
+
+### Step 5: Isolate with targeted test
+Write a test that exercises ONLY the failing unit. If it fails → unit is broken. If it passes → problem is in composition / integration / env.
+
+### Step 6: Document
+Append to `.tasks/$ID/worklog.md`:
+```
+- [<timestamp>] tried: <what>. result: <what happened>. hypothesis: <next>
+```
+
+Never: "I can't reproduce it." → reduce the environment until you can.
+Never: try a third syntactic variant of the same command (R6 rule).
+
+---
+
+## Dev Protocol (End-to-End)
+
+### Local setup
+```bash
+# 1. Clone + branch
+git clone <repo> && cd <repo>
+git switch -c own/$ID-<slug> origin/main
+
+# 2. Install deps
+<npm install | pip install -r requirements.txt | go mod tidy | make setup>
+
+# 3. Load env
+source ~/.env.d/<project>.env   # or cp .env.example .env + fill from Bitwarden
+
+# 4. Verify baseline
+<npm test | pytest | make test>   # must pass before any change
+```
+
+### Dev loop
+```
+code → lint/typecheck → targeted test → commit (atomic)
+```
+- Lint + typecheck on every save. Fix before moving on.
+- Commit at each logical unit — not at end of day.
+- Commit message: `type($ID): what and why` (follow project's commit style).
+
+### Deploy pipeline
+```
+local test → PR → CI green → staging deploy → staging smoke → prod deploy → prod smoke
+```
+
+**Staging deploy:**
+```bash
+<make deploy-staging | ./deploy.sh staging | kubectl apply -k overlays/staging>
+# Confirm pods ready
+kubectl rollout status deploy/<app> -n staging
+# Smoke test
+curl -sf https://staging.<domain>/health | jq .
+```
+
+**Prod deploy (only after staging smoke passes):**
+```bash
+<make deploy-prod | ./deploy.sh prod | kubectl apply -k overlays/prod>
+kubectl rollout status deploy/<app> -n prod
+# Smoke test — real endpoint, not health check
+<R1 command from success.md>
+```
+
+### Environment promotion rules
+- Never deploy to prod without staging smoke passing.
+- Feature flags: enable in staging first, validate, then enable in prod.
+- DB migrations: run migrate BEFORE deploying new code.
+  ```bash
+  <alembic upgrade head | rails db:migrate | flyway migrate>
+  # Confirm: no pending migrations
+  <alembic current | rails db:migrate:status | flyway info>
+  ```
+- Config/secrets: update in Bitwarden first → then deploy target env.
+
+### Rollback
+Trigger: prod smoke fails OR error rate spikes after deploy.
+```bash
+# Option 1: revert deploy
+kubectl rollout undo deploy/<app> -n prod
+# Option 2: revert to previous image tag
+kubectl set image deploy/<app> app=<image>:<prev-tag> -n prod
+# Option 3: git revert + redeploy
+git revert <sha> && git push && <trigger CI deploy>
+```
+After rollback: reopen issue, append failure evidence to `.tasks/$ID/worklog.md`, re-enter Phase 5.
+
+---
+
 ## When to Ask the User vs. Decide Yourself
 
 **Default: decide yourself.** The user is the last resort. Before any
@@ -1096,7 +1425,6 @@ Decide yourself for everything else, including:
 
 ## Anti-Patterns (Don't Do These)
 
-- "I'll just write unit tests with mocks and call it tested." — No. See 5c.
 - "Opus for everything." — No. Opus is the supervisor.
 - "Skip review, the implementation looks fine." — No. Fresh-eyes subagent always.
 - "Ran `/review`, it said LGTM, shipped." — No. `/code-review ultra` is the primary
@@ -1109,13 +1437,10 @@ Decide yourself for everything else, including:
 - "User said 'this is small, just add it,' so I went straight to code." — No. That
   is the compression trap. Acknowledge, then still emit the Kickoff Contract (R1 +
   STATE skeleton + scaled phase list) and run every phase shrunk, none deleted.
-- "Defined the success metric implicitly / in my head." — No. Write the literal R1
-  line in the response AND rule out CI-green / unit-tests / API-200 as the bar.
 - "Explained how I'd recover from a lost STATE.md." — Not enough. Show STATE.md
   being written at each phase boundary during the run, resume-sufficient.
 - "Merge while CI is still running." — No.
 - "Ask the user for every uncertainty." — No. You own this. Investigate first.
-- "Merged CI-green; didn't check the pod." — No. Phase 9 prod verify is required.
 - "Combined diagnose + implement in one context." — No. Single context drifts;
   fresh-context subagents per step is the whole point.
 - "Took 'theirs'/'ours' blindly during a rebase." — No. Reconcile semantic
@@ -1138,6 +1463,7 @@ Decide yourself for everything else, including:
 
 | Pattern | Skill |
 |---------|-------|
+| CUA-driven UI/mobile test | `agentprobe` ([github.com/dzianisv/agentprobe](https://github.com/dzianisv/agentprobe)) |
 | Tests at the right tier (unit / integration / live / eval) | `[[write-test]]` |
 | Post-merge prod verification command set | `[[post-merge-verify]]` |
 | Bulk-drain a backlog of issues in parallel | `[[no-github-backlog]]` |
