@@ -1,0 +1,170 @@
+<title>Ops Report — 2026-07-08 — Docs Deploy fix &amp; Chatwoot email migration</title>
+<style>
+  :root {
+    --bg: #f7f8f7; --surface: #ffffff; --ink: #1c2422; --muted: #5c6b66;
+    --line: #dde3e0; --accent: #0e7c66; --accent-soft: #e2f0ec;
+    --crit: #c24437; --crit-soft: #f7e6e3; --warn: #b07a1e; --warn-soft: #f6eeda;
+    --code-bg: #eef1ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101614; --surface: #161e1b; --ink: #e4ebe8; --muted: #8fa19a;
+      --line: #2a352f; --accent: #3dbb9d; --accent-soft: #16302a;
+      --crit: #e07463; --crit-soft: #35201c; --warn: #d3a04b; --warn-soft: #322a18;
+      --code-bg: #1d2724;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101614; --surface: #161e1b; --ink: #e4ebe8; --muted: #8fa19a;
+    --line: #2a352f; --accent: #3dbb9d; --accent-soft: #16302a;
+    --crit: #e07463; --crit-soft: #35201c; --warn: #d3a04b; --warn-soft: #322a18;
+    --code-bg: #1d2724;
+  }
+  :root[data-theme="light"] {
+    --bg: #f7f8f7; --surface: #ffffff; --ink: #1c2422; --muted: #5c6b66;
+    --line: #dde3e0; --accent: #0e7c66; --accent-soft: #e2f0ec;
+    --crit: #c24437; --crit-soft: #f7e6e3; --warn: #b07a1e; --warn-soft: #f6eeda;
+    --code-bg: #eef1ef;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 36px 24px 60px; }
+  .kicker {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 8px;
+  }
+  h1 { font-size: 23px; font-weight: 750; line-height: 1.3; margin: 0 0 16px; text-wrap: balance; }
+  h2 {
+    font-size: 15px; font-weight: 700; margin: 30px 0 8px;
+    text-transform: uppercase; letter-spacing: 0.04em; font-size: 13px; color: var(--muted);
+  }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+
+  .banner {
+    display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline;
+    background: var(--accent-soft); border-left: 4px solid var(--accent);
+    padding: 12px 16px; margin: 0 0 4px;
+  }
+  .banner .big { font-weight: 750; font-size: 15px; color: var(--accent); }
+  .banner .item { font-size: 13.5px; }
+
+  .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .pill.ok { background: var(--accent-soft); color: var(--accent); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+
+  .tablebox { overflow-x: auto; border: 1px solid var(--line); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--surface); }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); padding: 8px 12px; border-bottom: 2px solid var(--line); background: var(--bg);
+  }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.mono { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  .flow {
+    display: flex; align-items: stretch; flex-wrap: wrap; gap: 8px;
+    padding: 14px; background: var(--surface); border: 1px solid var(--line); overflow-x: auto;
+  }
+  .flow .node {
+    display: flex; flex-direction: column; justify-content: center;
+    border: 1.5px solid var(--ink); padding: 7px 11px; font-size: 12.5px; line-height: 1.35;
+    background: var(--bg); min-width: 100px;
+  }
+  .flow .node .t { font-weight: 700; }
+  .flow .node .d { color: var(--muted); font-size: 11.5px; }
+  .flow .node.hl { border-color: var(--accent); background: var(--accent-soft); }
+  .flow .arrow { display: flex; align-items: center; color: var(--muted); font-family: monospace; }
+  .branch { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+
+  p { margin: 8px 0; max-width: 72ch; }
+  .note { color: var(--muted); font-size: 13px; }
+  footer { margin-top: 36px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+</style>
+
+<div class="wrap">
+  <p class="kicker">Ops report · 2026-07-08</p>
+  <h1>Docs Deploy fixed (3 root causes) — support email now flows into Chatwoot</h1>
+
+  <div class="banner">
+    <span class="big">Master: GREEN</span>
+    <span class="item">5 PRs merged</span>
+    <span class="item">proof: run <span class="mono">28971116745</span> — ticket found in Chatwoot in 6.5&nbsp;s</span>
+  </div>
+
+  <h2>Why it was red — three stacked causes</h2>
+  <div class="tablebox"><table>
+    <tr><th>Cause</th><th>Fix</th></tr>
+    <tr><td>Test polled the wrong Gmail account for 2.5 months (verify job was silently skipped, nobody saw it)</td><td class="mono">#1507</td></tr>
+    <tr><td>Gmail IMAP SEARCH lags minutes behind fresh mail → emails invisible for the whole 90s poll</td><td class="mono">#1508</td></tr>
+    <tr><td><b>CI secret was the real bug:</b> <code>TEST_GMAIL_USER</code> logs into <span class="mono">dzianis.somewhere.3@</span> — a mailbox that never receives support@ forwards. Login succeeded, so everyone trusted it. Auth OK ≠ right account.</td><td class="mono">#1509</td></tr>
+  </table></div>
+
+  <h2>The fix — drop Gmail, verify in Chatwoot</h2>
+  <div class="flow">
+    <div class="node"><span class="t">support@</span><span class="d">customer or CI</span></div>
+    <div class="arrow">→</div>
+    <div class="node hl"><span class="t">CF Email Worker</span><span class="d">new, never bounces</span></div>
+    <div class="arrow">→</div>
+    <div class="branch">
+      <div class="node"><span class="t">Personal Gmail</span><span class="d">copy, unchanged</span></div>
+      <div class="node hl"><span class="t">Chatwoot</span><span class="d">inbox 3 / inbox 2</span></div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node"><span class="t">CI Step 13</span><span class="d">poll API → resolve</span></div>
+  </div>
+  <p class="note">Covers support@vibebrowser.app and support@agentlabs.cc. No IMAP, no app passwords, no paid services.</p>
+
+  <h2>Shipped</h2>
+  <div class="tablebox"><table>
+    <tr><td class="mono">vibe #1505</td><td>CUA test → shared agentprobe core (was ready, unrelated)</td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td class="mono">vibe #1508</td><td>envelope-subject match instead of Gmail SEARCH</td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td class="mono">OCB #2747</td><td>Email Worker + Chatwoot ingestion (reviewed, fixed, live)</td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td class="mono">vibe #1509</td><td>Step 13: Chatwoot API poll replaces Gmail</td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td class="mono">vibe #1510</td><td>Step 13 resolves its own CI ticket (no on-call noise)</td><td><span class="pill ok">merged</span></td></tr>
+  </table></div>
+
+  <h2>Open</h2>
+  <div class="tablebox"><table>
+    <tr>
+      <td>Wire Chatwoot outbound SMTP to the <b>existing Brevo account</b> (found in VibeBrowserProductPage/.env — waitlist already uses it) so agents can reply to support email</td>
+      <td><span class="pill warn">ready to do</span></td>
+    </tr>
+    <tr>
+      <td>Issue #2749 — if the two Chatwoot pods split across nodes, ingestion fails silently; needs alerting or shared storage</td>
+      <td><span class="pill warn">filed</span></td>
+    </tr>
+    <tr>
+      <td>#1510's cleanup path not yet exercised in CI (its run skipped verify — no docs changed); worst case = one extra open ticket</td>
+      <td><span class="pill warn">caveat</span></td>
+    </tr>
+  </table></div>
+
+  <h2>Session work log — all tasks this session</h2>
+  <div class="tablebox"><table>
+    <tr><th>Task</th><th>PR</th><th>Status</th></tr>
+    <tr><td>CUA test e2e: CWS install → login → DuckDuckGo agent answer, on video (issue #1501)</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1504">vibe #1504</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>agentprobe showcase gif</td><td><a href="https://github.com/dzianisv/agentprobe/pull/2">agentprobe #2</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>agentprobe: extract shared CUA core + surfaces</td><td><a href="https://github.com/dzianisv/agentprobe/pull/3">agentprobe #3</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>vibe: consume agentprobe shared core</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1505">vibe #1505</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>oncall-engineer skill drift fixes (health sweep findings)</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1506">vibe #1506</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>docs-chat: poll correct Gmail account (root cause 1)</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1507">vibe #1507</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>docs-chat: envelope-subject match, no Gmail SEARCH (root cause 2)</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1508">vibe #1508</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>Chatwoot email ingestion via CF Email Worker</td><td><a href="https://github.com/VibeTechnologies/OpenClawBot/pull/2747">OCB #2747</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>docs-chat Step 13 → Chatwoot API (root cause 3)</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1509">vibe #1509</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>Step 13 resolves its own CI ticket</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1510">vibe #1510</a></td><td><span class="pill ok">merged</span></td></tr>
+    <tr><td>Chatwoot support docs + on-call queue check</td><td><a href="https://github.com/VibeTechnologies/OpenClawBot/pull/2738">OCB #2738</a></td><td><span class="pill warn">open — superseded by #2747/#2739, close or rebase</span></td></tr>
+    <tr><td>tier-access.test.js fail loudly</td><td><a href="https://github.com/VibeTechnologies/VibeWebAgent/pull/1493">vibe #1493</a></td><td><span class="pill warn">open — CI passed, awaiting review verdict</span></td></tr>
+  </table></div>
+
+  <footer>Full evidence: PR descriptions · .agents/memory/2026-07-08.md · questions → ask me.</footer>
+</div>
