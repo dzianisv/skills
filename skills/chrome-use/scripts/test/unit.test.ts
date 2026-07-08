@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { parseArgv, ALIASES } from '../lib/argv.ts';
 import { parsePortFile } from '../lib/devtools-port.ts';
 import { isRef } from '../lib/selectors.ts';
+import { handlers as filesHandlers } from '../commands/files.ts';
+import type { Ctx } from '../lib/types.ts';
 
 test('parseArgv: subcommand + positional args', () => {
   const c = parseArgv(['fill', '@e1', 'hello world']);
@@ -52,4 +54,38 @@ test('isRef: only @eN matches', () => {
   assert.equal(isRef('#e1'), false);
   assert.equal(isRef('text=e1'), false);
   assert.equal(isRef('button'), false);
+});
+
+/**
+ * file_upload's validation (missing selector/paths, nonexistent files) returns
+ * before ever touching ctx.cdp/ctx.tab, so a bare mock ctx exercises it without a
+ * live browser connection.
+ */
+function mockCtx(args: string[]): Ctx {
+  return {
+    cdp: {} as Ctx['cdp'],
+    state: {} as Ctx['state'],
+    tab: {} as Ctx['tab'],
+    command: { name: 'file_upload', args, flags: {} },
+  };
+}
+
+test('file_upload: missing selector errors', async () => {
+  const res = await filesHandlers.file_upload(mockCtx([]));
+  assert.equal(res.ok, false);
+  assert.match(res.error ?? '', /selector/);
+});
+
+test('file_upload: missing file path errors', async () => {
+  const res = await filesHandlers.file_upload(mockCtx(['#file-input']));
+  assert.equal(res.ok, false);
+  assert.match(res.error ?? '', /file path required/);
+});
+
+test('file_upload: nonexistent file path errors', async () => {
+  const res = await filesHandlers.file_upload(
+    mockCtx(['#file-input', '/definitely/does/not/exist-chrome-use-test.png']),
+  );
+  assert.equal(res.ok, false);
+  assert.match(res.error ?? '', /not found/);
 });

@@ -19,6 +19,7 @@ import type { Command, CommandResult, Ctx, Handler, TabSession } from './lib/typ
 
 import { handlers as navigationHandlers } from './commands/navigation.ts';
 import { handlers as interactionHandlers } from './commands/interaction.ts';
+import { handlers as filesHandlers } from './commands/files.ts';
 import { handlers as inspectionHandlers } from './commands/inspection.ts';
 import { handlers as tabsHandlers } from './commands/tabs.ts';
 import { handlers as cookiesHandlers } from './commands/cookies.ts';
@@ -29,6 +30,7 @@ const PROXY_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prox
 const registry: Record<string, Handler> = {
   ...navigationHandlers,
   ...interactionHandlers,
+  ...filesHandlers,
   ...inspectionHandlers,
   ...tabsHandlers,
   ...cookiesHandlers,
@@ -52,6 +54,7 @@ Interaction:
   press <key>                     e.g. Enter, Control+a
   focus|hover <@ref|sel>          focus / hover an element
   scroll <up|down|left|right> [px]
+  file_upload <@ref|sel> <path...>   set files on an <input type=file>
 
 Inspection:
   snapshot [-i] [--json] [-s <css>]   ref tree (@e1 …); -i interactive-only
