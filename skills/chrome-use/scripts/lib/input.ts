@@ -35,7 +35,7 @@ const NAMED_KEYS: Record<string, KeyDef> = {
 };
 
 /** Build the {objectId} | {backendNodeId} addressing object for CDP DOM/Input. */
-function nodeAddr(el: ResolvedElement): Record<string, unknown> {
+export function nodeAddr(el: ResolvedElement): Record<string, unknown> {
   if (el.objectId) return { objectId: el.objectId };
   if (el.backendNodeId != null) return { backendNodeId: el.backendNodeId };
   throw new Error('ResolvedElement has neither objectId nor backendNodeId');
