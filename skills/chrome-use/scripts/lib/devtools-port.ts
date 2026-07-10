@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 
 export type Channel = 'stable' | 'canary' | 'beta' | 'dev';
 
@@ -67,9 +68,59 @@ export function buildWsEndpoint(channel: Channel = 'stable', userDataDir?: strin
 }
 
 /**
+ * Best-effort identity check: is whatever is listening on `port` a
+ * throwaway/automation Chrome instance launched with a hardcoded
+ * `--remote-debugging-port=` flag, rather than a real user-profile Chrome
+ * driven via DevToolsActivePort autoConnect (which never carries that flag)?
+ *
+ * Root cause this guards against: a throwaway automation Chrome hardcoded to
+ * `--remote-debugging-port=9561` repeatedly collided with the real Chrome's
+ * port, and plain TCP-reachability picked whichever one answered first —
+ * silently connecting to the wrong browser.
+ *
+ * Uses `lsof` to find the pid listening on `port`, then `ps` to inspect that
+ * pid's command line. Deliberately best-effort: if `lsof`/`ps` are missing,
+ * error, or time out, this returns `false` (treat as "not confirmed
+ * throwaway") so callers fall back to plain TCP-reachability behavior for
+ * that candidate instead of crashing endpoint resolution.
+ */
+function isThrowawayDebugChrome(port: number): boolean {
+  try {
+    const pidsRaw = execFileSync('lsof', [`-iTCP:${port}`, '-sTCP:LISTEN', '-t'], {
+      timeout: 500,
+      encoding: 'utf8',
+    });
+    const pids = pidsRaw
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => parseInt(s, 10))
+      .filter((n) => Number.isFinite(n));
+
+    for (const pid of pids) {
+      try {
+        const cmd = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
+          timeout: 500,
+          encoding: 'utf8',
+        });
+        if (/--remote-debugging-port=/.test(cmd)) return true;
+      } catch {
+        // process gone or ps unavailable for this pid — check remaining pids
+      }
+    }
+    return false;
+  } catch {
+    // lsof missing/erroring — best-effort, never hard-fail identity verification
+    return false;
+  }
+}
+
+/**
  * Try all known Chrome channels and return the ws:// endpoint for the first
- * one whose port file exists AND whose port is reachable (TCP connect).
- * Falls back to the stable channel error if none respond.
+ * one whose port file exists AND whose port is reachable (TCP connect) AND —
+ * best-effort — does not belong to a throwaway/automation Chrome instance
+ * (see isThrowawayDebugChrome). Falls back to the stable channel error if
+ * none respond.
  */
 export async function buildWsEndpointAuto(userDataDir?: string): Promise<string> {
   const channels: Channel[] = ['stable', 'dev', 'beta', 'canary'];
@@ -107,7 +158,12 @@ export async function buildWsEndpointAuto(userDataDir?: string): Promise<string>
       sock.on('error', () => { clearTimeout(timer); resolve(false); });
       timer = setTimeout(() => { sock.destroy(); resolve(false); }, 300);
     });
-    if (reachable) return endpoint;
+    if (!reachable) continue;
+    // Reachable isn't enough on its own — confirm it's not a throwaway
+    // automation Chrome that happens to be listening on this port before
+    // accepting it; if we can't confirm either way, accept it (best-effort).
+    if (isThrowawayDebugChrome(port)) continue;
+    return endpoint;
   }
 
   // All port files exist but none are reachable — return the first candidate's

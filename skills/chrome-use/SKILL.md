@@ -173,5 +173,7 @@ Chrome. `test:offline` skips them. See `scripts/test/README.md`.
 
 - Kill or restart a **healthy proxy** — it forces a new Chrome permission dialog. The CLI probes and reuses it automatically. (Changing *command* logic does not require a proxy restart — only changes to `proxy.ts` do.)
 - Use `--remote-debugging-port` flags — this skill uses autoConnect.
+- Hand-build a raw `ws://127.0.0.1:<port>/devtools/browser/<uuid>` URL or write a one-off script to connect straight to the CDP debug port — even though the proxy reads `DevToolsActivePort` internally, every raw/direct debugger connection is a brand-new client to Chrome and re-triggers the native "Allow remote debugging?" dialog. Always go through the `chrome-use` CLI so the one approved connection is reused.
+- Launch a throwaway/automation Chrome instance with a hardcoded `--remote-debugging-port` — if it collides with the real profile's port you get confusing cross-talk while diagnosing connections. Use `--remote-debugging-port=0` (OS-assigned ephemeral port) for any separate instance so it can never collide.
 - `curl http://localhost:<port>/json/version` or `/json/list` — those HTTP endpoints do not exist in autoConnect mode.
 - Reuse `@eN` refs across a navigation or between tabs — refs are per-tab and reset on navigation. Re-snapshot first.

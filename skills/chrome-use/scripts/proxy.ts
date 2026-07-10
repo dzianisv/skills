@@ -15,19 +15,77 @@
  *
  * Daemonizes (double-fork) unless CHROME_USE_DAEMON=1. Exits 0 if another proxy
  * already owns the socket. Socket path overridable via CHROME_USE_SOCKET.
+ *
+ * Startup is gated by an exclusive lock file (`<socket>.lock`) so concurrent
+ * launches can't race past the unlink+listen+connect sequence — that race was
+ * the other source of duplicate dialogs (two proxies, two approved CDP
+ * connections). `__status` reports a content-hash `version` of this file +
+ * lib/cdp.ts + lib/devtools-port.ts so cli.ts can detect a running proxy that
+ * predates a fix to those files and restart it once. Daemon stdout/stderr are
+ * appended to `<socket>.log` (single-generation rotation at 5MB) instead of
+ * being discarded, so incidents can be reconstructed from logs.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { Cdp } from './lib/cdp.ts';
 import { buildWsEndpoint, buildWsEndpointAuto } from './lib/devtools-port.ts';
 
 const SOCKET_PATH = process.env.CHROME_USE_SOCKET ?? `/tmp/chrome-use-${os.userInfo().uid}.sock`;
+const LOCK_PATH = `${SOCKET_PATH}.lock`;
+const LOG_PATH = `${SOCKET_PATH}.log`;
+const MAX_LOCK_ATTEMPTS = 3;
+const MAX_LOG_BYTES = 5 * 1024 * 1024; // 5 MiB
 
 function log(...a: unknown[]): void {
   process.stderr.write('[chrome-use proxy] ' + a.join(' ') + '\n');
+}
+
+// ── Version stamp ──────────────────────────────────────────────────────────────
+
+/**
+ * Files that define proxy *behavior* (this file + the CDP client + the
+ * DevToolsActivePort resolver). Deliberately excludes cli.ts and commands/ —
+ * those hold command logic, which can change without needing a proxy restart
+ * (see module header) — so CLI-only edits must not force a spurious restart.
+ */
+const THIS_FILE = fileURLToPath(import.meta.url);
+const VERSION_FILES = [
+  THIS_FILE,
+  path.join(path.dirname(THIS_FILE), 'lib', 'cdp.ts'),
+  path.join(path.dirname(THIS_FILE), 'lib', 'devtools-port.ts'),
+];
+
+/** Stable content hash of VERSION_FILES, exposed via `__status` as `version`. */
+function computeVersion(): string {
+  const hash = crypto.createHash('sha256');
+  for (const f of VERSION_FILES) hash.update(fs.readFileSync(f));
+  return hash.digest('hex');
+}
+
+const PROXY_VERSION = computeVersion();
+
+// ── Persistent rotating log ─────────────────────────────────────────────────────
+
+/**
+ * Open the persistent daemon log for appending, rotating the previous file to
+ * a single `.1` generation (overwriting any older one) if it has grown past
+ * MAX_LOG_BYTES. No external dependency — plain fs, single generation.
+ */
+function openLogFd(): number {
+  try {
+    if (fs.statSync(LOG_PATH).size > MAX_LOG_BYTES) {
+      fs.renameSync(LOG_PATH, `${LOG_PATH}.1`);
+    }
+  } catch {
+    /* no existing log yet */
+  }
+  return fs.openSync(LOG_PATH, 'a');
 }
 
 // ── Singleton check ────────────────────────────────────────────────────────────
@@ -54,6 +112,128 @@ function checkAlreadyRunning(): Promise<boolean> {
       resolve(false);
     });
   });
+}
+
+// ── Atomic startup lock ──────────────────────────────────────────────────────────
+
+/**
+ * Acquire an exclusive startup lock so concurrent proxy launches can't race
+ * past the unlink-socket + listen + connect-to-Chrome sequence — two proxies
+ * doing that concurrently means two approved CDP connections, i.e. two
+ * "Allow remote debugging?" dialogs.
+ *
+ * Lock content (our pid) is published atomically: we write it to a
+ * uniquely-named temp file first, then `fs.linkSync` it onto LOCK_PATH — a
+ * single hard-link syscall that's atomic at the OS level (EEXIST if
+ * LOCK_PATH already exists) and, unlike open('wx') + a separate write(),
+ * never lets a racing reader observe LOCK_PATH created-but-empty. (An empty
+ * read used to parse as `ownerPid = null`, which forced `killThrowsESRCH`'s
+ * default of `true` regardless of whether the real owner was alive — the
+ * same false-staleness failure this whole lock exists to prevent.)
+ *
+ * Resolves `true` if this process now holds the lock and should proceed to
+ * start the server. Resolves `false` if another proxy is already fully up and
+ * serving (this process should back off, matching the existing "exit 0 if
+ * another proxy already owns the socket" behavior). Throws if the lock is
+ * held by a stale/dead holder that can't be cleared within
+ * MAX_LOCK_ATTEMPTS — never spins forever.
+ */
+async function acquireLock(): Promise<boolean> {
+  for (let attempt = 1; attempt <= MAX_LOCK_ATTEMPTS; attempt++) {
+    const tmpPath = `${LOCK_PATH}.tmp.${process.pid}`;
+    let linked = false;
+    try {
+      fs.writeFileSync(tmpPath, String(process.pid));
+      try {
+        fs.linkSync(tmpPath, LOCK_PATH);
+        linked = true;
+      } catch (err: any) {
+        if (err?.code !== 'EEXIST') throw err;
+      }
+    } finally {
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch {
+        /* already gone */
+      }
+    }
+    if (linked) {
+      // We won the lock fresh (uncontended) — but that alone doesn't prove
+      // nobody is already serving. releaseLock() intentionally frees the lock
+      // right after a predecessor's listen() succeeds (the bound socket
+      // becomes the singleton token from then on, per that function's
+      // comment) — NOT for that predecessor's whole lifetime. So a newcomer
+      // can win a perfectly "uncontended" link in the gap right after a
+      // healthy predecessor released it, having never observed EEXIST at all
+      // and therefore never running the owner-liveness check below. Without
+      // this, that newcomer barrels straight into its own unlink+listen,
+      // stealing the socket out from under a healthy predecessor — two
+      // proxies, two approved CDP connections. Confirmed via a real
+      // concurrent-launch test (test/lock.test.ts) before this check existed.
+      if (await checkAlreadyRunning()) {
+        releaseLock();
+        return false;
+      }
+      return true;
+    }
+
+    // LOCK_PATH already exists — someone else holds (or left behind) it.
+    let ownerPid: number | null = null;
+    try {
+      const raw = fs.readFileSync(LOCK_PATH, 'utf8').trim();
+      ownerPid = raw ? parseInt(raw, 10) : null;
+    } catch {
+      ownerPid = null; // lockfile vanished between our linkSync and this read
+    }
+
+    let killThrowsESRCH = true;
+    if (ownerPid && Number.isFinite(ownerPid)) {
+      try {
+        process.kill(ownerPid, 0);
+        killThrowsESRCH = false; // no throw → owner process is alive
+      } catch (killErr: any) {
+        killThrowsESRCH = killErr?.code === 'ESRCH';
+      }
+    }
+
+    // Stale iff the owner process is gone, OR nothing is actually serving on
+    // the socket (covers a wedged owner / a pid reused by an unrelated
+    // process). When the owner IS alive, don't declare staleness off a single
+    // check: it may simply be mid-startup, about to call server.listen(), and
+    // checkAlreadyRunning() legitimately returns false during that narrow
+    // window. Give it one short grace-period retry first — without it, a
+    // racing process would wrongly steal the lock out from under a legitimate
+    // in-flight starter and both would proceed to start a proxy, reintroducing
+    // the double-CDP-connection bug this lock exists to prevent.
+    let stale: boolean;
+    if (killThrowsESRCH) {
+      stale = true;
+    } else {
+      stale = !(await checkAlreadyRunning());
+      if (stale) {
+        await new Promise((r) => setTimeout(r, 400));
+        stale = !(await checkAlreadyRunning());
+      }
+    }
+    if (!stale) return false; // a live proxy already owns the socket end-to-end
+
+    log(`Stale lock (pid ${ownerPid ?? '?'}) at ${LOCK_PATH}, attempt ${attempt}/${MAX_LOCK_ATTEMPTS} — clearing.`);
+    try {
+      fs.unlinkSync(LOCK_PATH);
+    } catch {
+      /* raced with another cleaner; fine, retry the exclusive-link */
+    }
+  }
+  throw new Error(`Could not acquire startup lock at ${LOCK_PATH} after ${MAX_LOCK_ATTEMPTS} attempts`);
+}
+
+/** Release the startup lock. Safe to call even if never acquired. */
+function releaseLock(): void {
+  try {
+    fs.unlinkSync(LOCK_PATH);
+  } catch {
+    /* already gone */
+  }
 }
 
 // ── Single approved connection (memoized, approval-aware) ────────────────────────
@@ -110,7 +290,7 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
   const { id, method, params, sessionId } = msg ?? {};
 
   if (method === '__status') {
-    return { id, result: { connected: !!cdp?.connected, socketPath: SOCKET_PATH } };
+    return { id, result: { connected: !!cdp?.connected, socketPath: SOCKET_PATH, version: PROXY_VERSION, pid: process.pid } };
   }
   if (method === '__stop') {
     setImmediate(() => {
@@ -140,40 +320,65 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
 
 // ── Unix socket server ───────────────────────────────────────────────────────────
 
-function startServer(): void {
-  try {
-    fs.unlinkSync(SOCKET_PATH);
-  } catch {
-    /* no stale socket */
+async function startServer(): Promise<void> {
+  const acquired = await acquireLock();
+  if (!acquired) {
+    // Another proxy already owns the socket end-to-end — defer to it rather
+    // than risk a second CDP connection (see docstring on acquireLock).
+    log('Another proxy already owns the socket — exiting.');
+    process.exit(0);
   }
 
-  server = net.createServer((socket) => {
-    let buf = '';
-    socket.setEncoding('utf8');
-    socket.on('data', (chunk) => {
-      buf += chunk;
-      let nl: number;
-      while ((nl = buf.indexOf('\n')) !== -1) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        if (!line.trim()) continue;
-        let msg: any;
-        try {
-          msg = JSON.parse(line);
-        } catch {
-          socket.write(JSON.stringify({ id: null, error: `Invalid JSON: ${line}` }) + '\n');
-          continue;
-        }
-        handle(msg)
-          .then((res) => socket.write(JSON.stringify(res) + '\n'))
-          .catch((err) => socket.write(JSON.stringify({ id: msg?.id ?? null, error: String(err?.message ?? err) }) + '\n'));
-      }
-    });
-    socket.on('error', () => {});
-  });
+  try {
+    try {
+      fs.unlinkSync(SOCKET_PATH);
+    } catch {
+      /* no stale socket */
+    }
 
-  server.listen(SOCKET_PATH, () => log(`Listening on ${SOCKET_PATH}`));
-  server.on('error', (err) => {
+    server = net.createServer((socket) => {
+      let buf = '';
+      socket.setEncoding('utf8');
+      socket.on('data', (chunk) => {
+        buf += chunk;
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          if (!line.trim()) continue;
+          let msg: any;
+          try {
+            msg = JSON.parse(line);
+          } catch {
+            socket.write(JSON.stringify({ id: null, error: `Invalid JSON: ${line}` }) + '\n');
+            continue;
+          }
+          handle(msg)
+            .then((res) => socket.write(JSON.stringify(res) + '\n'))
+            .catch((err) => socket.write(JSON.stringify({ id: msg?.id ?? null, error: String(err?.message ?? err) }) + '\n'));
+        }
+      });
+      socket.on('error', () => {});
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const onListenError = (err: NodeJS.ErrnoException) => reject(err);
+      server!.once('error', onListenError);
+      server!.listen(SOCKET_PATH, () => {
+        server!.removeListener('error', onListenError);
+        log(`Listening on ${SOCKET_PATH}`);
+        resolve();
+      });
+    });
+  } finally {
+    // The bound socket is the singleton token from here on — release the lock
+    // whether startup succeeded or failed. Do NOT unlink-then-listen outside
+    // the lock; that unguarded ordering is what caused the original race.
+    releaseLock();
+  }
+
+  // Handle errors for the remainder of the process lifetime (post-startup).
+  server!.on('error', (err) => {
     log('Server error:', err.message);
     process.exit(1);
   });
@@ -186,17 +391,24 @@ async function main(): Promise<void> {
 
   const isDaemon = process.env.CHROME_USE_DAEMON === '1';
   if (!isDaemon) {
+    const logFd = openLogFd();
     const child = spawn(process.execPath, [process.argv[1]], {
       detached: true,
-      stdio: 'ignore',
+      stdio: ['ignore', logFd, logFd],
       env: { ...process.env, CHROME_USE_DAEMON: '1' },
     });
+    fs.closeSync(logFd); // child has its own dup'd reference; safe to close ours
     child.unref();
     await new Promise((r) => setTimeout(r, 100));
     process.exit(0);
   }
 
-  startServer();
+  try {
+    await startServer();
+  } catch (err: any) {
+    log('Failed to start server:', err?.message ?? String(err));
+    process.exit(1);
+  }
   // Connect eagerly so the approval dialog appears at startup, not on first command.
   ensureConnected().catch((err) => log('Initial connection failed (will retry on next command):', err.message));
 
