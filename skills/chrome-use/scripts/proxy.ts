@@ -22,8 +22,18 @@
  * connections). `__status` reports a content-hash `version` of this file +
  * lib/cdp.ts + lib/devtools-port.ts so cli.ts can detect a running proxy that
  * predates a fix to those files and restart it once. Daemon stdout/stderr are
- * appended to `<socket>.log` (single-generation rotation at 5MB) instead of
- * being discarded, so incidents can be reconstructed from logs.
+ * appended to `<socket>.log` (single-generation rotation at 5MB, ISO-timestamped
+ * lines) instead of being discarded, so incidents can be reconstructed from logs.
+ *
+ * `ensureConnected()` is single-flight (concurrent commands share one in-flight
+ * CDP connect attempt — never open a second WebSocket while the first is still
+ * pending) and, after a failed attempt, enforces a RECONNECT_COOLDOWN_MS backoff
+ * before trying again: commands that arrive during the cooldown fail fast with
+ * an actionable message instead of starting another connect. Both guard against
+ * the same failure mode as the startup lock above — one dialog per new CDP
+ * WebSocket connect attempt, so an unbounded number of connect attempts (either
+ * concurrent or rapid-fire while unapproved) means an unbounded number of
+ * "Allow remote debugging?" dialogs.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -42,8 +52,22 @@ const LOG_PATH = `${SOCKET_PATH}.log`;
 const MAX_LOCK_ATTEMPTS = 3;
 const MAX_LOG_BYTES = 5 * 1024 * 1024; // 5 MiB
 
+/**
+ * Cooldown after a failed CDP connect attempt (e.g. the "Allow remote
+ * debugging?" dialog timed out unanswered) before another attempt is allowed.
+ * Without this, every command that arrives while disconnected starts a fresh
+ * WebSocket connect — and Chrome shows a brand-new dialog per connect attempt
+ * (one dialog per new debugger client), so N queued commands = N dialogs.
+ * During the cooldown, commands fail fast with an actionable message instead
+ * of silently queuing another approval prompt.
+ *
+ * Overridable via CHROME_USE_RECONNECT_COOLDOWN_MS so tests don't have to
+ * block for the real 30s window.
+ */
+const RECONNECT_COOLDOWN_MS = Number(process.env.CHROME_USE_RECONNECT_COOLDOWN_MS) || 30_000;
+
 function log(...a: unknown[]): void {
-  process.stderr.write('[chrome-use proxy] ' + a.join(' ') + '\n');
+  process.stderr.write(`[${new Date().toISOString()}] [chrome-use proxy] ` + a.join(' ') + '\n');
 }
 
 // ── Version stamp ──────────────────────────────────────────────────────────────
@@ -241,10 +265,28 @@ function releaseLock(): void {
 let cdp: Cdp | null = null;
 let connecting: Promise<void> | null = null;
 let server: net.Server | null = null;
+/** Timestamp (ms) of the most recent failed connect attempt, or null if the
+ *  last attempt succeeded (or none has run yet). Drives RECONNECT_COOLDOWN_MS. */
+let lastConnectFailureAt: number | null = null;
 
 function ensureConnected(): Promise<void> {
   if (cdp?.connected) return Promise.resolve();
+  // Single-flight: a connect attempt is already in progress (own WebSocket to
+  // Chrome, own pending dialog if unapproved). Share that same promise instead
+  // of opening a second one — only one dialog can be pending at a time.
   if (connecting) return connecting;
+  if (lastConnectFailureAt !== null) {
+    const elapsedMs = Date.now() - lastConnectFailureAt;
+    if (elapsedMs < RECONNECT_COOLDOWN_MS) {
+      const remainingS = Math.ceil((RECONNECT_COOLDOWN_MS - elapsedMs) / 1000);
+      return Promise.reject(
+        new Error(
+          `Chrome debugging not approved yet — switch to Chrome and click "Allow" on the remote-debugging ` +
+            `dialog, then retry. (next connect attempt allowed in ${remainingS}s)`,
+        ),
+      );
+    }
+  }
   connecting = (async () => {
     // Always connect via DevToolsActivePort autoConnect (my-browser style).
     // CHROME_USE_USER_DATA_DIR optionally points at a non-default Chrome profile;
@@ -275,10 +317,15 @@ function ensureConnected(): Promise<void> {
     // Clear `connecting` on success too — not just on failure. Otherwise it keeps
     // a resolved promise and the `if (connecting) return connecting` fast path
     // short-circuits forever, so a dead `cdp` is never replaced.
-    .then(() => { connecting = null; })
+    .then(() => { connecting = null; lastConnectFailureAt = null; })
     .catch((err) => {
       connecting = null;
       cdp = null;
+      lastConnectFailureAt = Date.now();
+      log(
+        `Connect attempt failed: ${err?.message ?? err}. ` +
+          `Cooling down for ${Math.round(RECONNECT_COOLDOWN_MS / 1000)}s before the next attempt.`,
+      );
       throw err;
     });
   return connecting;
