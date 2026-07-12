@@ -12,6 +12,7 @@ import {
   typeText,
   pressKey,
   scrollBy,
+  centerOf,
 } from '../lib/input.ts';
 
 const click: Handler = async (ctx): Promise<CommandResult> => {
@@ -74,6 +75,48 @@ const scroll: Handler = async (ctx): Promise<CommandResult> => {
   return { ok: true, text: `Scrolled ${dir} ${px}px` };
 };
 
+/**
+ * upload <@ref|sel> <path...>  — set files on a <input type=file> via CDP
+ * DOM.setFileInputFiles. This is the same privileged mechanism DevTools itself
+ * uses to drive file inputs headlessly; it never opens the native OS file
+ * picker, so it works over the existing approved CDP connection.
+ */
+const upload: Handler = async (ctx): Promise<CommandResult> => {
+  const sel = ctx.command.args[0];
+  if (!sel) return { ok: false, error: 'upload: selector or @ref required' };
+  const paths = ctx.command.args.slice(1);
+  if (paths.length === 0) return { ok: false, error: 'upload: at least one file path required' };
+  const el = await resolve(ctx.cdp, ctx.tab, sel);
+  await ctx.cdp.send('DOM.setFileInputFiles', { files: paths, ...el }, ctx.tab.sessionId);
+  return { ok: true, text: `Uploaded ${paths.length} file(s) to ${sel}` };
+};
+
+/**
+ * dragdrop <@ref|sel> <path...>  — simulate an OS-level file drag-and-drop onto a
+ * dropzone via CDP Input.dispatchDragEvent. Some modern editors (e.g. GitHub's
+ * newer Primer-based comment box) mount no persistent <input type=file> at all —
+ * they only render a dropzone and open a file chooser in response to a genuinely
+ * trusted click, which we can't answer without event relay support in the proxy
+ * (Page.fileChooserOpened isn't forwarded — see lib/proxy-client.ts). Dragging a
+ * real file path onto the dropzone sidesteps the file-chooser flow entirely: it's
+ * a single request/response CDP command (dragEnter/dragOver/drop), same shape as
+ * every other command already relayed through the proxy, so no proxy changes or
+ * dialog re-approval are needed.
+ */
+const dragdrop: Handler = async (ctx): Promise<CommandResult> => {
+  const sel = ctx.command.args[0];
+  if (!sel) return { ok: false, error: 'dragdrop: selector or @ref required' };
+  const paths = ctx.command.args.slice(1);
+  if (paths.length === 0) return { ok: false, error: 'dragdrop: at least one file path required' };
+  const el = await resolve(ctx.cdp, ctx.tab, sel);
+  const { x, y } = await centerOf(ctx.cdp, ctx.tab.sessionId, el);
+  const data = { items: [], files: paths, dragOperationsMask: 1 };
+  await ctx.cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', x, y, data }, ctx.tab.sessionId);
+  await ctx.cdp.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data }, ctx.tab.sessionId);
+  await ctx.cdp.send('Input.dispatchDragEvent', { type: 'drop', x, y, data }, ctx.tab.sessionId);
+  return { ok: true, text: `Dropped ${paths.length} file(s) onto ${sel}` };
+};
+
 export const handlers: Record<string, Handler> = {
   click,
   fill,
@@ -82,4 +125,6 @@ export const handlers: Record<string, Handler> = {
   focus,
   hover,
   scroll,
+  upload,
+  dragdrop,
 };
