@@ -76,7 +76,7 @@ async function scrollIntoView(cdp: CdpClient, sessionId: string, el: ResolvedEle
  * Compute the viewport center point of an element. Falls back to scrolling it into
  * view and retrying once if the box model is initially unavailable.
  */
-async function centerOf(
+export async function centerOf(
   cdp: CdpClient,
   sessionId: string,
   el: ResolvedElement,
