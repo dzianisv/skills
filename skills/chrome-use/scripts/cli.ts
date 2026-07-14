@@ -109,7 +109,6 @@ Tabs & cookies:
 
 Other:
   status                          proxy + browser health
-  stop                            stop the proxy (next command reconnects)
   help                            this message
 
 Global: add --json for structured output where supported.`;
@@ -239,18 +238,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  // `stop` shuts the proxy down (forces a fresh connect + approval next time).
-  if (command.name === 'stop') {
-    try {
-      const c = await ProxyClient.open(SOCKET_PATH, 3000);
-      await c.send('__stop', {});
-      c.close();
-      process.stdout.write('proxy stopped\n');
-    } catch {
-      process.stdout.write('no proxy running\n');
-    }
-    return;
-  }
+  // NOTE: there is deliberately NO public `stop` command. The proxy is shared
+  // across every session and holds the ONE approved Chrome remote-debugging
+  // connection; a `chrome-use stop` was called by agents far too often "to reset"
+  // for no real reason, killing that connection and re-triggering Chrome's
+  // "Allow remote debugging?" consent dialog for everyone. `stop` therefore falls
+  // through to the normal unknown-command path below (exit 1, proxy untouched).
+  // Terminating a genuinely broken proxy is an explicit out-of-band OS action for
+  // a human/maintainer (e.g. `kill <pid>`), never something the agent CLI exposes.
+  // (`__stop` still exists as an internal control method, used only by
+  // ensureProxy()'s one-shot restart when the proxy is running stale code.)
 
   const handler = registry[command.name];
   if (!handler) {

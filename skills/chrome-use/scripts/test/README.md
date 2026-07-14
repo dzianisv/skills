@@ -23,8 +23,8 @@ be fully automated because Chrome's one-time "Allow remote debugging?" dialog ne
 human click). It walks you through: (1) open a page (approve the dialog if shown),
 (2) **fully restart Chrome** (drops the CDP socket + assigns a new debug port),
 (3) run another command — which must auto-reconnect (no `CDP connection closed`, no
-manual `stop`). It uses an isolated socket and stops its own proxy on exit, so your
-everyday chrome-use proxy is untouched.
+manual restart). It uses an isolated socket and terminates its own proxy out-of-band
+on exit (there is no `stop` command), so your everyday chrome-use proxy is untouched.
 
 ## Requirements
 
