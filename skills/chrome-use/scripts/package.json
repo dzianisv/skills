@@ -2,8 +2,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node --test test/unit.test.ts test/reconnect.test.ts test/lock.test.ts test/connect-resilience.test.ts test/evals.test.ts",
-    "test:offline": "node --test test/unit.test.ts test/reconnect.test.ts test/lock.test.ts test/connect-resilience.test.ts",
+    "test": "node --test test/unit.test.ts test/reconnect.test.ts test/lock.test.ts test/connect-resilience.test.ts test/no-stop-command.test.ts test/evals.test.ts",
+    "test:offline": "node --test test/unit.test.ts test/reconnect.test.ts test/lock.test.ts test/connect-resilience.test.ts test/no-stop-command.test.ts",
     "live-smoke": "bash test/live-smoke.sh"
   }
 }
