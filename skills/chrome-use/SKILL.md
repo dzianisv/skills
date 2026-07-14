@@ -141,7 +141,8 @@ File format: two lines — port number, then WebSocket path:
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `DevToolsActivePort not found` | Chrome not running, or autoConnect not enabled | Start Chrome 144+, go to `chrome://inspect/#remote-debugging`, click **Allow** |
-| Permission dialog appears on every run | New connections instead of the shared proxy | Let the CLI auto-start and reuse the proxy; do not kill it between commands |
+| Permission dialog appears on every run | The shared proxy keeps getting torn down (a stray `chrome-use stop`, a killed process, or a Chrome restart), so each command opens a **new** debugger connection | Let the CLI auto-start and reuse the ONE proxy; **never `chrome-use stop`** or kill it between commands (plain `stop` now refuses for exactly this reason). One prompt per Chrome restart is unavoidable. |
+| Proxy looks stuck / you want to "reset" it | It is **shared across every session**; stopping it re-triggers the consent dialog for everyone | Run `chrome-use status` and **report** the result — do NOT stop/restart. Emergency maintenance only: `CHROME_USE_ALLOW_STOP=1 chrome-use stop --force` |
 | Connection hangs on first command | Chrome is showing the "Allow remote debugging?" dialog | Switch to Chrome, click **Allow** |
 | `page changed — re-run snapshot` | Acting on a stale `@eN` after navigation | Re-run `snapshot`, then use the fresh refs |
 | `Daemon did not start in time` | Daemon failed to launch or Chrome not responding | Go to `chrome://inspect/#remote-debugging`, click **Allow**; check `./chrome-use status` |
@@ -157,7 +158,7 @@ running Chrome through the proxy — *my-browser style*, not `--remote-debugging
 
 ```bash
 cd scripts && npm test          # unit + reconnect + golden eval cases (needs Chrome)
-cd scripts && npm run test:offline   # unit + reconnect only — no Chrome, CI-safe
+cd scripts && npm run test:offline   # unit + reconnect + lock + resilience + stop-guard — no Chrome, CI-safe
 cd scripts && npm run live-smoke     # guided live reconnect smoke (needs Chrome + 1 Allow click)
 ```
 
@@ -171,6 +172,7 @@ Chrome. `test:offline` skips them. See `scripts/test/README.md`.
 
 ## Do NOT
 
+- **Never run `chrome-use stop`** (or otherwise kill/restart the proxy) to "reset" a session. The proxy is **shared across all sessions** and holds the single approved Chrome connection; stopping it forces a fresh "Allow remote debugging?" dialog for **everyone**. Plain `stop` now **refuses by default** — it only proceeds with an explicit emergency opt-in requiring BOTH a flag and an env var (`CHROME_USE_ALLOW_STOP=1 chrome-use stop --force`). If a session looks unhealthy, run `chrome-use status` and **report** it; do not restart it.
 - Kill or restart a **healthy proxy** — it forces a new Chrome permission dialog. The CLI probes and reuses it automatically. (Changing *command* logic does not require a proxy restart — only changes to `proxy.ts` do.)
 - Use `--remote-debugging-port` flags — this skill uses autoConnect.
 - Hand-build a raw `ws://127.0.0.1:<port>/devtools/browser/<uuid>` URL or write a one-off script to connect straight to the CDP debug port — even though the proxy reads `DevToolsActivePort` internally, every raw/direct debugger connection is a brand-new client to Chrome and re-triggers the native "Allow remote debugging?" dialog. Always go through the `chrome-use` CLI so the one approved connection is reused.

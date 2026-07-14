@@ -108,8 +108,11 @@ Tabs & cookies:
   cookies | cookies set <name> <val> | cookies clear
 
 Other:
-  status                          proxy + browser health
-  stop                            stop the proxy (next command reconnects)
+  status                          proxy + browser health (use this to check the proxy)
+  stop                            refuses by default — the proxy is SHARED; stopping it
+                                  re-triggers Chrome's "Allow remote debugging?" dialog
+                                  for every session. Emergency maintenance only:
+                                    CHROME_USE_ALLOW_STOP=1 chrome-use stop --force
   help                            this message
 
 Global: add --json for structured output where supported.`;
@@ -239,8 +242,42 @@ async function main(): Promise<void> {
     return;
   }
 
-  // `stop` shuts the proxy down (forces a fresh connect + approval next time).
+  // `stop` tears down the proxy — but the proxy is SHARED across every session
+  // and holds ONE approved Chrome remote-debugging connection. Stopping it drops
+  // that connection, so the next command from ANY session makes Chrome re-show
+  // the "Allow remote debugging?" consent dialog — the exact prompt-spam this
+  // proxy exists to prevent. (A stray `chrome-use stop` from one agent session is
+  // what re-triggered the dialog for everyone in the field.)
+  //
+  // Fail closed: refuse by default, WITHOUT signalling or removing the proxy.
+  // The emergency maintenance escape hatch requires BOTH an explicit `--force`
+  // flag AND `CHROME_USE_ALLOW_STOP=1` — two independent, deliberately
+  // hard-to-trigger-by-accident opt-ins, so a normal agent can never stop the
+  // shared proxy by guessing a single flag or env var.
   if (command.name === 'stop') {
+    const forced = command.flags.force === true && process.env.CHROME_USE_ALLOW_STOP === '1';
+    if (!forced) {
+      process.stderr.write(
+        'chrome-use: refusing to stop the shared proxy.\n' +
+          '\n' +
+          'The proxy holds ONE approved Chrome remote-debugging connection shared by\n' +
+          'every session. Stopping it drops that connection, so the next command from\n' +
+          'ANY session makes Chrome re-show the "Allow remote debugging?" dialog — the\n' +
+          'exact consent-prompt spam the shared proxy exists to prevent.\n' +
+          '\n' +
+          'If the proxy looks unhealthy: run `chrome-use status` and report the result.\n' +
+          'Do NOT stop or restart a shared session.\n' +
+          '\n' +
+          'Emergency maintenance only (WILL re-trigger the Chrome consent dialog):\n' +
+          '  CHROME_USE_ALLOW_STOP=1 chrome-use stop --force\n',
+      );
+      process.exitCode = 1;
+      return;
+    }
+    process.stderr.write(
+      'chrome-use: force-stopping the shared proxy (--force + CHROME_USE_ALLOW_STOP=1).\n' +
+        "The next command from any session will re-trigger Chrome's remote-debugging consent dialog.\n",
+    );
     try {
       const c = await ProxyClient.open(SOCKET_PATH, 3000);
       await c.send('__stop', {});
