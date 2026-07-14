@@ -15,7 +15,17 @@ URL="${1:-https://example.com}"
 # Isolated socket so this never disturbs your everyday chrome-use proxy.
 export CHROME_USE_SOCKET="${CHROME_USE_SOCKET:-/tmp/chrome-use-livesmoke-$$.sock}"
 
-cleanup() { "$CU" stop >/dev/null 2>&1 || true; }
+# There is deliberately no `chrome-use stop` command (agents must never stop the
+# shared proxy). This smoke test uses its OWN isolated socket, so we terminate
+# that proxy out-of-band — an explicit OS action, exactly as a maintainer would.
+cleanup() {
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -t -- "$CHROME_USE_SOCKET" 2>/dev/null | while read -r pid; do
+      [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+    done
+  fi
+  rm -f "$CHROME_USE_SOCKET" "$CHROME_USE_SOCKET".log "$CHROME_USE_SOCKET".lock 2>/dev/null || true
+}
 trap cleanup EXIT
 
 echo "1) Connecting + opening $URL"
