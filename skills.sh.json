@@ -20,7 +20,7 @@
     {
       "title": "Tooling & Integrations",
       "description": "CLI tools, secret management, messaging, and deploy helpers.",
-      "skills": ["agent-memory", "bitwarden-cli", "claude-sessions", "claude-max", "telegram-cli", "opencode-api", "vercel-lfs", "git-worktree", "mermaid2excalidraw", "macro-panel"]
+      "skills": ["agent-memory", "bitwarden-cli", "claude-sessions", "claude-max", "telegram-cli", "prompt-hermes-ai", "opencode-api", "vercel-lfs", "git-worktree", "mermaid2excalidraw", "macro-panel"]
     }
   ]
 }
