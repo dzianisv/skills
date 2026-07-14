@@ -147,7 +147,8 @@ File format: two lines — port number, then WebSocket path:
 | `Daemon did not start in time` | Daemon failed to launch or Chrome not responding | Go to `chrome://inspect/#remote-debugging`, click **Allow**; check `./chrome-use status` |
 | `/json/version` connection refused | Expected in autoConnect mode | Use `DevToolsActivePort` + direct WebSocket; do not curl the HTTP API |
 | Another debugger attached error | DevTools panel open on the same tab | Close DevTools panels / disconnect other debuggers |
-| `CDP connection closed` after a Chrome restart / dropped socket | The CDP WebSocket dropped | Nothing — the proxy now auto-reconnects on the **next** command (re-reading `DevToolsActivePort` for Chrome's new port). No `stop`/restart needed. If it persists, Chrome isn't running. |
+| `CDP connection closed` after a Chrome restart / dropped socket | The CDP WebSocket dropped | Nothing — the proxy now auto-reconnects on the **next** command (re-reading `DevToolsActivePort` for Chrome's new port). No manual restart needed. If it persists, Chrome isn't running. |
+| You think the proxy is broken and want to "reset" it | The proxy is **shared** and holds the one approved Chrome connection; there is intentionally **no `chrome-use stop`** | Run `chrome-use status` and **report** it. Do not try to stop/restart it from the CLI. If a proxy is genuinely wedged, a **human/maintainer** terminates that process out-of-band (OS process management, e.g. `kill <pid>`) — never the agent. |
 
 ## Testing
 
@@ -171,6 +172,7 @@ Chrome. `test:offline` skips them. See `scripts/test/README.md`.
 
 ## Do NOT
 
+- **Do not try to stop or restart the proxy.** There is intentionally **no `chrome-use stop`** command — the proxy is **shared across all sessions** and holds the single approved Chrome connection, so stopping it forces a fresh "Allow remote debugging?" dialog for **everyone**. If a session looks unhealthy, run `chrome-use status` and **report** it. Terminating a genuinely broken proxy is an explicit **out-of-band OS action for a human/maintainer** (e.g. `kill <pid>`), never something an agent does.
 - Kill or restart a **healthy proxy** — it forces a new Chrome permission dialog. The CLI probes and reuses it automatically. (Changing *command* logic does not require a proxy restart — only changes to `proxy.ts` do.)
 - Use `--remote-debugging-port` flags — this skill uses autoConnect.
 - Hand-build a raw `ws://127.0.0.1:<port>/devtools/browser/<uuid>` URL or write a one-off script to connect straight to the CDP debug port — even though the proxy reads `DevToolsActivePort` internally, every raw/direct debugger connection is a brand-new client to Chrome and re-triggers the native "Allow remote debugging?" dialog. Always go through the `chrome-use` CLI so the one approved connection is reused.
