@@ -178,13 +178,34 @@ const wait: Handler = async (ctx): Promise<CommandResult> => {
 };
 
 const status: Handler = async (ctx): Promise<CommandResult> => {
+  // `status` is documented as a lightweight health probe ("proxy + browser
+  // health") and must answer fast even when Chrome hasn't approved the remote
+  // debugging dialog yet. Ask the proxy's `__status` control channel first —
+  // it never touches Chrome or ensureConnected(), so it can't be dragged into
+  // the up-to-5-minute approval wait that real CDP methods (like the
+  // Browser.getVersion below) would trigger on a disconnected proxy.
+  const proxyState = await ctx.cdp.send<any>('__status', {});
+
+  if (!proxyState?.connected) {
+    return {
+      ok: true,
+      text:
+        `chrome-use proxy up (pid ${proxyState?.pid}) — Chrome not connected yet. ` +
+        `Run a navigation command (e.g. "chrome-use open <url>") to trigger the ` +
+        `"Allow remote debugging?" dialog, or approve it in Chrome if already showing.`,
+      data: { connected: false, pid: proxyState?.pid, version: proxyState?.version },
+    };
+  }
+
+  // Only reachable once the proxy already holds a live CDP connection, so
+  // these calls resolve immediately instead of forcing a fresh connect.
   const version = await ctx.cdp.send<any>('Browser.getVersion');
   await ctx.state.syncTabs();
   const tabCount = ctx.state.tabs.size;
   return {
     ok: true,
     text: `chrome-use proxy up — ${version?.product ?? 'Chrome'}, ${tabCount} tab(s)`,
-    data: { version: version?.product, tabCount },
+    data: { connected: true, version: version?.product, tabCount },
   };
 };
 

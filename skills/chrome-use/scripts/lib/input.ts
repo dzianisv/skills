@@ -323,6 +323,41 @@ async function sendKey(
   await cdp.send('Input.dispatchKeyEvent', params, sessionId);
 }
 
+/**
+ * Type an arbitrary string into the currently-focused element by dispatching a
+ * keyDown (carrying the printable `text`) + keyUp per character. Unlike
+ * Input.insertText, this drives the same keydown path that JS editors (e.g.
+ * Notion) listen on, so text actually lands in block-level contenteditables.
+ * The caller must focus/place the caret first (e.g. via a real click).
+ */
+export async function typeTextByKeys(
+  cdp: CdpClient,
+  sessionId: string,
+  text: string,
+): Promise<void> {
+  for (const ch of Array.from(text)) {
+    if (ch === '\n') {
+      await sendKey(cdp, sessionId, 'keyDown', NAMED_KEYS.Enter, 0);
+      await sendKey(cdp, sessionId, 'keyUp', NAMED_KEYS.Enter, 0);
+      await new Promise((r) => setTimeout(r, 12));
+      continue;
+    }
+    const upper = ch.toUpperCase();
+    const def: KeyDef = {
+      key: ch,
+      code: /[a-zA-Z]/.test(ch) ? `Key${upper}` : /[0-9]/.test(ch) ? `Digit${ch}` : '',
+      keyCode: upper.charCodeAt(0) || 0,
+      text: ch,
+    };
+    await sendKey(cdp, sessionId, 'keyDown', def, 0);
+    await sendKey(cdp, sessionId, 'keyUp', def, 0);
+    // Inter-key delay: JS editors (Notion) process input asynchronously;
+    // firing keys back-to-back races the editor and corrupts caret order.
+    // 45ms reliably avoids reordering/duplication in Notion's React editor.
+    await new Promise((r) => setTimeout(r, 45));
+  }
+}
+
 /** Scroll the page by `px` pixels in the given direction via a wheel event. */
 export async function scrollBy(
   cdp: CdpClient,

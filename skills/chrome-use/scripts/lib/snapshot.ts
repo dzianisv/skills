@@ -23,11 +23,9 @@ export async function takeSnapshot(
   opts: SnapshotOptions,
 ): Promise<SnapshotResult> {
   const expression = buildWalkerExpression(opts);
-  const res = await cdp.send<any>(
-    'Runtime.evaluate',
-    { expression, returnByValue: true },
-    tab.sessionId,
-  );
+  const evalParams: Record<string, unknown> = { expression, returnByValue: true };
+  if (tab.executionContextId != null) evalParams.contextId = tab.executionContextId;
+  const res = await cdp.send<any>('Runtime.evaluate', evalParams, tab.sessionId);
   const nodes: SnapshotNode[] = res?.result?.value?.nodes ?? [];
 
   const lines: string[] = [];

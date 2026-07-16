@@ -58,7 +58,12 @@ export class ClientState implements BrowserState {
   }
 
   async #pages(): Promise<TargetInfo[]> {
-    const { targetInfos } = await this.cdp.send<any>('Target.getTargets');
+    // Explicit include-all filter ([{}]) so page targets in OTHER browser
+    // contexts (e.g. incognito contexts created via Target.createBrowserContext)
+    // are consistently returned. Without a filter, getTargets can intermittently
+    // omit cross-context pages, which makes the active-tab pointer silently fall
+    // back to a page in the default context.
+    const { targetInfos } = await this.cdp.send<any>('Target.getTargets', { filter: [{}] });
     return (targetInfos as TargetInfo[]).filter(drivable);
   }
 
@@ -101,12 +106,46 @@ export class ClientState implements BrowserState {
   async getActiveTab(): Promise<TabSession> {
     const pages = await this.#pages();
     if (!pages.length) throw new Error('No page open in Chrome');
+    // Opt-in hard pin: when CHROME_USE_PIN_TARGET is set, always drive exactly
+    // that targetId and NEVER silently fall back to another tab/context. This is
+    // essential when driving a tab in a non-default browser context (e.g. an
+    // incognito login) alongside other tabs: a transient getTargets miss must
+    // not cause commands to land on an unrelated tab in the default context.
+    const pinned = process.env.CHROME_USE_PIN_TARGET;
+    if (pinned) {
+      if (!pages.some((p) => p.targetId === pinned)) {
+        throw new Error(
+          `CHROME_USE_PIN_TARGET=${pinned} is not among the current page targets; refusing to fall back to another tab.`,
+        );
+      }
+      writeActive(pinned);
+      this.activeTargetId = pinned;
+      const idx = pages.findIndex((p) => p.targetId === pinned);
+      const sessionId = await this.#attach(pinned);
+      try {
+        await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
+      } catch {
+        /* not fatal */
+      }
+      return { targetId: pinned, sessionId, url: pages[idx].url, tabId: 't' + (idx + 1), refRegistry: new Map() };
+    }
     let active = readActive();
     if (!active || !pages.some((p) => p.targetId === active)) active = pages[0].targetId;
     writeActive(active);
     this.activeTargetId = active;
     const idx = pages.findIndex((p) => p.targetId === active);
     const sessionId = await this.#attach(active);
+    // Treat the page as focused even when the Chrome window is in the OS
+    // background. Without this, synthetic clicks on contenteditable regions
+    // register but do NOT place a caret / focus the editable (buttons still
+    // work), so keystrokes silently no-op. The override is per-session and is
+    // reset when the session detaches at end of the invocation, so re-apply it
+    // on every attach. Best-effort: not all targets support it.
+    try {
+      await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
+    } catch {
+      /* not fatal */
+    }
     return {
       targetId: active,
       sessionId,
@@ -116,11 +155,25 @@ export class ClientState implements BrowserState {
     };
   }
 
+  /**
+   * Resolve a tab by its positional `tabId` (`t1`, `t2`, ...), a bare numeric
+   * index, or — as a fallback — a URL substring match (e.g. `pull/2945`).
+   *
+   * Positional tabIds are recomputed from scratch on every CLI invocation
+   * (see syncTabs) from whatever tabs currently exist. In a browser shared
+   * with other concurrent automation/processes that open or close tabs
+   * between invocations, the same position can silently point at a
+   * different physical tab from one command to the next. Matching by URL
+   * substring gives callers a way to keep re-targeting the *same* tab
+   * across multiple separate commands even while positions drift.
+   */
   async getTab(idOrIndex: string): Promise<TabSession | undefined> {
     if (!this.tabs.size) await this.syncTabs();
     for (const t of this.tabs.values()) if (t.tabId === idOrIndex) return t;
     const n = Number(idOrIndex);
     if (!Number.isNaN(n)) return [...this.tabs.values()][n];
+    const byUrl = [...this.tabs.values()].filter((t) => t.url.includes(idOrIndex));
+    if (byUrl.length === 1) return byUrl[0];
     return undefined;
   }
 
@@ -129,8 +182,15 @@ export class ClientState implements BrowserState {
     this.activeTargetId = targetId;
   }
 
-  async newTab(url?: string): Promise<TabSession> {
-    const { targetId } = await this.cdp.send<any>('Target.createTarget', { url: url || 'about:blank' });
+  async newTab(url?: string, opts?: { incognito?: boolean }): Promise<TabSession> {
+    const createParams: Record<string, unknown> = { url: url || 'about:blank' };
+    if (opts?.incognito) {
+      const { browserContextId } = await this.cdp.send<any>('Target.createBrowserContext', {
+        disposeOnDetach: false,
+      });
+      createParams.browserContextId = browserContextId;
+    }
+    const { targetId } = await this.cdp.send<any>('Target.createTarget', createParams);
     const sessionId = await this.#attach(targetId);
     this.setActive(targetId);
     const pages = await this.#pages();

@@ -12,6 +12,16 @@
  */
 import type { CdpClient, TabSession, ResolvedElement } from './types.ts';
 
+/**
+ * Build Runtime.evaluate params, scoping to the tab's isolated-world context when
+ * one is set (so `--frame` selector resolution runs inside the target subframe).
+ */
+function evalParams(tab: TabSession, expression: string): Record<string, unknown> {
+  const p: Record<string, unknown> = { expression, returnByValue: false, objectGroup: 'chrome-use' };
+  if (tab.executionContextId != null) p.contextId = tab.executionContextId;
+  return p;
+}
+
 /** True when `selector` is a snapshot element ref like "@e1". */
 export function isRef(selector: string): boolean {
   return /^@e\d+$/.test(selector);
@@ -36,11 +46,7 @@ async function resolveRef(
 ): Promise<ResolvedElement> {
   const index = parseInt(selector.slice(2), 10) - 1; // "@e1" → index 0
   const expression = `(window.__chromeUseRefs ? window.__chromeUseRefs[${index}] : '__NO_SNAPSHOT__')`;
-  const res = await cdp.send<any>(
-    'Runtime.evaluate',
-    { expression, returnByValue: false, objectGroup: 'chrome-use' },
-    tab.sessionId,
-  );
+  const res = await cdp.send<any>('Runtime.evaluate', evalParams(tab, expression), tab.sessionId);
   const result = res?.result;
   // A string sentinel means the registry was missing entirely.
   if (result?.type === 'string' && result.value === '__NO_SNAPSHOT__') {
@@ -81,11 +87,7 @@ async function resolveText(
     walk(document.body, 0);
     return best;
   })()`;
-  const res = await cdp.send<any>(
-    'Runtime.evaluate',
-    { expression, returnByValue: false, objectGroup: 'chrome-use' },
-    tab.sessionId,
-  );
+  const res = await cdp.send<any>('Runtime.evaluate', evalParams(tab, expression), tab.sessionId);
   const objectId = res?.result?.objectId;
   if (!objectId) throw new Error(`No element matching text=${needle}`);
   return { objectId };
@@ -98,11 +100,7 @@ async function resolveCss(
   selector: string,
 ): Promise<ResolvedElement> {
   const expression = `document.querySelector(${JSON.stringify(selector)})`;
-  const res = await cdp.send<any>(
-    'Runtime.evaluate',
-    { expression, returnByValue: false, objectGroup: 'chrome-use' },
-    tab.sessionId,
-  );
+  const res = await cdp.send<any>('Runtime.evaluate', evalParams(tab, expression), tab.sessionId);
   const objectId = res?.result?.objectId;
   if (!objectId) throw new Error(`No element matching selector: ${selector}`);
   return { objectId };

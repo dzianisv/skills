@@ -45,11 +45,9 @@ const get: Handler = async (ctx): Promise<CommandResult> => {
     case 'url': {
       let url = ctx.tab.url;
       try {
-        const res = await ctx.cdp.send<any>(
-          'Runtime.evaluate',
-          { expression: 'location.href', returnByValue: true },
-          ctx.tab.sessionId,
-        );
+        const p: Record<string, unknown> = { expression: 'location.href', returnByValue: true };
+        if (ctx.tab.executionContextId != null) p.contextId = ctx.tab.executionContextId;
+        const res = await ctx.cdp.send<any>('Runtime.evaluate', p, ctx.tab.sessionId);
         if (typeof res?.result?.value === 'string') url = res.result.value;
       } catch {
         /* fall back to cached url */
@@ -57,11 +55,9 @@ const get: Handler = async (ctx): Promise<CommandResult> => {
       return { ok: true, text: url, data: { url } };
     }
     case 'title': {
-      const res = await ctx.cdp.send<any>(
-        'Runtime.evaluate',
-        { expression: 'document.title', returnByValue: true },
-        ctx.tab.sessionId,
-      );
+      const p: Record<string, unknown> = { expression: 'document.title', returnByValue: true };
+      if (ctx.tab.executionContextId != null) p.contextId = ctx.tab.executionContextId;
+      const res = await ctx.cdp.send<any>('Runtime.evaluate', p, ctx.tab.sessionId);
       const title = String(res?.result?.value ?? '');
       return { ok: true, text: title, data: { title } };
     }
@@ -102,11 +98,9 @@ const screenshot: Handler = async (ctx): Promise<CommandResult> => {
 const evalCmd: Handler = async (ctx): Promise<CommandResult> => {
   const expr = ctx.command.args.join(' ');
   if (!expr) return { ok: false, error: 'eval: expression required' };
-  const res = await ctx.cdp.send<any>(
-    'Runtime.evaluate',
-    { expression: expr, returnByValue: true, awaitPromise: true },
-    ctx.tab.sessionId,
-  );
+  const params: Record<string, unknown> = { expression: expr, returnByValue: true, awaitPromise: true };
+  if (ctx.tab.executionContextId != null) params.contextId = ctx.tab.executionContextId;
+  const res = await ctx.cdp.send<any>('Runtime.evaluate', params, ctx.tab.sessionId);
   if (res?.exceptionDetails) {
     return { ok: false, error: res.exceptionDetails.text ?? 'eval failed' };
   }
@@ -114,9 +108,42 @@ const evalCmd: Handler = async (ctx): Promise<CommandResult> => {
   return { ok: true, text: JSON.stringify(value, null, 2), data: { value } };
 };
 
+/**
+ * Override (or clear) the page's device viewport via CDP Emulation, so
+ * responsive layouts can be exercised without physically resizing the real
+ * Chrome window (useful when the host screen is smaller than the desired
+ * viewport, e.g. testing a 1440x900 desktop breakpoint on a 1440x900 display
+ * that already loses vertical space to window chrome).
+ *
+ * Usage: `emulate <width> <height> [--mobile] [--scale N]` or `emulate clear`.
+ */
+const emulate: Handler = async (ctx): Promise<CommandResult> => {
+  if (ctx.command.args[0] === 'clear') {
+    await ctx.cdp.send('Emulation.clearDeviceMetricsOverride', {}, ctx.tab.sessionId);
+    return { ok: true, text: 'Cleared device metrics override' };
+  }
+  const width = parseInt(ctx.command.args[0], 10);
+  const height = parseInt(ctx.command.args[1], 10);
+  if (!width || !height) {
+    return { ok: false, error: 'emulate: <width> <height> [--mobile] [--scale N] | emulate clear' };
+  }
+  const mobile = ctx.command.flags.mobile === true;
+  const scale = ctx.command.flags.scale ? Number(ctx.command.flags.scale) : 1;
+  await ctx.cdp.send(
+    'Emulation.setDeviceMetricsOverride',
+    { width, height, deviceScaleFactor: scale, mobile, screenWidth: width, screenHeight: height },
+    ctx.tab.sessionId,
+  );
+  if (mobile) {
+    await ctx.cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true }, ctx.tab.sessionId);
+  }
+  return { ok: true, text: `Set viewport to ${width}x${height} (mobile=${mobile}, scale=${scale})` };
+};
+
 export const handlers: Record<string, Handler> = {
   snapshot,
   get,
   screenshot,
   eval: evalCmd,
+  emulate,
 };

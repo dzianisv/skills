@@ -65,16 +65,98 @@ function openLogFd(): number {
   return fs.openSync(LOG_PATH, 'a');
 }
 
+/**
+ * List page/iframe (OOPIF) targets with sanitized locations (origin + pathname
+ * only — query strings can carry session tokens and are dropped). Helps pick the
+ * right `--frame <substr>` for a cross-origin embedded form. Read-only.
+ */
+const framesCmd: Handler = async (ctx): Promise<CommandResult> => {
+  const { targetInfos } = await ctx.cdp.send<any>('Target.getTargets', { filter: [{}] });
+  const rows = (targetInfos as Array<{ targetId: string; type: string; url: string; title?: string }>)
+    .filter((t) => t.type === 'iframe' || t.type === 'page')
+    .map((t) => {
+      let loc = '';
+      try {
+        const u = new URL(t.url);
+        loc = u.origin + u.pathname;
+      } catch {
+        loc = '(opaque)';
+      }
+      return { type: t.type, url: loc, title: t.title ?? '' };
+    });
+  return { ok: true, data: rows };
+};
+
+/**
+ * Debug: list ALL page targets with targetId + browserContextId + url, using an
+ * explicit include-all filter so incognito/other-context pages are never dropped
+ * by the default getTargets filter. Read-only.
+ */
+const targetsCmd: Handler = async (ctx): Promise<CommandResult> => {
+  const { targetInfos } = await ctx.cdp.send<any>('Target.getTargets', { filter: [{}] });
+  const rows = (targetInfos as Array<{ targetId: string; type: string; url: string; browserContextId?: string }>)
+    .filter((t) => t.type === 'page')
+    .map((t) => ({ targetId: t.targetId, browserContextId: t.browserContextId ?? '', url: t.url }));
+  return { ok: true, data: rows };
+};
+
+/**
+ * Debug/recovery: pin the active-tab pointer to an explicit targetId so later
+ * commands operate on exactly that tab, bypassing positional/context drift.
+ */
+const usetargetCmd: Handler = async (ctx): Promise<CommandResult> => {
+  const targetId = ctx.command.args[0];
+  if (!targetId) return { ok: false, error: 'usage: usetarget <targetId>' };
+  ctx.state.setActive(targetId);
+  return { ok: true, text: `Active target set to ${targetId}` };
+};
+
 const registry: Record<string, Handler> = {
   ...navigationHandlers,
   ...interactionHandlers,
   ...inspectionHandlers,
   ...tabsHandlers,
   ...cookiesHandlers,
+  frames: framesCmd,
+  targets: targetsCmd,
+  usetarget: usetargetCmd,
 };
 
 /** Commands that do not need a resolved active tab up front. */
-const NO_TAB = new Set(['status', 'tab']);
+const NO_TAB = new Set(['status', 'tab', 'frames', 'targets', 'usetarget']);
+
+/**
+ * Bind to a same-site cross-origin subframe of the ACTIVE tab whose URL contains
+ * `match`, returning a TabSession that shares the page's CDP session but carries an
+ * isolated-world executionContextId scoped to that subframe. This drives forms like
+ * a payments.google.com billing iframe (same site as console.cloud.google.com, so
+ * in-process — no separate CDP target) that the top-frame selector engine can't
+ * reach. Scoped to the active tab's own frame tree, so duplicate tabs elsewhere in
+ * the browser can't be targeted by accident.
+ */
+async function resolveFrameTab(cdp: ProxyClient, pageTab: TabSession, match: string): Promise<TabSession> {
+  await cdp.send('Page.enable', {}, pageTab.sessionId).catch(() => {});
+  const { frameTree } = await cdp.send<any>('Page.getFrameTree', {}, pageTab.sessionId);
+  const frame = findFrameByUrl(frameTree, match);
+  if (!frame) throw new Error(`No subframe matching '${match}' in the active tab`);
+  const { executionContextId } = await cdp.send<any>(
+    'Page.createIsolatedWorld',
+    { frameId: frame.id, worldName: 'chrome-use-frame' },
+    pageTab.sessionId,
+  );
+  return { ...pageTab, url: frame.url, executionContextId, tabId: 'frame', refRegistry: new Map() };
+}
+
+/** Depth-first search a CDP FrameTree for a frame whose url contains `match`. */
+function findFrameByUrl(node: any, match: string): { id: string; url: string } | null {
+  const f = node?.frame;
+  if (f && typeof f.url === 'string' && f.url.includes(match)) return { id: f.id, url: f.url };
+  for (const child of node?.childFrames ?? []) {
+    const r = findFrameByUrl(child, match);
+    if (r) return r;
+  }
+  return null;
+}
 
 const USAGE = `chrome-use — drive your real Chrome via CDP
 
@@ -102,6 +184,8 @@ Inspection:
   get attr <sel> <attr>               element attribute
   screenshot [path] [--full]          save a png
   eval <js>                           Runtime.evaluate, JSON result
+  emulate <w> <h> [--mobile] [--scale N]   CDP device viewport override
+  emulate clear                       remove viewport override
 
 Tabs & cookies:
   tab | tab new [url] | tab <tN> | tab close [tN]
@@ -268,9 +352,25 @@ async function main(): Promise<void> {
     if (!NO_TAB.has(command.name)) {
       tab = await state.getActiveTab();
     } else {
-      tab = (await state.getActiveTab().catch(() => null)) as TabSession;
+      // NO_TAB commands (status, tab) may not need a tab at all — don't force
+      // Target.getTargets (via getActiveTab()) if the proxy has no live Chrome
+      // connection yet. That call would fall through to ensureConnected() and
+      // block through the same up-to-5-minute approval wait a real
+      // browser-driving command legitimately waits through, just to
+      // opportunistically resolve a tab nobody asked for. Cheaply check the
+      // proxy's connection state first via the same fast `__status` control
+      // channel the `status` handler uses, and only attempt to resolve a tab
+      // when a connection already exists (so the call is fast, not a fresh
+      // connect attempt).
+      const proxyState = await cdp.send<any>('__status', {}).catch(() => null);
+      if (proxyState?.connected) {
+        tab = (await state.getActiveTab().catch(() => null)) as TabSession;
+      }
     }
     const ctx: Ctx = { cdp, state, tab, command };
+    if (tab && typeof command.flags.frame === 'string') {
+      ctx.tab = await resolveFrameTab(cdp, tab, command.flags.frame);
+    }
     const result = await handler(ctx);
     printResult(result, command);
   } finally {

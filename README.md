@@ -96,6 +96,7 @@ CLI tools, secret management, messaging, and deploy helpers.
 | [`github-copilot-sessions`](skills/github-copilot-sessions) | Find a past GitHub Copilot CLI agent session on this machine by project or topic via BM25 search, then summarize what was done. | `npx -y skills add dzianisv/skills -s github-copilot-sessions -g` |
 | [`google-workspace-cli`](skills/google-workspace-cli) | Use the preinstalled gws CLI for Google Drive, Gmail, and Calendar workflows, including customer-assisted OAuth login and multi-account control. | `npx -y skills add dzianisv/skills -s google-workspace-cli -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
+| [`stocks-advisor-fast`](skills/stocks-advisor-fast) | analyse assets using fundamental, technical, smartmoney and narrative. | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
 
 <!-- SKILLS:END -->
 

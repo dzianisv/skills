@@ -42,7 +42,8 @@ const tab: Handler = async (ctx): Promise<CommandResult> => {
   // tab new [url]
   if (sub === 'new') {
     const url = ctx.command.args[1];
-    const created = await ctx.state.newTab(url);
+    const incognito = ctx.command.flags.incognito === true;
+    const created = await ctx.state.newTab(url, { incognito });
     return { ok: true, text: `Opened ${created.tabId}`, data: { tabId: created.tabId } };
   }
 
