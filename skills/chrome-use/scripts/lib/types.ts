@@ -43,6 +43,14 @@ export interface TabSession {
   url: string;
   /** Stable short tab id exposed to the user, e.g. "t1". */
   tabId: string;
+  /**
+   * Optional isolated-world execution context. When set, Runtime.evaluate-based
+   * resolution (snapshot, CSS/text/@ref selectors, eval, get url/title) runs in
+   * this context instead of the session's default (main-frame) world. Used by
+   * `--frame` to drive a same-site cross-origin subframe (e.g. a
+   * payments.google.com billing form) that shares the page's renderer/session.
+   */
+  executionContextId?: number;
 }
 
 /**
@@ -66,7 +74,7 @@ export interface BrowserState {
   /** Make `targetId` the active tab. */
   setActive(targetId: string): void;
   /** Create a new page, attach, and make it active. Returns the new session. */
-  newTab(url?: string): Promise<TabSession>;
+  newTab(url?: string, opts?: { incognito?: boolean }): Promise<TabSession>;
   /** Close a tab and detach. */
   closeTab(targetId: string): Promise<void>;
 }
