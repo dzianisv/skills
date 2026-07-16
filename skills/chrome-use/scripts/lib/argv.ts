@@ -21,7 +21,7 @@ export const ALIASES: Record<string, string> = {
 };
 
 /** Flags that are booleans (never consume a following value). Stored by long name. */
-const BOOLEAN_FLAGS = new Set(['i', 'full', 'json', 'new-tab', 'all']);
+const BOOLEAN_FLAGS = new Set(['i', 'full', 'json', 'new-tab', 'all', 'mobile', 'incognito']);
 
 /** Short flag → long flag name (without dashes). */
 const SHORT_FLAGS: Record<string, string> = {

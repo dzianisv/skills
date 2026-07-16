@@ -10,10 +10,18 @@ import {
   focusElement,
   fillElement,
   typeText,
+  typeTextByKeys,
   pressKey,
   scrollBy,
   centerOf,
 } from '../lib/input.ts';
+
+// Resolve secret text without exposing it on argv: `@ENV:VARNAME` reads process.env[VARNAME].
+function resolveText(raw: string): string {
+  const m = /^@ENV:(.+)$/.exec(raw);
+  if (m) return process.env[m[1]] ?? '';
+  return raw;
+}
 
 const click: Handler = async (ctx): Promise<CommandResult> => {
   const sel = ctx.command.args[0];
@@ -27,7 +35,7 @@ const click: Handler = async (ctx): Promise<CommandResult> => {
 const fill: Handler = async (ctx): Promise<CommandResult> => {
   const sel = ctx.command.args[0];
   if (!sel) return { ok: false, error: 'fill: selector or @ref required' };
-  const text = ctx.command.args.slice(1).join(' ');
+  const text = resolveText(ctx.command.args.slice(1).join(' '));
   const el = await resolve(ctx.cdp, ctx.tab, sel);
   await fillElement(ctx.cdp, ctx.tab.sessionId, el, text);
   return { ok: true, text: `Filled ${sel}` };
@@ -36,7 +44,7 @@ const fill: Handler = async (ctx): Promise<CommandResult> => {
 const type: Handler = async (ctx): Promise<CommandResult> => {
   const sel = ctx.command.args[0];
   if (!sel) return { ok: false, error: 'type: selector or @ref required' };
-  const text = ctx.command.args.slice(1).join(' ');
+  const text = resolveText(ctx.command.args.slice(1).join(' '));
   const el = await resolve(ctx.cdp, ctx.tab, sel);
   await typeText(ctx.cdp, ctx.tab.sessionId, el, text);
   return { ok: true, text: `Typed into ${sel}` };
@@ -45,8 +53,16 @@ const type: Handler = async (ctx): Promise<CommandResult> => {
 const press: Handler = async (ctx): Promise<CommandResult> => {
   const key = ctx.command.args[0];
   if (!key) return { ok: false, error: 'press: key required (e.g. Enter, Control+a)' };
+  // `--on <selector>` focuses the element first, in the SAME session, so the
+  // trusted key routes to it. Needed for buttons in same-process subframes
+  // where coordinate clicks miss but node-based focus + key works (like fill).
+  const on = ctx.command.flags.on;
+  if (typeof on === 'string' && on) {
+    const el = await resolve(ctx.cdp, ctx.tab, on);
+    await focusElement(ctx.cdp, ctx.tab.sessionId, el);
+  }
   await pressKey(ctx.cdp, ctx.tab.sessionId, key);
-  return { ok: true, text: `Pressed ${key}` };
+  return { ok: true, text: `Pressed ${key}${typeof on === 'string' && on ? ` on ${on}` : ''}` };
 };
 
 const focus: Handler = async (ctx): Promise<CommandResult> => {
@@ -117,8 +133,72 @@ const dragdrop: Handler = async (ctx): Promise<CommandResult> => {
   return { ok: true, text: `Dropped ${paths.length} file(s) onto ${sel}` };
 };
 
+const clickat: Handler = async (ctx): Promise<CommandResult> => {
+  const x = Number(ctx.command.args[0]);
+  const y = Number(ctx.command.args[1]);
+  if (Number.isNaN(x) || Number.isNaN(y)) return { ok: false, error: 'clickat: numeric x y required' };
+  const s = ctx.tab.sessionId;
+  await ctx.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, s);
+  await ctx.cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1 }, s);
+  await ctx.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1, buttons: 1 }, s);
+  return { ok: true, text: `Clicked at ${x},${y}` };
+};
+
+// Insert text at the current caret via CDP Input.insertText, WITHOUT calling
+// DOM.focus first. Needed for block-level contenteditables (e.g. Notion page
+// blocks) that reject DOM.focus but accept trusted insertText once a real click
+// has placed the caret. Place the caret first with `click`/`clickat`, then run
+// `inserttext "<text>"`.
+const inserttext: Handler = async (ctx): Promise<CommandResult> => {
+  const clickSel = typeof ctx.command.flags.click === 'string' ? ctx.command.flags.click : '';
+  const text = resolveText(ctx.command.args.join(' '));
+  if (!text) return { ok: false, error: 'inserttext: text required' };
+  if (clickSel) {
+    const el = await resolve(ctx.cdp, ctx.tab, clickSel);
+    await clickElement(ctx.cdp, ctx.tab.sessionId, el);
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  await ctx.cdp.send('Input.insertText', { text }, ctx.tab.sessionId);
+  return { ok: true, text: `Inserted ${text.length} chars` };
+};
+
+// Enable focus emulation so the renderer treats the page as focused even when
+// the Chrome window is in the OS background. Without this, synthetic clicks on
+// contenteditable regions register but do NOT place a caret / focus the editable
+// (buttons still work), so typing into Notion blocks silently no-ops. Also brings
+// the tab to the front. Idempotent; persists on the connection until navigation.
+const focuspage: Handler = async (ctx): Promise<CommandResult> => {
+  const s = ctx.tab.sessionId;
+  try { await ctx.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, s); } catch { /* not fatal */ }
+  try { await ctx.cdp.send('Page.bringToFront', {}, s); } catch { /* not fatal */ }
+  return { ok: true, text: 'Focus emulation enabled + tab brought to front' };
+};
+
+// Type a whole string via per-character key events into the currently-focused
+// editable. Optional first arg `--click <selector>` places the caret with a real
+// trusted click in this same invocation (so focus + typing share one session),
+// which is what block-level contenteditables (Notion) require. Usage:
+//   typekeys "some text"
+//   typekeys --click '[data-block-id="…"] .content-editable-leaf-rtl' "some text"
+const typekeys: Handler = async (ctx): Promise<CommandResult> => {
+  const clickSel = typeof ctx.command.flags.click === 'string' ? ctx.command.flags.click : '';
+  const text = resolveText(ctx.command.args.join(' '));
+  if (!text) return { ok: false, error: 'typekeys: text required' };
+  if (clickSel) {
+    const el = await resolve(ctx.cdp, ctx.tab, clickSel);
+    await clickElement(ctx.cdp, ctx.tab.sessionId, el);
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  await typeTextByKeys(ctx.cdp, ctx.tab.sessionId, text);
+  return { ok: true, text: `Typed ${text.length} chars via keys` };
+};
+
 export const handlers: Record<string, Handler> = {
   click,
+  clickat,
+  inserttext,
+  typekeys,
+  focuspage,
   fill,
   type,
   press,
