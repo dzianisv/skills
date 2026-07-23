@@ -28,7 +28,9 @@ import { handlers as cookiesHandlers } from './commands/cookies.ts';
 const SOCKET_PATH = process.env.CHROME_USE_SOCKET ?? `/tmp/chrome-use-${os.userInfo().uid}.sock`;
 const PROXY_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'proxy.ts');
 const LOG_PATH = `${SOCKET_PATH}.log`;
+const PROXY_START_LOCK_PATH = `${SOCKET_PATH}.ensure.lock`;
 const MAX_LOG_BYTES = 5 * 1024 * 1024; // 5 MiB
+const PROXY_START_LOCK_TIMEOUT_MS = 15_000;
 
 /**
  * Files that define proxy *behavior* — mirrors proxy.ts's own VERSION_FILES
@@ -63,6 +65,92 @@ function openLogFd(): number {
     /* no existing log yet */
   }
   return fs.openSync(LOG_PATH, 'a');
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: any) {
+    if (error?.code === 'EPERM') {
+      return true;
+    }
+    return false;
+  }
+}
+
+function acquireProxyStartLock(): boolean {
+  const tempPath = `${PROXY_START_LOCK_PATH}.tmp.${process.pid}`;
+
+  try {
+    fs.writeFileSync(tempPath, String(process.pid));
+  } catch {
+    return false;
+  }
+
+  try {
+    fs.linkSync(tempPath, PROXY_START_LOCK_PATH);
+    return true;
+  } catch (error: any) {
+    if (error?.code !== 'EEXIST') {
+      throw error;
+    }
+  } finally {
+    try {
+      fs.unlinkSync(tempPath);
+    } catch {
+      // ignore cleanup failures
+    }
+  }
+
+  try {
+    const lockOwner = fs.readFileSync(PROXY_START_LOCK_PATH, 'utf8').trim();
+    const lockPid = Number.parseInt(lockOwner, 10);
+    if (Number.isInteger(lockPid) && lockPid > 0 && !isProcessAlive(lockPid)) {
+      fs.unlinkSync(PROXY_START_LOCK_PATH);
+    }
+  } catch {
+    // ignore stale lock inspection failures
+  }
+
+  try {
+    fs.writeFileSync(tempPath, String(process.pid));
+    fs.linkSync(tempPath, PROXY_START_LOCK_PATH);
+    return true;
+  } catch (error: any) {
+    if (error?.code !== 'EEXIST') {
+      throw error;
+    }
+    return false;
+  } finally {
+    try {
+      fs.unlinkSync(tempPath);
+    } catch {
+      // ignore cleanup failures
+    }
+  }
+}
+
+function releaseProxyStartLock() {
+  try {
+    fs.unlinkSync(PROXY_START_LOCK_PATH);
+  } catch {
+    // ignore release failures
+  }
+}
+
+async function waitForHealthyProxy(expectedVersion: string): Promise<boolean> {
+  const deadline = Date.now() + PROXY_START_LOCK_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const status = await proxyStatus(500);
+    if (status.alive && status.version === expectedVersion) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  return false;
 }
 
 /**
@@ -284,16 +372,33 @@ async function ensureProxy(): Promise<void> {
     }
   }
 
-  spawnProxy();
+  const acquiredLock = acquireProxyStartLock();
+  try {
+    if (!acquiredLock) {
+      const healthy = await waitForHealthyProxy(expectedVersion);
+      if (healthy) return;
+      const reacquiredLock = acquireProxyStartLock();
+      if (!reacquiredLock) {
+        throw new Error(
+          'chrome-use proxy is still starting up.\n' +
+            'Make sure Chrome is running and remote debugging is allowed at chrome://inspect/#remote-debugging',
+        );
+      }
+    }
 
-  const deadline = Date.now() + 6000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 200));
-    const s = await proxyStatus(2000);
-    // Require a version match (not just "alive") so a respawn that raced a
-    // wedged old proxy can't be mistaken for success.
-    if (s.alive && s.version === expectedVersion) return;
+    const statusAfterLock = await proxyStatus(2000);
+    if (statusAfterLock.alive && statusAfterLock.version === expectedVersion) return;
+
+    spawnProxy();
+
+    const healthy = await waitForHealthyProxy(expectedVersion);
+    if (healthy) return;
+  } finally {
+    if (acquiredLock) {
+      releaseProxyStartLock();
+    }
   }
+
   throw new Error(
     'chrome-use proxy did not start in time.\n' +
       'Make sure Chrome is running and remote debugging is allowed at chrome://inspect/#remote-debugging',
