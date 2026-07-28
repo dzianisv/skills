@@ -93,13 +93,38 @@ async function resolveText(
   return { objectId };
 }
 
-/** Resolve a CSS selector via document.querySelector. */
+/**
+ * Resolve a CSS selector via document.querySelector, falling back to a
+ * shadow-DOM-piercing deep search when the plain lookup finds nothing. Many
+ * modern SPAs (e.g. YouTube Studio's Polymer components) mount inputs and
+ * other targets inside open shadow roots that document.querySelector cannot
+ * see across; the fallback recursively searches shadowRoot subtrees (open
+ * roots only — closed roots are inherently inaccessible from page JS) for the
+ * first match, matching document order within each root visited.
+ */
 async function resolveCss(
   cdp: CdpClient,
   tab: TabSession,
   selector: string,
 ): Promise<ResolvedElement> {
-  const expression = `document.querySelector(${JSON.stringify(selector)})`;
+  const expression = `(() => {
+    const sel = ${JSON.stringify(selector)};
+    const direct = document.querySelector(sel);
+    if (direct) return direct;
+    const deepQuery = (root) => {
+      const match = root.querySelector(sel);
+      if (match) return match;
+      const all = root.querySelectorAll('*');
+      for (const el of all) {
+        if (el.shadowRoot) {
+          const found = deepQuery(el.shadowRoot);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    return deepQuery(document);
+  })()`;
   const res = await cdp.send<any>('Runtime.evaluate', evalParams(tab, expression), tab.sessionId);
   const objectId = res?.result?.objectId;
   if (!objectId) throw new Error(`No element matching selector: ${selector}`);
