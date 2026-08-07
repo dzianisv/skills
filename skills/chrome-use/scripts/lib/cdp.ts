@@ -62,7 +62,14 @@ export class Cdp implements CdpClient {
   static async connect(wsEndpoint: string, timeoutMs = 10_000): Promise<Cdp> {
     const ws = new WebSocket(wsEndpoint);
     const client = new Cdp(ws);
-    await withTimeout(client.#open, timeoutMs, `CDP connect timed out after ${timeoutMs}ms`);
+    try {
+      await withTimeout(client.#open, timeoutMs, `CDP connect timed out after ${timeoutMs}ms`);
+    } catch (error) {
+      // A timed-out autoConnect socket can still be pending in Chrome. Close it
+      // before the proxy decides whether another debugger connection is allowed.
+      client.close();
+      throw error;
+    }
     return client;
   }
 

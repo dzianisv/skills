@@ -27,13 +27,9 @@
  *
  * `ensureConnected()` is single-flight (concurrent commands share one in-flight
  * CDP connect attempt — never open a second WebSocket while the first is still
- * pending) and, after a failed attempt, enforces a RECONNECT_COOLDOWN_MS backoff
- * before trying again: commands that arrive during the cooldown fail fast with
- * an actionable message instead of starting another connect. Both guard against
- * the same failure mode as the startup lock above — one dialog per new CDP
- * WebSocket connect attempt, so an unbounded number of connect attempts (either
- * concurrent or rapid-fire while unapproved) means an unbounded number of
- * "Allow remote debugging?" dialogs.
+ * pending) and never opens a second debugger connection after any connection
+ * failure or loss. A new connection can show Chrome's native approval dialog;
+ * automatic recovery would turn a broken browser into repeated dialogs.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -52,19 +48,9 @@ const LOG_PATH = `${SOCKET_PATH}.log`;
 const MAX_LOCK_ATTEMPTS = 3;
 const MAX_LOG_BYTES = 5 * 1024 * 1024; // 5 MiB
 
-/**
- * Cooldown after a failed CDP connect attempt (e.g. the "Allow remote
- * debugging?" dialog timed out unanswered) before another attempt is allowed.
- * Without this, every command that arrives while disconnected starts a fresh
- * WebSocket connect — and Chrome shows a brand-new dialog per connect attempt
- * (one dialog per new debugger client), so N queued commands = N dialogs.
- * During the cooldown, commands fail fast with an actionable message instead
- * of silently queuing another approval prompt.
- *
- * Overridable via CHROME_USE_RECONNECT_COOLDOWN_MS so tests don't have to
- * block for the real 30s window.
- */
-const RECONNECT_COOLDOWN_MS = Number(process.env.CHROME_USE_RECONNECT_COOLDOWN_MS) || 30_000;
+const CONNECT_TIMEOUT_MS = Number(process.env.CHROME_USE_CONNECT_TIMEOUT_MS) || 300_000;
+const REQUEST_TIMEOUT_MS = Number(process.env.CHROME_USE_REQUEST_TIMEOUT_MS) || 120_000;
+const KEEPALIVE_MS = Number(process.env.CHROME_USE_KEEPALIVE_MS) || 20_000;
 
 function log(...a: unknown[]): void {
   process.stderr.write(`[${new Date().toISOString()}] [chrome-use proxy] ` + a.join(' ') + '\n');
@@ -265,28 +251,61 @@ function releaseLock(): void {
 let cdp: Cdp | null = null;
 let connecting: Promise<void> | null = null;
 let server: net.Server | null = null;
-/** Timestamp (ms) of the most recent failed connect attempt, or null if the
- *  last attempt succeeded (or none has run yet). Drives RECONNECT_COOLDOWN_MS. */
-let lastConnectFailureAt: number | null = null;
+let connectionBlocked: string | null = null;
+let keepalive: ReturnType<typeof setInterval> | null = null;
+let keepaliveInFlight = false;
+
+function stopKeepalive(): void {
+  if (keepalive) clearInterval(keepalive);
+  keepalive = null;
+  keepaliveInFlight = false;
+}
+
+function blockReconnect(reason: string): void {
+  if (connectionBlocked) return;
+  connectionBlocked = reason;
+  stopKeepalive();
+  log(`${reason} Blocking automatic reconnects to avoid another native dialog.`);
+}
+
+function startKeepalive(client: Cdp): void {
+  stopKeepalive();
+  keepalive = setInterval(() => {
+    if (keepaliveInFlight || cdp !== client || !client.connected || connectionBlocked) return;
+    keepaliveInFlight = true;
+    // Existing socket only. This timer never calls ensureConnected().
+    client.send('Browser.getVersion').catch(() => {}).finally(() => { keepaliveInFlight = false; });
+  }, KEEPALIVE_MS);
+  keepalive.unref();
+}
+
+function sendWithTimeout<T>(client: Cdp, method: string, params: Record<string, unknown>, sessionId?: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`CDP request timed out after ${REQUEST_TIMEOUT_MS}ms: ${method}`)),
+      REQUEST_TIMEOUT_MS,
+    );
+    client.send<T>(method, params, sessionId).then(
+      (result) => { clearTimeout(timer); resolve(result); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
 
 function ensureConnected(): Promise<void> {
   if (cdp?.connected) return Promise.resolve();
+  if (connectionBlocked) {
+    return Promise.reject(
+      new Error(
+        `${connectionBlocked} This proxy will not open another remote-debugging dialog. ` +
+          'Start a new browser-control session only when a human is ready to approve it.',
+      ),
+    );
+  }
   // Single-flight: a connect attempt is already in progress (own WebSocket to
   // Chrome, own pending dialog if unapproved). Share that same promise instead
   // of opening a second one — only one dialog can be pending at a time.
   if (connecting) return connecting;
-  if (lastConnectFailureAt !== null) {
-    const elapsedMs = Date.now() - lastConnectFailureAt;
-    if (elapsedMs < RECONNECT_COOLDOWN_MS) {
-      const remainingS = Math.ceil((RECONNECT_COOLDOWN_MS - elapsedMs) / 1000);
-      return Promise.reject(
-        new Error(
-          `Chrome debugging not approved yet — switch to Chrome and click "Allow" on the remote-debugging ` +
-            `dialog, then retry. (next connect attempt allowed in ${remainingS}s)`,
-        ),
-      );
-    }
-  }
   connecting = (async () => {
     // Always connect via DevToolsActivePort autoConnect (my-browser style).
     // CHROME_USE_USER_DATA_DIR optionally points at a non-default Chrome profile;
@@ -301,31 +320,25 @@ function ensureConnected(): Promise<void> {
       : await buildWsEndpointAuto();
     log(`Connecting to ${ws}`);
     log('Chrome shows a one-time "Allow remote debugging?" dialog — click Allow (waits up to 5 min).');
-    const client = await Cdp.connect(ws, 300_000);
+    const client = await Cdp.connect(ws, CONNECT_TIMEOUT_MS);
     cdp = client;
-    // When the socket drops, discard the dead handle so the next command lazily
-    // reconnects (re-reading DevToolsActivePort) instead of returning the cached
-    // closed client forever. Without this the proxy needs a manual stop to recover.
-    // Guard on identity: a late close from a SUPERSEDED connection must not null a
-    // freshly reconnected client (cdp may already point at a newer one).
-    client.onClose(() => { if (cdp === client) { cdp = null; connecting = null; } });
-    // Use the local `client` (not the module `cdp`, which onClose may have nulled)
-    // so the connect handshake completes cleanly even if the socket drops mid-setup.
+    client.onClose(() => {
+      if (cdp === client) {
+        cdp = null;
+        connecting = null;
+        blockReconnect('Chrome debugging connection closed.');
+      }
+    });
     const v = await client.send<any>('Browser.getVersion');
     log(`Connected. ${v?.product ?? 'Chrome'}`);
+    startKeepalive(client);
   })()
-    // Clear `connecting` on success too — not just on failure. Otherwise it keeps
-    // a resolved promise and the `if (connecting) return connecting` fast path
-    // short-circuits forever, so a dead `cdp` is never replaced.
-    .then(() => { connecting = null; lastConnectFailureAt = null; })
+    .then(() => { connecting = null; })
     .catch((err) => {
       connecting = null;
+      cdp?.close();
       cdp = null;
-      lastConnectFailureAt = Date.now();
-      log(
-        `Connect attempt failed: ${err?.message ?? err}. ` +
-          `Cooling down for ${Math.round(RECONNECT_COOLDOWN_MS / 1000)}s before the next attempt.`,
-      );
+      blockReconnect(`Chrome debugging connection failed: ${err?.message ?? err}.`);
       throw err;
     });
   return connecting;
@@ -337,7 +350,16 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
   const { id, method, params, sessionId } = msg ?? {};
 
   if (method === '__status') {
-    return { id, result: { connected: !!cdp?.connected, socketPath: SOCKET_PATH, version: PROXY_VERSION, pid: process.pid } };
+    return {
+      id,
+      result: {
+        connected: !!cdp?.connected,
+        connectionBlocked,
+        socketPath: SOCKET_PATH,
+        version: PROXY_VERSION,
+        pid: process.pid,
+      },
+    };
   }
   if (method === '__stop') {
     setImmediate(() => {
@@ -351,6 +373,7 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
       } catch {
         /* ignore */
       }
+      stopKeepalive();
       process.exit(0);
     });
     return { id, result: { stopping: true } };
@@ -358,9 +381,15 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
 
   try {
     await ensureConnected();
-    const result = await cdp!.send(method, params ?? {}, sessionId);
+    const client = cdp!;
+    const result = await sendWithTimeout(client, method, params ?? {}, sessionId);
     return { id, result };
   } catch (err: any) {
+    if (cdp?.connected && String(err?.message ?? err).startsWith('CDP request timed out after ')) {
+      blockReconnect(`Chrome debugging request hung: ${err.message}.`);
+      cdp.close();
+      cdp = null;
+    }
     return { id, error: err?.message ?? String(err) };
   }
 }
@@ -457,7 +486,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   // Connect eagerly so the approval dialog appears at startup, not on first command.
-  ensureConnected().catch((err) => log('Initial connection failed (will retry on next command):', err.message));
+  ensureConnected().catch((err) => log('Initial connection failed (automatic reconnect disabled):', err.message));
 
   for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const) {
     process.on(sig, () => {
@@ -471,6 +500,7 @@ async function main(): Promise<void> {
       } catch {
         /* ignore */
       }
+      stopKeepalive();
       process.exit(0);
     });
   }

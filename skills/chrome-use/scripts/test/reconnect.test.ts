@@ -1,12 +1,12 @@
 /**
- * Reconnect regression test for issue #1 — a dropped CDP socket must heal on the
- * next command without a manual `stop`.
+ * A dropped CDP socket must not cause a fresh Chrome debugger connection. Each
+ * fresh connection can create a native approval dialog, so the proxy becomes
+ * fail-closed until a human starts a new browser-control session.
  *
  * Real sockets, no real Chrome: a minimal in-process CDP WebSocket server stands in
  * for Chrome. The ACTUAL proxy.ts is spawned and driven over its Unix socket via the
- * real ProxyClient. We connect, drop the fake CDP socket (as a Chrome restart would),
- * point DevToolsActivePort at a fresh server, and assert the next command reconnects
- * and succeeds. On the pre-fix code the second command returns "CDP connection closed".
+ * real ProxyClient. We prove its keepalive uses the original connection, then drop
+ * that socket and assert a command does not connect to a fresh endpoint.
  *
  * Run: node --test scripts/test/reconnect.test.ts
  */
@@ -146,7 +146,7 @@ async function waitForSocket(sockPath: string, timeoutMs = 8000): Promise<void> 
   }
 }
 
-test('dropped CDP socket auto-reconnects on the next command (issue #1)', async (t) => {
+test('keepalive uses one socket and a dropped CDP socket never auto-reconnects', async (t) => {
   const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-reconnect-'));
   const sockPath = path.join(udd, 'proxy.sock');
   const server1 = await startFakeCdp('FakeChrome-1');
@@ -170,6 +170,7 @@ test('dropped CDP socket auto-reconnects on the next command (issue #1)', async 
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
       CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_KEEPALIVE_MS: '50',
     },
     stdio: 'ignore',
   });
@@ -180,6 +181,10 @@ test('dropped CDP socket auto-reconnects on the next command (issue #1)', async 
   const r1 = await client.send<any>('Browser.getVersion');
   assert.equal(r1.product, 'FakeChrome-1', 'first command should reach server1');
 
+  const beforeKeepalive = server1.getVersionCount();
+  await new Promise((r) => setTimeout(r, 150));
+  assert.ok(server1.getVersionCount() > beforeKeepalive, 'keepalive must reuse the original CDP socket');
+
   // 2) Drop the CDP socket (as a Chrome restart / idle close would).
   server1.dropAll();
   // Bring up a NEW server on a new port and repoint DevToolsActivePort at it,
@@ -189,9 +194,8 @@ test('dropped CDP socket auto-reconnects on the next command (issue #1)', async 
   writePortFile(udd, server2);
   await new Promise((r) => setTimeout(r, 200)); // let the close propagate to the proxy
 
-  // 3) THE ASSERTION: the next command must auto-reconnect (to server2, via the
-  //    re-read port file) and succeed — no manual stop, no "CDP connection closed".
-  const r2 = await client.send<any>('Browser.getVersion');
-  assert.equal(r2.product, 'FakeChrome-2', 'next command must reconnect to the new endpoint');
-  assert.ok(server2.getVersionCount() >= 1, 'proxy must have reconnected to server2');
+  // 3) The next command fails closed. It must not open a new debugger connection
+  // to server2 because that could create another native Chrome approval dialog.
+  await assert.rejects(client.send<any>('Browser.getVersion'), /will not open another remote-debugging dialog/);
+  assert.equal(server2.getVersionCount(), 0, 'a dropped socket must not auto-reconnect to a fresh endpoint');
 });
