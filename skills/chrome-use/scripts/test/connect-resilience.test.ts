@@ -11,11 +11,8 @@
  *  1. Single-flight: several commands that arrive while a connect is already in
  *     progress must share that one attempt — never open a second upstream
  *     WebSocket connection while the first is still pending.
- *  2. Failure backoff: once a connect attempt fails, commands arriving inside the
- *     cooldown window must fail fast with the actionable "not approved yet"
- *     message and must NOT trigger another upstream connect attempt. After the
- *     cooldown elapses, the next command must transparently reconnect and
- *     succeed (the existing healthy-case auto-reconnect behavior).
+ *  2. A failed connection latches the proxy. Later commands fail fast and never
+ *     trigger another upstream connection or native approval dialog.
  *
  * Run: node --test scripts/test/connect-resilience.test.ts
  */
@@ -97,6 +94,9 @@ function startDelayedFakeCdp(upgradeDelayMs: number): Promise<DelayedFakeCdp> {
   const server = http.createServer();
   server.on('upgrade', (req, socket: net.Socket) => {
     upgrades++;
+    // Track immediately: a delayed handshake may still be pending when test
+    // cleanup begins, and server.close() waits for that socket otherwise.
+    sockets.add(socket);
     const key = req.headers['sec-websocket-key'] as string;
     const accept = crypto.createHash('sha1').update(key + WS_GUID).digest('base64');
     setTimeout(() => {
@@ -106,7 +106,6 @@ function startDelayedFakeCdp(upgradeDelayMs: number): Promise<DelayedFakeCdp> {
         'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
         `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
       );
-      sockets.add(socket);
       let buf = Buffer.alloc(0);
       socket.on('data', (chunk) => {
         buf = Buffer.concat([buf, chunk]);
@@ -218,21 +217,18 @@ test('single-flight: N concurrent commands while disconnected trigger exactly ON
   assert.equal(fake.upgradeCount(), 1, 'exactly one upstream WebSocket connect attempt must have been made — one dialog, not N');
 });
 
-test('failure backoff: cooldown rejects fast without a new connect attempt, then reconnects once it elapses', async (t) => {
+test('connection failure: never opens another debugger connection', async (t) => {
   const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-backoff-'));
   const sockPath = path.join(udd, 'proxy.sock');
   const rejecting = await startRejectingServer();
   writePortFile(udd, { port: rejecting.port, wsPath: '/devtools/browser/fake-reject' });
 
-  const cooldownMs = 2000;
   let proxy: ChildProcess | undefined;
   const clients: ProxyClient[] = [];
-  const realCdp: { s?: DelayedFakeCdp } = {};
   t.after(async () => {
     for (const c of clients) { try { c.close(); } catch { /* ignore */ } }
     try { proxy?.kill('SIGKILL'); } catch { /* ignore */ }
     try { await rejecting.close(); } catch { /* ignore */ }
-    try { await realCdp.s?.close(); } catch { /* ignore */ }
     try { fs.rmSync(udd, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
@@ -242,13 +238,11 @@ test('failure backoff: cooldown rejects fast without a new connect attempt, then
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
       CHROME_USE_USER_DATA_DIR: udd,
-      CHROME_USE_RECONNECT_COOLDOWN_MS: String(cooldownMs),
     },
     stdio: 'ignore',
   });
   await waitForSocket(sockPath);
-  // Let the eager startup connect attempt fail against the rejecting server —
-  // this is what starts the cooldown window.
+  // Let the eager startup connection fail against the rejecting server.
   await new Promise((r) => setTimeout(r, 500));
   assert.ok(rejecting.connectionCount() >= 1, 'the eager startup connect must have attempted (and failed) against the fake endpoint');
   const connectionsAfterFailure = rejecting.connectionCount();
@@ -258,33 +252,57 @@ test('failure backoff: cooldown rejects fast without a new connect attempt, then
   await assert.rejects(
     c1.send<any>('Browser.getVersion'),
     (err: Error) => {
-      assert.match(err.message, /Chrome debugging not approved yet/);
-      assert.match(err.message, /next connect attempt allowed in \d+s/);
+      assert.match(err.message, /will not open another remote-debugging dialog/);
       return true;
     },
-    'a command inside the cooldown window must fail fast with the actionable message',
+    'a command after connection failure must fail closed',
   );
 
   const c2 = await ProxyClient.open(sockPath, 5000);
   clients.push(c2);
-  await assert.rejects(c2.send<any>('Browser.getVersion'), /Chrome debugging not approved yet/, 'a second command inside the same window must also fail fast');
+  await assert.rejects(c2.send<any>('Browser.getVersion'), /will not open another remote-debugging dialog/, 'a second command must also fail closed');
 
   assert.equal(
     rejecting.connectionCount(),
     connectionsAfterFailure,
-    'no new upstream connect attempt must have been made while cooling down — that would mean a second dialog',
+    'no new upstream connect attempt must have been made — that would mean a second dialog',
   );
+});
 
-  // Once the cooldown elapses, point DevToolsActivePort at a real (fast) fake
-  // server and confirm the next command transparently reconnects and succeeds —
-  // the existing healthy-case auto-reconnect behavior must survive the backoff.
-  await new Promise((r) => setTimeout(r, cooldownMs));
-  const healthy = await startDelayedFakeCdp(0);
-  realCdp.s = healthy;
-  writePortFile(udd, healthy);
+test('approval timeout: never opens another debugger connection', async (t) => {
+  const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-approval-timeout-'));
+  const sockPath = path.join(udd, 'proxy.sock');
+  // Deliberately hold the WebSocket handshake past the proxy's short test timeout.
+  const fake = await startDelayedFakeCdp(1_000);
+  writePortFile(udd, fake);
+  let proxy: ChildProcess | undefined;
+  const clients: ProxyClient[] = [];
+  t.after(async () => {
+    for (const client of clients) { try { client.close(); } catch { /* ignore */ } }
+    try { proxy?.kill('SIGKILL'); } catch { /* ignore */ }
+    try { await fake.close(); } catch { /* ignore */ }
+    try { fs.rmSync(udd, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
 
-  const c3 = await ProxyClient.open(sockPath, 5000);
-  clients.push(c3);
-  const r3 = await c3.send<any>('Browser.getVersion');
-  assert.equal(r3.product, 'FakeChrome-delayed', 'after the cooldown elapses, the next command must reconnect and succeed');
+  proxy = spawn(process.execPath, [PROXY], {
+    env: {
+      ...process.env,
+      CHROME_USE_DAEMON: '1',
+      CHROME_USE_SOCKET: sockPath,
+      CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_CONNECT_TIMEOUT_MS: '100',
+      CHROME_USE_RECONNECT_COOLDOWN_MS: '50',
+    },
+    stdio: 'ignore',
+  });
+  await waitForSocket(sockPath);
+  await new Promise((r) => setTimeout(r, 250));
+  assert.equal(fake.upgradeCount(), 1, 'startup creates one pending Chrome debugger connection');
+
+  for (let i = 0; i < 3; i++) {
+    const client = await ProxyClient.open(sockPath, 5_000);
+    clients.push(client);
+    await assert.rejects(client.send<any>('Browser.getVersion'), /will not open another remote-debugging dialog/);
+  }
+  assert.equal(fake.upgradeCount(), 1, 'commands after an unanswered approval must not create another dialog');
 });

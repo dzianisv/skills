@@ -286,27 +286,14 @@ Other:
 Global: add --json for structured output where supported.`;
 
 /** Probe the proxy's control status within `timeoutMs`. */
-async function proxyStatus(timeoutMs: number): Promise<{ alive: boolean; version?: string; pid?: number }> {
+async function proxyStatus(timeoutMs: number): Promise<{ alive: boolean; version?: string; pid?: number; connectionBlocked?: string | null }> {
   let client: ProxyClient | null = null;
   try {
     client = await ProxyClient.open(SOCKET_PATH, timeoutMs);
     const res = await client.send<any>('__status', {});
-    return { alive: true, version: res?.version, pid: res?.pid };
+    return { alive: true, version: res?.version, pid: res?.pid, connectionBlocked: res?.connectionBlocked };
   } catch {
     return { alive: false };
-  } finally {
-    client?.close();
-  }
-}
-
-/** Ask a running proxy to stop. Best-effort; a no-op if nothing is listening. */
-async function stopProxy(timeoutMs: number): Promise<void> {
-  let client: ProxyClient | null = null;
-  try {
-    client = await ProxyClient.open(SOCKET_PATH, timeoutMs);
-    await client.send('__stop', {});
-  } catch {
-    /* already down */
   } finally {
     client?.close();
   }
@@ -321,55 +308,22 @@ function spawnProxy(): void {
 }
 
 /**
- * Ensure the transparent proxy is running AND running the currently-installed
- * code, starting/restarting it (double-fork) if not.
- *
- * A running proxy that reports a stale `version` (or none at all — predates
- * this field) predates a fix to proxy.ts/lib/cdp.ts/lib/devtools-port.ts; it
- * is stopped and respawned exactly once so it can't keep a dead/buggy
- * connection alive indefinitely. The respawn goes through the same spawn call
- * used for a cold start, which proxy.ts itself gates behind its own startup
- * lock — this function never touches the socket/lock files directly, so it
- * can't reintroduce the concurrent-startup race that lock fixes.
+ * Ensure the transparent proxy is running. Never restart a live proxy merely
+ * because code changed: restarting can show a new native Chrome approval dialog.
  */
 async function ensureProxy(): Promise<void> {
   const expectedVersion = computeExpectedVersion();
   const initialStatus = await proxyStatus(2000);
 
-  if (initialStatus.alive && initialStatus.version === expectedVersion) return;
-
   if (initialStatus.alive) {
-    process.stderr.write('chrome-use: proxy is running stale code, restarting…\n');
-    await stopProxy(3000);
-    // Wait for the old process to actually exit before spawning a replacement:
-    // __stop replies immediately but exits on setImmediate, so without this
-    // wait the new spawn's own startup check could see the dying proxy's
-    // socket still live and defer to it, silently no-op'ing the restart.
-    const stopDeadline = Date.now() + 3000;
-    let lastStatus = initialStatus;
-    while (Date.now() < stopDeadline) {
-      lastStatus = await proxyStatus(500);
-      if (!lastStatus.alive) break;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    if (lastStatus.alive) {
-      // The old proxy didn't exit within the grace window. Spawning a new one
-      // now would be a guaranteed no-op — the new child's own checkAlreadyRunning()
-      // sees the still-live socket and exits immediately — which used to surface
-      // only as a generic "did not start in time" timeout below with no clue what
-      // actually went wrong and no escape hatch. Fail loudly and specifically
-      // instead of falling through to spawnProxy().
-      const pid = lastStatus.pid;
+    if (initialStatus.connectionBlocked) {
+      const pid = initialStatus.pid;
       throw new Error(
-        `chrome-use: old proxy${pid ? ` (pid ${pid})` : ''} is still running after a 3s stop request and ` +
-          `did not exit.\n` +
-          `Refusing to start a second proxy alongside it — that would silently no-op and reintroduce the ` +
-          `double-CDP-connection bug this lock exists to prevent.\n` +
-          (pid
-            ? `Manually stop it, then retry: kill ${pid}`
-            : `Manually find and stop it (its pid was not reported), e.g.: pgrep -fl proxy.ts`),
+        `chrome-use: proxy blocked after a Chrome connection failure. It will not reconnect automatically.\n` +
+          `A human must stop the proxy${pid ? ` (kill ${pid})` : ''}, then run one browser command while ready to click Chrome's Allow dialog.`,
       );
     }
+    return;
   }
 
   const acquiredLock = acquireProxyStartLock();
@@ -387,7 +341,7 @@ async function ensureProxy(): Promise<void> {
     }
 
     const statusAfterLock = await proxyStatus(2000);
-    if (statusAfterLock.alive && statusAfterLock.version === expectedVersion) return;
+    if (statusAfterLock.alive) return;
 
     spawnProxy();
 

@@ -85,6 +85,14 @@ async function waitForSocket(sockPath: string, timeoutMs = 8000): Promise<void> 
   }
 }
 
+async function waitForConnection(fake: { connectionCount: () => number }, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (fake.connectionCount() < 1) {
+    if (Date.now() > deadline) throw new Error('proxy did not reach the fake CDP endpoint');
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
 test('status control probe (__status) resolves fast while a CDP connect is hung/pending', async (t) => {
   const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-status-fast-'));
   const sockPath = path.join(udd, 'proxy.sock');
@@ -114,7 +122,7 @@ test('status control probe (__status) resolves fast while a CDP connect is hung/
   // comes up. Against startHangingCdp() that attempt is now genuinely
   // in-flight and will stay pending for the full 300s Cdp.connect timeout —
   // exactly the "unapproved dialog" state this test simulates.
-  await new Promise((r) => setTimeout(r, 300));
+  await waitForConnection(hanging);
   assert.ok(hanging.connectionCount() >= 1, 'the eager startup connect must have reached the fake endpoint (and be hanging there)');
 
   client = await ProxyClient.open(sockPath, 15_000);
@@ -154,7 +162,7 @@ test('real `chrome-use status` CLI returns within a few seconds when Chrome is n
     stdio: 'ignore',
   });
   await waitForSocket(sockPath);
-  await new Promise((r) => setTimeout(r, 300));
+  await waitForConnection(hanging);
   assert.ok(hanging.connectionCount() >= 1, 'the eager startup connect must be hanging against the fake endpoint');
 
   const start = Date.now();

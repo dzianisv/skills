@@ -13,17 +13,13 @@ npm run live-smoke        # guided LIVE reconnect smoke (needs Chrome + 1 Allow 
 
 ## Reconnect / live smoke
 
-`reconnect.test.ts` (in `test:offline`) is the **automated** gate for CDP
-auto-reconnect: it spawns the real proxy against an in-process CDP WebSocket server,
-drops the socket, repoints `DevToolsActivePort`, and asserts the next command
-reconnects — no Chrome, CI-safe.
+`reconnect.test.ts` (in `test:offline`) proves the proxy keepalive reuses its one
+approved CDP socket and that a dropped socket fails closed without auto-reconnect.
 
 `npm run live-smoke` is the **end-to-end** version against your real Chrome (it can't
 be fully automated because Chrome's one-time "Allow remote debugging?" dialog needs a
 human click). It walks you through: (1) open a page (approve the dialog if shown),
-(2) **fully restart Chrome** (drops the CDP socket + assigns a new debug port),
-(3) run another command — which must auto-reconnect (no `CDP connection closed`, no
-manual restart). It uses an isolated socket and terminates its own proxy out-of-band
+(2) verify the existing browser connection stays alive. It uses an isolated socket and terminates its own proxy out-of-band
 on exit (there is no `stop` command), so your everyday chrome-use proxy is untouched.
 
 ## Requirements
