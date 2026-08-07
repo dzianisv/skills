@@ -142,12 +142,13 @@ File format: two lines — port number, then WebSocket path:
 |---------|-------|-----|
 | `DevToolsActivePort not found` | Chrome not running, or autoConnect not enabled | Start Chrome 144+, go to `chrome://inspect/#remote-debugging`, click **Allow** |
 | Permission dialog appears on every run | New connections instead of the shared proxy | Let the CLI auto-start and reuse the proxy; do not kill it between commands |
-| Connection hangs on first command | Chrome is showing the "Allow remote debugging?" dialog | Switch to Chrome, click **Allow** |
+| Connection hangs on first command | Chrome is showing the "Allow remote debugging?" dialog | Switch to Chrome, click **Allow** before its five-minute timeout |
+| `will not open another remote-debugging dialog` | CDP approval, connection, or request failed | Do not retry browser commands. A human must stop proxy PID from `chrome-use status`, then run one browser command while ready to approve one dialog |
 | `page changed — re-run snapshot` | Acting on a stale `@eN` after navigation | Re-run `snapshot`, then use the fresh refs |
 | `Daemon did not start in time` | Daemon failed to launch or Chrome not responding | Go to `chrome://inspect/#remote-debugging`, click **Allow**; check `./chrome-use status` |
 | `/json/version` connection refused | Expected in autoConnect mode | Use `DevToolsActivePort` + direct WebSocket; do not curl the HTTP API |
 | Another debugger attached error | DevTools panel open on the same tab | Close DevTools panels / disconnect other debuggers |
-| `CDP connection closed` after a Chrome restart / dropped socket | The CDP WebSocket dropped | Nothing — the proxy now auto-reconnects on the **next** command (re-reading `DevToolsActivePort` for Chrome's new port). No manual restart needed. If it persists, Chrome isn't running. |
+| `Chrome debugging connection closed` | Chrome restarted or CDP socket dropped | Proxy fails closed. It will not auto-reconnect or create another dialog. A human must stop proxy PID from `chrome-use status`, then run one browser command while ready to approve it. |
 | You think the proxy is broken and want to "reset" it | The proxy is **shared** and holds the one approved Chrome connection; there is intentionally **no `chrome-use stop`** | Run `chrome-use status` and **report** it. Do not try to stop/restart it from the CLI. If a proxy is genuinely wedged, a **human/maintainer** terminates that process out-of-band (OS process management, e.g. `kill <pid>`) — never the agent. |
 
 ## Testing
