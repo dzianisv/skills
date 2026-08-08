@@ -36,12 +36,22 @@ interface TargetInfo {
   url: string;
 }
 
-/** A page target we are willing to drive (skip devtools/extension surfaces). */
+/**
+ * A page target we are willing to drive (skip devtools/extension surfaces).
+ *
+ * `chrome-extension://` pages are excluded by default because they are rarely
+ * the user's intent and are easy to hit by accident. Some legitimate tasks DO
+ * need them (e.g. reading/toggling an extension's own options page), so set
+ * `CHROME_USE_ALLOW_EXTENSION=1` to opt in for that invocation only. Default
+ * behaviour is unchanged.
+ */
+const ALLOW_EXTENSION_PAGES = process.env.CHROME_USE_ALLOW_EXTENSION === '1';
+
 function drivable(t: TargetInfo): boolean {
   return (
     t.type === 'page' &&
     !t.url.startsWith('devtools://') &&
-    !t.url.startsWith('chrome-extension://')
+    (ALLOW_EXTENSION_PAGES || !t.url.startsWith('chrome-extension://'))
   );
 }
 
