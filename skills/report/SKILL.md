@@ -1,6 +1,6 @@
 ---
 name: report
-description: "Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. Use when asked for a report, session report, incident recap page, or 'write up what we did'."
+description: "Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. Use when asked for a report, session report, incident recap page, or 'write up what we did"
 ---
 DO NOT DO ANY TOOL CALL TO COMPLETE REPORT
 YOU DERIVE FROM THE CONTEXT
