@@ -474,6 +474,31 @@ async def cmd_send(target: str, message: str, topic_id: int | None = None) -> in
         await client.disconnect()  # type: ignore[func-returns-value]
 
 
+async def cmd_topic_create(target: str, title: str) -> int:
+    """Create native forum topic and print its root message id."""
+    client = await _connect()
+    try:
+        entity = await client.get_input_entity(_coerce_target(target))
+        result = await client(tl_functions.messages.CreateForumTopicRequest(
+            peer=entity,
+            title=title,
+            icon_color=0x6FB9F0,
+        ))
+        topic_id = next(
+            (getattr(getattr(update, "message", None), "id", None)
+             for update in getattr(result, "updates", [])
+             if getattr(getattr(update, "message", None), "id", None) is not None),
+            None,
+        )
+        print(f"created topic_id={topic_id} title={title}")
+        return 0
+    except Exception as exc:
+        print(f"ERROR: {exc}")
+        return 1
+    finally:
+        await client.disconnect()  # type: ignore[func-returns-value]
+
+
 async def cmd_send_media(
     target: str,
     path: str,
@@ -659,6 +684,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_send.add_argument("message", help="Message text to send")
     p_send.add_argument("--topic-id", type=int, default=None, help=_TOPIC_HELP)
 
+    # topic-create
+    p_topic = sub.add_parser("topic-create", help="Create a native forum/monoforum topic")
+    p_topic.add_argument("target", help="Username (@bot) or numeric Telegram ID")
+    p_topic.add_argument("title", help="Topic title")
+
     # send-image
     p_send_image = sub.add_parser("send-image", help="Send an image/photo")
     p_send_image.add_argument("target", help="Username (@bot) or numeric Telegram ID")
@@ -734,6 +764,8 @@ def main() -> None:
         rc = cmd_capabilities()
     elif args.command == "send":
         rc = asyncio.run(cmd_send(args.target, args.message, args.topic_id))
+    elif args.command == "topic-create":
+        rc = asyncio.run(cmd_topic_create(args.target, args.title))
     elif args.command == "send-image":
         rc = asyncio.run(cmd_send_media(args.target, args.path, "image", args.caption, args.topic_id))
     elif args.command == "send-file":

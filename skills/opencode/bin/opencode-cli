@@ -1,0 +1,969 @@
+#!/usr/bin/env bun
+'use strict';
+
+/**
+ * opencode-cli — ergonomic wrapper around the `opencode serve` REST API, for agents.
+ *
+ * Talks to a running opencode server (local or remote) over HTTP so callers don't
+ * have to hand-roll curl+jq for session listing, status polling, and prompt sending.
+ *
+ * Config:
+ *   OPENCODE_URL               base URL of the server (default http://127.0.0.1:4096)
+ *   OPENCODE_SERVER_PASSWORD   basic-auth password (username "opencode" unless overridden)
+ *   OPENCODE_SERVER_USERNAME   basic-auth username override (default "opencode")
+ * ~/.env.d/opencode.env is auto-sourced if present (existing env vars always win).
+ *
+ * Run with no args (or --help) for usage.
+ */
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// ---------------------------------------------------------------------------
+// Config / env
+// ---------------------------------------------------------------------------
+
+function loadEnvFile(file) {
+  let content;
+  try {
+    content = fs.readFileSync(file, 'utf8');
+  } catch {
+    return;
+  }
+  for (const rawLine of content.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (line.startsWith('export ')) line = line.slice('export '.length).trim();
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+// Snapshot the REAL exported environment before any config file is merged in.
+// Precedence must be: exported env > --server profile > config files. If we
+// checked process.env after loadEnvFile(), a stale ~/.env.d/opencode.env would
+// silently beat an explicit --server and quietly talk to the wrong host.
+const EXPORTED_ENV = {
+  url: process.env.OPENCODE_URL,
+  password: process.env.OPENCODE_SERVER_PASSWORD,
+  username: process.env.OPENCODE_SERVER_USERNAME,
+};
+
+loadEnvFile(path.join(os.homedir(), '.config', 'opencode-cli', 'env'));
+loadEnvFile(path.join(os.homedir(), '.env.d', 'opencode.env'));
+
+// --- Named server profiles -------------------------------------------------
+// ~/.config/opencode-cli/servers.json:
+//   { "default": "local",
+//     "servers": {
+//       "local":  { "url": "http://127.0.0.1:4096" },
+//       "azure":  { "url": "http://100.108.64.76:4096", "password": "…",
+//                   "username": "opencode",
+//                   "directory": "/home/azureuser/workspace/OpenClawBot" } } }
+// Select with `--server <name>` (stripped from argv before parsing) or
+// OPENCODE_PROFILE. Explicit env vars (OPENCODE_URL etc.) always win.
+const SERVERS_FILE = path.join(os.homedir(), '.config', 'opencode-cli', 'servers.json');
+
+function loadServers() {
+  try {
+    return JSON.parse(fs.readFileSync(SERVERS_FILE, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+let PROFILE_DIRECTORY = '';
+(function applyProfile() {
+  const cfg = loadServers();
+  if (!cfg || !cfg.servers) return;
+
+  let name = process.env.OPENCODE_PROFILE || '';
+  const i = process.argv.indexOf('--server');
+  if (i !== -1 && process.argv[i + 1]) {
+    name = process.argv[i + 1];
+    process.argv.splice(i, 2);
+  }
+  if (!name) name = cfg.default || '';
+  if (!name) return;
+
+  const s = cfg.servers[name];
+  if (!s) {
+    console.error(`opencode-cli: unknown --server "${name}". Known: ${Object.keys(cfg.servers).join(', ')}`);
+    process.exit(2);
+  }
+  // Exported env wins over a profile; a profile wins over any config file.
+  if (s.url && !EXPORTED_ENV.url) process.env.OPENCODE_URL = s.url;
+  if (s.password && !EXPORTED_ENV.password) process.env.OPENCODE_SERVER_PASSWORD = s.password;
+  if (s.username && !EXPORTED_ENV.username) process.env.OPENCODE_SERVER_USERNAME = s.username;
+  if (s.directory) PROFILE_DIRECTORY = s.directory;
+})();
+
+const BASE_URL = (process.env.OPENCODE_URL || 'http://127.0.0.1:4096').replace(/\/+$/, '');
+const AUTH_USER = process.env.OPENCODE_SERVER_USERNAME || 'opencode';
+const AUTH_PASS = process.env.OPENCODE_SERVER_PASSWORD || '';
+
+function authHeaders() {
+  if (!AUTH_PASS) return {};
+  const token = Buffer.from(`${AUTH_USER}:${AUTH_PASS}`).toString('base64');
+  return { Authorization: `Basic ${token}` };
+}
+
+// ---------------------------------------------------------------------------
+// HTTP
+// ---------------------------------------------------------------------------
+
+class CliError extends Error {}
+
+function fail(msg, status) {
+  const err = new CliError(msg);
+  if (status !== undefined) err.status = status;
+  throw err;
+}
+
+async function request(method, urlPath, { body, timeoutMs = 10000 } = {}) {
+  const url = `${BASE_URL}${urlPath}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      fail(`request timed out after ${timeoutMs}ms: ${method} ${urlPath} (is the server at ${BASE_URL} reachable?)`);
+    }
+    fail(`cannot reach opencode server at ${BASE_URL}${urlPath}: ${(err && err.message) || err}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+  if (!res.ok) {
+    const detail = typeof data === 'string' ? data : JSON.stringify(data);
+    fail(`HTTP ${res.status} ${res.statusText} on ${method} ${urlPath}: ${(detail || '').slice(0, 500)}`, res.status);
+  }
+  return data;
+}
+
+// opencode servers scope session/project endpoints by working directory: a plain
+// GET /session only returns sessions for the server's own default project. Pass
+// ?directory=<abs path> (a project's `worktree` from GET /project) to target another
+// project. This is a no-op for single-session-ID lookups (show/send/abort/delete/etc.
+// resolve by session ID globally regardless of directory) but required for listing
+// (sessions/status/stuck) and session creation (new).
+function withDirectory(urlPath, directory) {
+  if (!directory) return urlPath;
+  const sep = urlPath.includes('?') ? '&' : '?';
+  return `${urlPath}${sep}directory=${encodeURIComponent(directory)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Formatting helpers
+// ---------------------------------------------------------------------------
+
+function truncate(str, n) {
+  if (!str) return '';
+  return str.length > n ? str.slice(0, Math.max(0, n - 1)) + '…' : str;
+}
+
+function truncatePath(p, n) {
+  if (!p) return '';
+  return p.length > n ? '…' + p.slice(p.length - (n - 1)) : p;
+}
+
+function isoTime(ms) {
+  if (!ms) return '';
+  return new Date(ms).toISOString();
+}
+
+function collapseWhitespace(str) {
+  return str.replace(/\s+/g, ' ').trim();
+}
+
+function textFromParts(parts) {
+  return (parts || [])
+    .filter((p) => p && p.type === 'text' && typeof p.text === 'string')
+    .map((p) => p.text)
+    .join(' ');
+}
+
+function printJSON(data, compact) {
+  console.log(compact ? JSON.stringify(data) : JSON.stringify(data, null, 2));
+}
+
+function printTable(rows, columns) {
+  if (rows.length === 0) {
+    console.log('(none)');
+    return;
+  }
+  const widths = {};
+  for (const col of columns) {
+    widths[col] = Math.max(col.length, ...rows.map((r) => String(r[col] ?? '').length));
+  }
+  const header = columns.map((c) => c.toUpperCase().padEnd(widths[c])).join('  ');
+  console.log(header);
+  console.log(columns.map((c) => '-'.repeat(widths[c])).join('  '));
+  for (const row of rows) {
+    console.log(columns.map((c) => String(row[c] ?? '').padEnd(widths[c])).join('  '));
+  }
+}
+
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const current = idx++;
+      results[current] = await fn(items[current], current);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Argument parsing
+// ---------------------------------------------------------------------------
+
+const BOOLEAN_FLAGS = new Set(['main', 'async', 'json', 'all-projects', 'all']);
+
+function parseArgs(argv) {
+  const positional = [];
+  const flags = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith('--')) {
+      const eq = arg.indexOf('=');
+      let key = eq === -1 ? arg.slice(2) : arg.slice(2, eq);
+      if (eq !== -1) {
+        flags[key] = arg.slice(eq + 1);
+      } else if (BOOLEAN_FLAGS.has(key)) {
+        flags[key] = true;
+      } else {
+        const next = argv[i + 1];
+        if (next === undefined) fail(`--${key} requires a value`);
+        flags[key] = next;
+        i++;
+      }
+    } else {
+      positional.push(arg);
+    }
+  }
+  // A profile's `directory` acts as the default project scope, so a remote
+  // whose work always lives in one repo doesn't need --directory every call.
+  // An explicit --directory or --all-projects still wins.
+  if (PROFILE_DIRECTORY && flags.directory === undefined && !flags['all-projects']) {
+    flags.directory = PROFILE_DIRECTORY;
+  }
+  return { positional, flags };
+}
+
+function parseHours(flags) {
+  if (flags.recent === undefined) return undefined;
+  const n = Number(flags.recent);
+  if (Number.isNaN(n)) fail('--recent expects a number of hours');
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Shared session helpers
+// ---------------------------------------------------------------------------
+
+async function fetchSessionsWithStatus(directory) {
+  const [sessions, status] = await Promise.all([
+    request('GET', withDirectory('/session', directory), { timeoutMs: 10000 }),
+    request('GET', withDirectory('/session/status', directory), { timeoutMs: 10000 }),
+  ]);
+  return { sessions: sessions || [], busyIds: new Set(Object.keys(status || {})) };
+}
+
+async function fetchProjects() {
+  const data = await request('GET', '/project', { timeoutMs: 10000 });
+  return data || [];
+}
+
+// Enumerates every project from GET /project and queries /session + /session/status
+// once per project worktree, in bounded parallel, aggregating into one session list.
+// A project that fails to answer is skipped with a stderr warning rather than aborting
+// the whole scan (e.g. the synthetic "global" project with worktree "/" may not behave
+// like a normal project).
+async function fetchAllProjectsSessionsWithStatus() {
+  const projects = await fetchProjects();
+  const perProject = await mapLimit(projects, 5, async (p) => {
+    try {
+      const { sessions, busyIds } = await fetchSessionsWithStatus(p.worktree);
+      return { project: p.worktree, sessions, busyIds, error: null };
+    } catch (err) {
+      return { project: p.worktree, sessions: [], busyIds: new Set(), error: (err && err.message) || String(err) };
+    }
+  });
+
+  const sessions = [];
+  const busyIds = new Set();
+  const errors = [];
+  for (const r of perProject) {
+    for (const s of r.sessions) sessions.push({ ...s, __project: r.project });
+    for (const id of r.busyIds) busyIds.add(id);
+    if (r.error) errors.push(`${r.project}: ${r.error}`);
+  }
+  if (errors.length) {
+    console.error(`opencode-cli: warning — ${errors.length} project(s) failed to query:`);
+    for (const e of errors) console.error(`  ${e}`);
+  }
+  return { sessions, busyIds };
+}
+
+function filterSessions(sessions, { main, recentHours }) {
+  let out = sessions;
+  if (main) out = out.filter((s) => !s.parentID);
+  if (recentHours !== undefined) {
+    const cutoff = Date.now() - recentHours * 3600 * 1000;
+    out = out.filter((s) => (s.time && s.time.updated ? s.time.updated : 0) >= cutoff);
+  }
+  return out;
+}
+
+function toSessionRow(s, busyIds, { truncateFields, showProject } = {}) {
+  const base = {
+    id: s.id,
+    project: s.__project || '',
+    title: s.title || '',
+    directory: s.directory || '',
+    updated: isoTime(s.time && s.time.updated),
+    parentID: s.parentID || null,
+    busy: busyIds.has(s.id),
+  };
+  if (!truncateFields) return base;
+  const row = {
+    id: s.id,
+    title: truncate(base.title, 40),
+    directory: truncatePath(base.directory, 30),
+    updated: base.updated,
+    status: base.busy ? 'busy' : 'idle',
+  };
+  if (showProject) row.project = truncatePath(base.project, 24);
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// Permission helpers
+// ---------------------------------------------------------------------------
+
+// Permission discovery is project-scoped exactly like sessions (see withDirectory
+// above) — a plain GET /permission only ever sees the server's own default project.
+// Confirmed live on opencode v1.17.9: it returned 0 pending while four sessions in
+// other projects sat frozen waiting for approval. A session blocked on a permission
+// looks plain idle and does NOT show up in GET /session/status, so this scoped fetch
+// is the only reliable way to find it. Each result is tagged with the directory it was
+// fetched under (or the literal '(default)' when none was given) so callers can tell
+// which project it belongs to even from a single-project query.
+async function fetchPermissions(directory) {
+  const data = await request('GET', withDirectory('/permission', directory), { timeoutMs: 10000 });
+  return (data || []).map((p) => ({ ...p, __project: directory || '(default)' }));
+}
+
+// Projects worth fanning permission scans across: excludes the synthetic "/" "global"
+// project entry, which doesn't behave like a normal per-directory scope and isn't a
+// real place permissions can be pending in.
+async function fetchScopableProjects() {
+  const projects = await fetchProjects();
+  return projects.filter((p) => p.worktree && p.worktree !== '/');
+}
+
+// Enumerates every real project and queries /permission once per worktree, in bounded
+// parallel (same concurrency-5 pattern as fetchAllProjectsSessionsWithStatus). Anything
+// less than this full fan-out silently misses frozen sessions in other projects — see
+// the multi-project scoping trap documented at the top of this file.
+async function fetchAllProjectsPermissions() {
+  const projects = await fetchScopableProjects();
+  const perProject = await mapLimit(projects, 5, async (p) => {
+    try {
+      return { project: p.worktree, permissions: await fetchPermissions(p.worktree), error: null };
+    } catch (err) {
+      return { project: p.worktree, permissions: [], error: (err && err.message) || String(err) };
+    }
+  });
+
+  const permissions = [];
+  const errors = [];
+  for (const r of perProject) {
+    for (const perm of r.permissions) permissions.push(perm);
+    if (r.error) errors.push(`${r.project}: ${r.error}`);
+  }
+  if (errors.length) {
+    console.error(`opencode-cli: warning — ${errors.length} project(s) failed to query:`);
+    for (const e of errors) console.error(`  ${e}`);
+  }
+  return permissions;
+}
+
+// metadata.command/description are both frequently absent — handle missing fields.
+// metadata.command can be a full shell command (heredocs, long argv); cap it well above
+// table-display width so JSON consumers still get something useful, not a wall of text.
+function permissionWhat(p) {
+  const meta = p.metadata || {};
+  if (meta.description) return collapseWhitespace(String(meta.description));
+  if (meta.command) return truncate(collapseWhitespace(String(meta.command)), 200);
+  return '-';
+}
+
+function permissionPatterns(p) {
+  const patterns = p.patterns || (p.metadata && p.metadata.patterns) || [];
+  return Array.isArray(patterns) && patterns.length ? patterns.join(',') : '-';
+}
+
+function toPermissionRow(p, { truncateFields } = {}) {
+  const base = {
+    project: p.__project || '',
+    id: p.id || '',
+    session: p.sessionID || '',
+    type: p.permission || '',
+    patterns: permissionPatterns(p),
+    what: permissionWhat(p),
+  };
+  if (!truncateFields) return base;
+  return {
+    project: truncatePath(base.project, 24),
+    id: base.id,
+    session: base.session,
+    type: base.type,
+    patterns: truncate(base.patterns, 30),
+    what: truncate(base.what, 50),
+  };
+}
+
+function normalizeResponse(flags) {
+  const response = flags.response || 'once';
+  if (!['once', 'always', 'reject'].includes(response)) {
+    fail(`--response must be one of once|always|reject (got "${response}")`);
+  }
+  return response;
+}
+
+// The ONLY reliable reply route: session-ID-scoped, so it works regardless of project
+// scoping. The alternative POST /permission/{id}/reply route 404s whenever the
+// permission isn't in the server's own default-scope project (adding ?directory= does
+// NOT fix it, nor does the x-opencode-directory header) — do not use it here, it's
+// fallback-only and documented as such in the skill.
+//
+// A 404 here almost always means the permission was already resolved (approved/
+// rejected/expired) by someone/something else — new permissions arrive continuously,
+// so races are normal. Treat it as "already gone", not a hard failure.
+async function approveOne(sessionID, permissionID, response) {
+  try {
+    await request('POST', `/session/${encodeURIComponent(sessionID)}/permissions/${encodeURIComponent(permissionID)}`, {
+      body: { response },
+      timeoutMs: 10000,
+    });
+    return { permissionID, sessionID, response, status: 'ok' };
+  } catch (err) {
+    if (err instanceof CliError && err.status === 404) {
+      return { permissionID, sessionID, response, status: 'already-resolved' };
+    }
+    return { permissionID, sessionID, response, status: 'error', error: (err && err.message) || String(err) };
+  }
+}
+
+function printApproveResult(r) {
+  if (r.status === 'ok') {
+    console.log(`${r.permissionID}  ${r.response}  OK (session ${r.sessionID})`);
+  } else if (r.status === 'already-resolved') {
+    console.log(`${r.permissionID}  ${r.response}  already resolved (404 — someone/something else got there first)`);
+  } else {
+    console.error(`${r.permissionID}  ${r.response}  FAILED: ${r.error}`);
+  }
+}
+
+async function findPermissionSessionID(permissionID, flags) {
+  const scanned = flags.directory ? await fetchPermissions(flags.directory) : await fetchAllProjectsPermissions();
+  const match = scanned.find((p) => p.id === permissionID);
+  return match ? match.sessionID : undefined;
+}
+
+// New permissions arrive continuously (a multi-step agent run often generates its next
+// permission the moment the last one is approved), so a single scan-then-reply-all pass
+// always risks leaving stragglers. --all drains in passes instead: re-scan after every
+// pass, stop as soon as a scan comes back empty, otherwise hard-cap at 3 passes so a
+// session that regenerates the same permission forever can't loop this command forever.
+async function approveAll(flags, response) {
+  const maxPasses = 3;
+  const passSummaries = [];
+  let totalOk = 0;
+  let totalAlready = 0;
+  let totalFailed = 0;
+
+  for (let pass = 1; pass <= maxPasses; pass++) {
+    const pending = flags.directory ? await fetchPermissions(flags.directory) : await fetchAllProjectsPermissions();
+    if (pending.length === 0) {
+      passSummaries.push({ pass, found: 0, ok: 0, alreadyResolved: 0, failed: 0 });
+      break;
+    }
+
+    const results = await mapLimit(pending, 5, (p) => approveOne(p.sessionID, p.id, response));
+    let ok = 0;
+    let already = 0;
+    let failed = 0;
+    for (const r of results) {
+      if (!flags.json) printApproveResult(r);
+      if (r.status === 'ok') ok++;
+      else if (r.status === 'already-resolved') already++;
+      else failed++;
+    }
+    totalOk += ok;
+    totalAlready += already;
+    totalFailed += failed;
+    passSummaries.push({ pass, found: pending.length, ok, alreadyResolved: already, failed });
+  }
+
+  if (flags.json) {
+    printJSON({ passes: passSummaries, totals: { approved: totalOk, alreadyResolved: totalAlready, failed: totalFailed } }, false);
+  } else {
+    console.log('');
+    for (const s of passSummaries) {
+      console.log(`pass ${s.pass}: found ${s.found}, approved ${s.ok}, already-resolved ${s.alreadyResolved}, failed ${s.failed}`);
+    }
+    console.log(`total: approved ${totalOk}, already-resolved ${totalAlready}, failed ${totalFailed}`);
+  }
+
+  if (totalFailed > 0) process.exitCode = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+async function cmdHealth(flags) {
+  const data = await request('GET', '/global/health', { timeoutMs: 10000 });
+  const healthy = !!(data && data.healthy === true);
+  if (flags.json) {
+    printJSON({ url: BASE_URL, ...data }, true);
+  } else {
+    console.log(`${healthy ? 'OK' : 'DOWN'}  url=${BASE_URL}  version=${(data && data.version) || 'unknown'}`);
+  }
+  if (!healthy) process.exitCode = 1;
+}
+
+async function cmdSessions(flags) {
+  const allProjects = !!flags['all-projects'];
+  const { sessions, busyIds } = allProjects
+    ? await fetchAllProjectsSessionsWithStatus()
+    : await fetchSessionsWithStatus(flags.directory);
+  const recentHours = parseHours(flags);
+  const filtered = filterSessions(sessions, { main: !!flags.main, recentHours }).sort(
+    (a, b) => (b.time?.updated || 0) - (a.time?.updated || 0),
+  );
+
+  if (flags.json) {
+    printJSON(
+      filtered.map((s) => toSessionRow(s, busyIds)),
+      false,
+    );
+    return;
+  }
+
+  const rows = filtered.map((s) => toSessionRow(s, busyIds, { truncateFields: true, showProject: allProjects }));
+  printTable(
+    rows,
+    allProjects ? ['id', 'project', 'title', 'directory', 'updated', 'status'] : ['id', 'title', 'directory', 'updated', 'status'],
+  );
+}
+
+async function cmdProjects(flags) {
+  const projects = await fetchProjects();
+  if (flags.json) {
+    printJSON(projects, false);
+    return;
+  }
+  const rows = projects.map((p) => ({ id: p.id || '', worktree: truncatePath(p.worktree || '', 60), vcs: p.vcs || '' }));
+  printTable(rows, ['id', 'worktree', 'vcs']);
+}
+
+async function cmdStatus(flags) {
+  const data = await request('GET', withDirectory('/session/status', flags.directory), { timeoutMs: 10000 });
+  printJSON(data, !!flags.json);
+}
+
+async function cmdStuck(flags) {
+  const allProjects = !!flags['all-projects'];
+  const { sessions, busyIds } = allProjects
+    ? await fetchAllProjectsSessionsWithStatus()
+    : await fetchSessionsWithStatus(flags.directory);
+  const recentHours = parseHours(flags);
+  const idle = filterSessions(sessions, { main: true, recentHours })
+    .filter((s) => !busyIds.has(s.id))
+    .sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
+
+  const results = await mapLimit(idle, 8, async (s) => {
+    let snippet;
+    try {
+      const messages = await request(
+        'GET',
+        withDirectory(`/session/${encodeURIComponent(s.id)}/message?limit=10`, s.__project || flags.directory),
+        { timeoutMs: 10000 },
+      );
+      if (!messages || messages.length === 0) {
+        snippet = '(empty session — 0 messages)';
+      } else {
+        const assistantMsgs = messages.filter((m) => m.info && m.info.role === 'assistant');
+        const last = assistantMsgs[assistantMsgs.length - 1];
+        if (!last) {
+          snippet = '(no assistant reply yet)';
+        } else {
+          const text = textFromParts(last.parts);
+          snippet = text ? collapseWhitespace(text).slice(0, 300) : '(assistant message has no text parts — tool-only turn)';
+        }
+      }
+    } catch (err) {
+      snippet = `(failed to fetch messages: ${(err && err.message) || err})`;
+    }
+    return {
+      id: s.id,
+      project: s.__project || '',
+      title: s.title || '',
+      directory: s.directory || '',
+      updated: isoTime(s.time?.updated),
+      snippet,
+    };
+  });
+
+  if (flags.json) {
+    printJSON(results, false);
+    return;
+  }
+
+  if (results.length === 0) {
+    console.log('(no idle main sessions match)');
+    return;
+  }
+
+  for (const r of results) {
+    const projectTag = r.project ? `  [${truncatePath(r.project, 40)}]` : '';
+    console.log(`${r.id}${projectTag}  ${truncate(r.title, 60)}  (updated ${r.updated})`);
+    console.log(`    ${r.snippet}`);
+    console.log('');
+  }
+}
+
+async function cmdShow(positional, flags) {
+  const sid = positional[0];
+  if (!sid) fail('usage: opencode-cli show <sessionID> [--limit N] [--json]');
+  const limit = flags.limit !== undefined ? Number(flags.limit) : 20;
+  if (Number.isNaN(limit)) fail('--limit expects a number');
+
+  const messages = await request('GET', withDirectory(`/session/${encodeURIComponent(sid)}/message?limit=${limit}`, flags.directory), {
+    timeoutMs: 10000,
+  });
+
+  if (flags.json) {
+    printJSON(
+      (messages || []).map((m) => ({
+        id: m.info && m.info.id,
+        role: m.info && m.info.role,
+        time: isoTime(m.info && m.info.time && m.info.time.created),
+        text: textFromParts(m.parts),
+      })),
+      false,
+    );
+    return;
+  }
+
+  if (!messages || messages.length === 0) {
+    console.log('(no messages)');
+    return;
+  }
+
+  for (const m of messages) {
+    const role = (m.info && m.info.role) || 'unknown';
+    const id = (m.info && m.info.id) || '';
+    const time = isoTime(m.info && m.info.time && m.info.time.created);
+    const text = textFromParts(m.parts) || '(no text parts — tool-only or empty message)';
+    console.log(`--- ${role} ${id} (${time}) ---`);
+    console.log(text);
+    console.log('');
+  }
+}
+
+async function cmdSend(positional, flags) {
+  const [sid, text] = positional;
+  if (!sid || !text) fail('usage: opencode-cli send <sessionID> "<text>" [--async] [--model providerID/modelID] [--json]');
+
+  const body = { parts: [{ type: 'text', text }] };
+  if (flags.model) {
+    const idx = String(flags.model).indexOf('/');
+    if (idx === -1) fail('--model expects providerID/modelID, e.g. anthropic/claude-sonnet-4-5');
+    body.model = { providerID: flags.model.slice(0, idx), modelID: flags.model.slice(idx + 1) };
+  }
+
+  if (flags.async) {
+    await request('POST', withDirectory(`/session/${encodeURIComponent(sid)}/prompt_async`, flags.directory), { body, timeoutMs: 10000 });
+    console.log(flags.json ? JSON.stringify({ queued: true, sessionID: sid }) : `queued async prompt for session ${sid}`);
+    return;
+  }
+
+  const data = await request('POST', withDirectory(`/session/${encodeURIComponent(sid)}/message`, flags.directory), { body, timeoutMs: 300000 });
+  if (flags.json) {
+    printJSON(data, false);
+    return;
+  }
+  console.log(textFromParts(data && data.parts) || JSON.stringify(data));
+}
+
+async function cmdNew(positional, flags) {
+  const title = positional[0];
+  if (!title) fail('usage: opencode-cli new "<title>" [--directory <path>] [--json]');
+  const data = await request('POST', withDirectory('/session', flags.directory), { body: { title }, timeoutMs: 10000 });
+  if (flags.json) {
+    printJSON(data, true);
+    return;
+  }
+  console.log((data && data.id) || '(no id returned)');
+}
+
+async function cmdAbort(positional, flags) {
+  const sid = positional[0];
+  if (!sid) fail('usage: opencode-cli abort <sessionID>');
+  await request('POST', withDirectory(`/session/${encodeURIComponent(sid)}/abort`, flags.directory), { timeoutMs: 10000 });
+  console.log(flags.json ? JSON.stringify({ aborted: sid }) : `aborted ${sid}`);
+}
+
+async function cmdDelete(positional, flags) {
+  const sid = positional[0];
+  if (!sid) fail('usage: opencode-cli delete <sessionID>');
+  await request('DELETE', withDirectory(`/session/${encodeURIComponent(sid)}`, flags.directory), { timeoutMs: 10000 });
+  console.log(flags.json ? JSON.stringify({ deleted: sid }) : `deleted ${sid}`);
+}
+
+async function cmdChildren(positional, flags) {
+  const sid = positional[0];
+  if (!sid) fail('usage: opencode-cli children <sessionID> [--directory <path>] [--json]');
+  // Session-ID lookups resolve globally regardless of directory, so fetch the parent
+  // first to learn its project directory — then use that (unless --directory overrides)
+  // to correctly scope the /session/status busy-check, which IS list-scoped.
+  const parent = await request('GET', withDirectory(`/session/${encodeURIComponent(sid)}`, flags.directory), { timeoutMs: 10000 });
+  const directory = flags.directory || (parent && parent.directory) || undefined;
+  const [data, status] = await Promise.all([
+    request('GET', withDirectory(`/session/${encodeURIComponent(sid)}/children`, directory), { timeoutMs: 10000 }),
+    request('GET', withDirectory('/session/status', directory), { timeoutMs: 10000 }),
+  ]);
+  const busyIds = new Set(Object.keys(status || {}));
+  const children = data || [];
+
+  if (flags.json) {
+    printJSON(
+      children.map((s) => toSessionRow(s, busyIds)),
+      false,
+    );
+    return;
+  }
+
+  const rows = children.map((s) => toSessionRow(s, busyIds, { truncateFields: true }));
+  printTable(rows, ['id', 'title', 'directory', 'updated', 'status']);
+}
+
+async function cmdDiff(positional, flags) {
+  const sid = positional[0];
+  if (!sid) fail('usage: opencode-cli diff <sessionID> [--directory <path>] [--json]');
+  const data = await request('GET', withDirectory(`/session/${encodeURIComponent(sid)}/diff`, flags.directory), { timeoutMs: 10000 });
+  printJSON(data, !!flags.json);
+}
+
+async function cmdPermissions(flags) {
+  const allProjects = !!flags['all-projects'];
+  const permissions = allProjects ? await fetchAllProjectsPermissions() : await fetchPermissions(flags.directory);
+
+  if (flags.json) {
+    printJSON(
+      permissions.map((p) => toPermissionRow(p)),
+      false,
+    );
+    return;
+  }
+
+  const rows = permissions.map((p) => toPermissionRow(p, { truncateFields: true }));
+  printTable(rows, ['project', 'id', 'session', 'type', 'patterns', 'what']);
+}
+
+async function cmdApprove(positional, flags) {
+  const response = normalizeResponse(flags);
+  if (flags.message) {
+    console.error(
+      'opencode-cli: note — --message only applies to the /permission/{id}/reply fallback route; ' +
+        'the reliable session-scoped route this CLI uses does not accept a message and will ignore it.',
+    );
+  }
+
+  if (flags.all) {
+    if (positional[0]) fail('usage: pass either <permissionID> or --all, not both');
+    return approveAll(flags, response);
+  }
+
+  const permissionID = positional[0];
+  if (!permissionID) {
+    fail(
+      'usage: opencode-cli approve <permissionID> [--response once|always|reject] [--session <sid>] [--directory <path>] [--json]\n' +
+        '   or: opencode-cli approve --all [--response once|always|reject] [--directory <path>] [--json]',
+    );
+  }
+
+  let sessionID = flags.session;
+  if (!sessionID) {
+    sessionID = await findPermissionSessionID(permissionID, flags);
+    if (!sessionID) {
+      fail(
+        `could not find a sessionID for permission ${permissionID} (already resolved, or in a project --directory doesn't cover) — pass --session <sid> to skip the lookup`,
+      );
+    }
+  }
+
+  const result = await approveOne(sessionID, permissionID, response);
+  if (flags.json) {
+    printJSON(result, true);
+  } else {
+    printApproveResult(result);
+  }
+  if (result.status === 'error') process.exitCode = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Help / dispatch
+// ---------------------------------------------------------------------------
+
+function helpText() {
+  return `opencode-cli — ergonomic CLI for the opencode server REST API (opencode serve)
+
+Usage: opencode-cli <command> [args] [flags]
+
+Config (env):
+  OPENCODE_URL                Base URL of the opencode server (default http://127.0.0.1:4096)
+  OPENCODE_SERVER_PASSWORD    Basic-auth password, username "opencode" (auto-loaded from ~/.env.d/opencode.env)
+  OPENCODE_SERVER_USERNAME    Basic-auth username override (default "opencode")
+
+Multi-project scoping:
+  opencode servers scope sessions by project directory. Plain "sessions"/"status"/"stuck"
+  only see ONE project (the server's default) — sessions in other project directories are
+  INVISIBLE unless you pass --directory or --all-projects.
+
+  --directory <abs path>   Scope this call to one project (a worktree from "projects").
+                           Required to see/create sessions in a non-default project.
+                           No effect on ID-scoped commands (show/send/abort/delete/children/
+                           diff resolve by session ID globally) — harmless if passed anyway.
+  --all-projects           (sessions, stuck, permissions) Enumerate every project from
+                           "projects" and aggregate results, tagged with a "project" column.
+
+Permission requests:
+  A session blocked on a permission prompt looks plain idle — it does NOT show up in
+  "status" or "stuck" (GET /session/status only lists busy/retry/fallback). The only
+  reliable way to find it is "permissions --all-projects" (discovery is project-scoped,
+  same trap as sessions). Reply with "approve" — it always uses the session-scoped route,
+  which works regardless of project scoping; the alternative /permission/{id}/reply route
+  404s outside the server's own default project. A 404 on approve usually just means the
+  permission was already resolved by someone/something else — not a hard failure.
+
+Commands:
+  health                                    Check server health/version
+  projects [--json]                         List all projects: id, worktree, vcs
+  sessions [--main] [--recent H] [--directory <path>] [--all-projects] [--json]
+                                             List sessions: id, title, directory, updated, status(busy|idle)
+  status [--directory <path>]               Raw /session/status (busy/retry/fallback sessions)
+  stuck [--recent H] [--directory <path>] [--all-projects] [--json]
+                                             Idle MAIN sessions + last-assistant-text snippet (300 chars)
+  permissions [--directory <path>] [--all-projects] [--json]
+                                             List pending permission requests: project, id, session, type, patterns, what
+  approve <permissionID> [--response once|always|reject] [--session <sid>] [--directory <path>] [--json]
+  approve --all [--response once|always|reject] [--directory <path>] [--json]
+                                             Reply to a permission request (default --response once).
+                                             --all drains the whole queue, re-scanning up to 3 passes since
+                                             new permissions arrive continuously. 404 = already resolved, not an error.
+  show <sid> [--limit N] [--directory <path>] [--json]
+                                             Last N messages (role + text), default N=20
+  send <sid> "<text>" [--async] [--model providerID/modelID] [--directory <path>] [--json]
+                                             Send a prompt. Sync waits for the full reply (300s timeout).
+                                             --async fires prompt_async and returns immediately.
+  new "<title>" [--directory <path>] [--json]
+                                             Create a session (in --directory's project if given), prints its id
+  abort <sid> [--directory <path>]          Abort a running session
+  delete <sid> [--directory <path>]         Delete a session
+  children <sid> [--directory <path>] [--json]
+                                             List child sessions of a parent (auto-scopes to parent's project)
+  diff <sid> [--directory <path>] [--json]  Session file diff
+
+All commands exit non-zero with a message on stderr on connection/HTTP failure.
+Timeouts: 10s for all requests except sync "send" (300s).
+`;
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const cmd = args[0];
+  if (!cmd || cmd === '-h' || cmd === '--help') {
+    console.log(helpText());
+    return;
+  }
+  const { positional, flags } = parseArgs(args.slice(1));
+
+  switch (cmd) {
+    case 'health':
+      return cmdHealth(flags);
+    case 'projects':
+      return cmdProjects(flags);
+    case 'sessions':
+      return cmdSessions(flags);
+    case 'status':
+      return cmdStatus(flags);
+    case 'stuck':
+      return cmdStuck(flags);
+    case 'permissions':
+      return cmdPermissions(flags);
+    case 'approve':
+      return cmdApprove(positional, flags);
+    case 'show':
+      return cmdShow(positional, flags);
+    case 'send':
+      return cmdSend(positional, flags);
+    case 'new':
+      return cmdNew(positional, flags);
+    case 'abort':
+      return cmdAbort(positional, flags);
+    case 'delete':
+      return cmdDelete(positional, flags);
+    case 'children':
+      return cmdChildren(positional, flags);
+    case 'diff':
+      return cmdDiff(positional, flags);
+    default:
+      fail(`unknown command "${cmd}"\n\n${helpText()}`);
+  }
+}
+
+main().catch((err) => {
+  if (err instanceof CliError) {
+    console.error(`opencode-cli: ${err.message}`);
+  } else {
+    console.error(`opencode-cli: unexpected error: ${(err && err.stack) || err}`);
+  }
+  process.exit(1);
+});

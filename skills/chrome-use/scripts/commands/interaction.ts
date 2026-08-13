@@ -144,6 +144,33 @@ const clickat: Handler = async (ctx): Promise<CommandResult> => {
   return { ok: true, text: `Clicked at ${x},${y}` };
 };
 
+// Human-like press-move-release drag from absolute x1,y1 to x2,y2. Needed for
+// slider verifications and canvas drags that require a real pointer trajectory
+// with intermediate mouseMoved events rather than a single jump.
+const dragto: Handler = async (ctx): Promise<CommandResult> => {
+  const [x1, y1, x2, y2] = ctx.command.args.slice(0, 4).map(Number);
+  if ([x1, y1, x2, y2].some((n) => Number.isNaN(n))) {
+    return { ok: false, error: 'dragto: numeric x1 y1 x2 y2 required' };
+  }
+  const steps = Number(ctx.command.flags.steps) || 30;
+  const s = ctx.tab.sessionId;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  await ctx.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x1, y: y1 }, s);
+  await ctx.cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x1, y: y1, button: 'left', clickCount: 1, buttons: 1 }, s);
+  await sleep(120);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const x = x1 + (x2 - x1) * ease;
+    const y = y1 + (y2 - y1) * ease + Math.sin(t * Math.PI) * 2;
+    await ctx.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1 }, s);
+    await sleep(10 + Math.random() * 25);
+  }
+  await sleep(150);
+  await ctx.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x2, y: y2, button: 'left', clickCount: 1, buttons: 1 }, s);
+  return { ok: true, text: `Dragged ${x1},${y1} -> ${x2},${y2} in ${steps} steps` };
+};
+
 // Insert text at the current caret via CDP Input.insertText, WITHOUT calling
 // DOM.focus first. Needed for block-level contenteditables (e.g. Notion page
 // blocks) that reject DOM.focus but accept trusted insertText once a real click
@@ -196,6 +223,7 @@ const typekeys: Handler = async (ctx): Promise<CommandResult> => {
 export const handlers: Record<string, Handler> = {
   click,
   clickat,
+  dragto,
   inserttext,
   typekeys,
   focuspage,
