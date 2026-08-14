@@ -9,7 +9,7 @@
  * change without ever restarting this proxy — so no repeated approval prompts.
  *
  * Wire protocol over the Unix socket (newline-delimited JSON):
- *   request  { id, method, params, sessionId? }
+ *   request  { id, method, params, sessionId?, timeoutMs? }
  *   response { id, result } | { id, error }
  * Control methods (answered without touching Chrome): `__status`, `__stop`.
  *
@@ -51,6 +51,20 @@ const MAX_LOG_BYTES = 5 * 1024 * 1024; // 5 MiB
 const CONNECT_TIMEOUT_MS = Number(process.env.CHROME_USE_CONNECT_TIMEOUT_MS) || 300_000;
 const REQUEST_TIMEOUT_MS = Number(process.env.CHROME_USE_REQUEST_TIMEOUT_MS) || 120_000;
 const KEEPALIVE_MS = Number(process.env.CHROME_USE_KEEPALIVE_MS) || 20_000;
+/** CHROME_USE_TRACE=1 logs every relayed CDP method — used to bisect connection drops. */
+const TRACE = process.env.CHROME_USE_TRACE === '1';
+/**
+ * Fail-closed-on-drop exists ONLY to avoid re-triggering Chrome's native
+ * "Allow remote debugging?" dialog, which is specific to autoConnect against the
+ * user's real profile. A dedicated agent instance launched with
+ * `--remote-debugging-port=0` (see agent-chrome.sh) has no such dialog, so there
+ * is nothing to protect and latching closed just wedges unattended work.
+ * agent-chrome.sh sets this; the shared human-session path never does.
+ */
+const ALLOW_RECONNECT = process.env.CHROME_USE_ALLOW_RECONNECT === '1';
+// How long a browser-level liveness probe gets before we conclude the CDP
+// connection itself (not just one request) is dead. See handle()'s catch block.
+const LIVENESS_PROBE_MS = Number(process.env.CHROME_USE_LIVENESS_PROBE_MS) || 5_000;
 
 function log(...a: unknown[]): void {
   process.stderr.write(`[${new Date().toISOString()}] [chrome-use proxy] ` + a.join(' ') + '\n');
@@ -262,6 +276,14 @@ function stopKeepalive(): void {
 }
 
 function blockReconnect(reason: string): void {
+  if (ALLOW_RECONNECT) {
+    // No approval dialog can be triggered on this profile, so a dropped socket is
+    // just a transport failure: drop the cached handle and let the next command
+    // redial. Never latch.
+    stopKeepalive();
+    log(`${reason} Reconnect is allowed on this profile — the next command will redial.`);
+    return;
+  }
   if (connectionBlocked) return;
   connectionBlocked = reason;
   stopKeepalive();
@@ -279,17 +301,46 @@ function startKeepalive(client: Cdp): void {
   keepalive.unref();
 }
 
-function sendWithTimeout<T>(client: Cdp, method: string, params: Record<string, unknown>, sessionId?: string): Promise<T> {
+function sendWithTimeout<T>(
+  client: Cdp,
+  method: string,
+  params: Record<string, unknown>,
+  sessionId?: string,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`CDP request timed out after ${REQUEST_TIMEOUT_MS}ms: ${method}`)),
-      REQUEST_TIMEOUT_MS,
+      () => reject(new Error(`CDP request timed out after ${timeoutMs}ms: ${method}`)),
+      timeoutMs,
     );
     client.send<T>(method, params, sessionId).then(
       (result) => { clearTimeout(timer); resolve(result); },
       (error) => { clearTimeout(timer); reject(error); },
     );
   });
+}
+
+/**
+ * Is the CDP connection itself still alive?
+ *
+ * A single request can hang for reasons that have nothing to do with the browser
+ * connection: a wedged renderer, a page stuck in a modal/beforeunload state, or
+ * an optional per-target command that a given target never answers. Those must
+ * NOT take the shared proxy down, because recovering the proxy costs a native
+ * "Allow remote debugging?" dialog for every session on this machine.
+ *
+ * `Browser.getVersion` is browser-level (no sessionId), so it still answers when
+ * one page session is wedged. If it answers quickly, the connection is healthy
+ * and only that one request failed.
+ */
+async function connectionAlive(client: Cdp): Promise<boolean> {
+  if (!client.connected) return false;
+  try {
+    await sendWithTimeout(client, 'Browser.getVersion', {}, undefined, LIVENESS_PROBE_MS);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function ensureConnected(): Promise<void> {
@@ -322,11 +373,12 @@ function ensureConnected(): Promise<void> {
     log('Chrome shows a one-time "Allow remote debugging?" dialog — click Allow (waits up to 5 min).');
     const client = await Cdp.connect(ws, CONNECT_TIMEOUT_MS);
     cdp = client;
-    client.onClose(() => {
+    client.onClose((info) => {
       if (cdp === client) {
         cdp = null;
         connecting = null;
-        blockReconnect('Chrome debugging connection closed.');
+        const detail = ` (ws close code=${info?.code ?? 'n/a'} reason=${JSON.stringify(info?.reason ?? '')} source=${info?.source ?? 'unknown'})`;
+        blockReconnect(`Chrome debugging connection closed.${detail}`);
       }
     });
     const v = await client.send<any>('Browser.getVersion');
@@ -347,7 +399,7 @@ function ensureConnected(): Promise<void> {
 // ── Per-request relay ────────────────────────────────────────────────────────────
 
 async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: string }> {
-  const { id, method, params, sessionId } = msg ?? {};
+  const { id, method, params, sessionId, timeoutMs } = msg ?? {};
 
   if (method === '__status') {
     return {
@@ -382,13 +434,28 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
   try {
     await ensureConnected();
     const client = cdp!;
-    const result = await sendWithTimeout(client, method, params ?? {}, sessionId);
+    if (TRACE) log(`-> ${method}${sessionId ? ` [sess ${String(sessionId).slice(0, 8)}]` : ''}`);
+    // Clients may request a SHORTER deadline for best-effort/optional commands
+    // (e.g. Emulation.setFocusEmulationEnabled). Never longer than the global cap.
+    const requested = Number(timeoutMs);
+    const deadline =
+      Number.isFinite(requested) && requested > 0
+        ? Math.min(requested, REQUEST_TIMEOUT_MS)
+        : REQUEST_TIMEOUT_MS;
+    const result = await sendWithTimeout(client, method, params ?? {}, sessionId, deadline);
     return { id, result };
   } catch (err: any) {
-    if (cdp?.connected && String(err?.message ?? err).startsWith('CDP request timed out after ')) {
-      blockReconnect(`Chrome debugging request hung: ${err.message}.`);
-      cdp.close();
-      cdp = null;
+    const message = String(err?.message ?? err);
+    if (cdp?.connected && message.startsWith('CDP request timed out after ')) {
+      const client = cdp;
+      // Only a dead CONNECTION justifies failing closed. One hung request does not.
+      if (await connectionAlive(client)) {
+        log(`Request timed out but the CDP connection is alive — keeping proxy up: ${message}`);
+        return { id, error: `${message} (connection still healthy; retry this command)` };
+      }
+      blockReconnect(`Chrome debugging request hung and the connection is unresponsive: ${message}.`);
+      client.close();
+      if (cdp === client) cdp = null;
     }
     return { id, error: err?.message ?? String(err) };
   }

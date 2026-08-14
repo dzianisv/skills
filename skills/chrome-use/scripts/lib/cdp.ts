@@ -1,10 +1,15 @@
 /**
- * Zero-dependency Chrome DevTools Protocol client over Node 22's global WebSocket.
+ * Zero-dependency Chrome DevTools Protocol client.
  *
  * Connects to the browser-level endpoint (ws://127.0.0.1:<port>/devtools/browser/<id>)
  * and uses flattened sessions: page-level commands carry a `sessionId` obtained via
  * Target.attachToTarget({ flatten: true }). No Puppeteer, no npm deps.
+ *
+ * Uses `lib/ws.ts` rather than Node's global WebSocket on purpose: the built-in
+ * client caps messages at 4 MiB and destroys the socket past that, which killed
+ * every screenshot of a content-heavy page. See the header of `lib/ws.ts`.
  */
+import { RawWebSocket, type WsCloseInfo } from './ws.ts';
 import type { CdpClient } from './types.ts';
 
 interface Pending {
@@ -12,38 +17,45 @@ interface Pending {
   reject: (e: Error) => void;
 }
 
+export type CloseInfo = WsCloseInfo;
+
 export class Cdp implements CdpClient {
-  #ws: WebSocket;
+  #ws: RawWebSocket;
   #nextId = 1;
   #pending = new Map<number, Pending>();
   #listeners = new Map<string, Set<(params: any, sessionId?: string) => void>>();
-  #open: Promise<void>;
   #closed = false;
   #closeFired = false;
-  #onCloseCbs = new Set<() => void>();
+  #onCloseCbs = new Set<(info: CloseInfo) => void>();
+  #closeInfo: CloseInfo = { code: null, reason: null, source: 'unknown' };
 
-  private constructor(ws: WebSocket) {
+  private constructor(ws: RawWebSocket) {
     this.#ws = ws;
-    this.#open = new Promise<void>((resolve, reject) => {
-      ws.addEventListener('open', () => resolve(), { once: true });
-      ws.addEventListener('error', () => reject(new Error('WebSocket connection error')), { once: true });
-    });
-    ws.addEventListener('message', (ev) => this.#onMessage(String((ev as MessageEvent).data)));
-    // A dropped socket fires 'close' (and usually 'error' first); either marks the
-    // client dead so the proxy can null its cached handle and reconnect on the next
-    // command. #fireClose is idempotent so close/error can't double-run it.
-    ws.addEventListener('close', () => this.#fireClose());
-    ws.addEventListener('error', () => this.#fireClose());
+    ws.onMessage((data) => this.#onMessage(data));
+    // A dropped socket marks the client dead so the proxy can null its cached
+    // handle. #fireClose is idempotent so close/error can't double-run it.
+    ws.onClose((info) => this.#fireClose(info));
   }
 
-  #fireClose(): void {
+  /**
+   * Why the socket dropped. Chrome's autoConnect endpoint closes with a specific
+   * code/reason when it REVOKES a grant (vs. a transport failure), and the two need
+   * very different handling: a revoked grant can be re-requested, a transport blip
+   * can simply be redialled. Without this, every drop looked identical.
+   */
+  get closeInfo(): CloseInfo {
+    return this.#closeInfo;
+  }
+
+  #fireClose(info: CloseInfo): void {
     if (this.#closeFired) return;
     this.#closeFired = true;
     this.#closed = true;
+    this.#closeInfo = info;
     for (const { reject } of this.#pending.values()) reject(new Error('CDP connection closed'));
     this.#pending.clear();
     for (const cb of this.#onCloseCbs) {
-      try { cb(); } catch { /* onClose callbacks are non-fatal */ }
+      try { cb(info); } catch { /* onClose callbacks are non-fatal */ }
     }
   }
 
@@ -52,29 +64,20 @@ export class Cdp implements CdpClient {
    * Lets the proxy discard its cached client and lazily reconnect. Returns an
    * unsubscribe fn. If already closed, the callback runs immediately.
    */
-  onClose(cb: () => void): () => void {
+  onClose(cb: (info: CloseInfo) => void): () => void {
     this.#onCloseCbs.add(cb);
-    if (this.#closed) { try { cb(); } catch { /* non-fatal */ } }
+    if (this.#closed) { try { cb(this.#closeInfo); } catch { /* non-fatal */ } }
     return () => this.#onCloseCbs.delete(cb);
   }
 
   /** Connect to a browser-level ws endpoint and resolve once the socket is open. */
   static async connect(wsEndpoint: string, timeoutMs = 10_000): Promise<Cdp> {
-    const ws = new WebSocket(wsEndpoint);
-    const client = new Cdp(ws);
-    try {
-      await withTimeout(client.#open, timeoutMs, `CDP connect timed out after ${timeoutMs}ms`);
-    } catch (error) {
-      // A timed-out autoConnect socket can still be pending in Chrome. Close it
-      // before the proxy decides whether another debugger connection is allowed.
-      client.close();
-      throw error;
-    }
-    return client;
+    const ws = await RawWebSocket.connect(wsEndpoint, timeoutMs);
+    return new Cdp(ws);
   }
 
   get connected(): boolean {
-    return !this.#closed && this.#ws.readyState === WebSocket.OPEN;
+    return !this.#closed && this.#ws.connected;
   }
 
   #onMessage(raw: string): void {
@@ -98,12 +101,17 @@ export class Cdp implements CdpClient {
     }
   }
 
-  send<T = any>(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<T> {
+  send<T = any>(
+    method: string,
+    params: Record<string, unknown> = {},
+    sessionId?: string,
+    timeoutMs?: number,
+  ): Promise<T> {
     if (this.#closed) return Promise.reject(new Error('CDP connection closed'));
     const id = this.#nextId++;
     const payload: Record<string, unknown> = { id, method, params };
     if (sessionId) payload.sessionId = sessionId;
-    return new Promise<T>((resolve, reject) => {
+    const promise = new Promise<T>((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
       try {
         this.#ws.send(JSON.stringify(payload));
@@ -112,6 +120,13 @@ export class Cdp implements CdpClient {
         reject(e instanceof Error ? e : new Error(String(e)));
       }
     });
+    if (!Number.isFinite(timeoutMs as number) || (timeoutMs as number) <= 0) return promise;
+    return withTimeout(promise, timeoutMs as number, `CDP request timed out after ${timeoutMs}ms: ${method}`).catch(
+      (err) => {
+        this.#pending.delete(id);
+        throw err;
+      },
+    );
   }
 
   on(method: string, handler: (params: any, sessionId?: string) => void): () => void {
