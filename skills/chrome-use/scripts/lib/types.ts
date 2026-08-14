@@ -15,8 +15,17 @@ export interface CdpClient {
    * is routed to that flattened target session (page-level domains); otherwise it
    * runs at the browser level.
    * Rejects with an Error carrying the CDP error message on protocol errors.
+   *
+   * `timeoutMs` optionally shortens the deadline for this one command. Use it for
+   * best-effort/optional calls so a target that never answers cannot hold a slot
+   * for the full default timeout.
    */
-  send<T = any>(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<T>;
+  send<T = any>(
+    method: string,
+    params?: Record<string, unknown>,
+    sessionId?: string,
+    timeoutMs?: number,
+  ): Promise<T>;
   /**
    * Subscribe to a CDP event. The handler receives the event params and the
    * originating sessionId (undefined for browser-level events). Returns an

@@ -46,6 +46,10 @@ interface TargetInfo {
  * behaviour is unchanged.
  */
 const ALLOW_EXTENSION_PAGES = process.env.CHROME_USE_ALLOW_EXTENSION === '1';
+// Emulation.setFocusEmulationEnabled is a best-effort nicety: some targets never
+// answer it. Cap it hard so an unanswered optional call can never occupy a slot
+// for the proxy's full request timeout (that is what wedged the shared proxy).
+const FOCUS_EMULATION_TIMEOUT_MS = Number(process.env.CHROME_USE_FOCUS_EMULATION_TIMEOUT_MS) || 3_000;
 
 function drivable(t: TargetInfo): boolean {
   return (
@@ -133,7 +137,7 @@ export class ClientState implements BrowserState {
       const idx = pages.findIndex((p) => p.targetId === pinned);
       const sessionId = await this.#attach(pinned);
       try {
-        await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
+        await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId, FOCUS_EMULATION_TIMEOUT_MS);
       } catch {
         /* not fatal */
       }
@@ -152,7 +156,7 @@ export class ClientState implements BrowserState {
     // reset when the session detaches at end of the invocation, so re-apply it
     // on every attach. Best-effort: not all targets support it.
     try {
-      await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
+      await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId, FOCUS_EMULATION_TIMEOUT_MS);
     } catch {
       /* not fatal */
     }
