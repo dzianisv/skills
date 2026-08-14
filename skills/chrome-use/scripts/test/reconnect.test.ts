@@ -181,8 +181,13 @@ test('keepalive uses one socket and a dropped CDP socket never auto-reconnects',
   const r1 = await client.send<any>('Browser.getVersion');
   assert.equal(r1.product, 'FakeChrome-1', 'first command should reach server1');
 
+  // Poll instead of sleeping a fixed 150ms: under parallel test load the 50ms
+  // keepalive tick can slip past a fixed window and flake the whole suite.
   const beforeKeepalive = server1.getVersionCount();
-  await new Promise((r) => setTimeout(r, 150));
+  const keepaliveDeadline = Date.now() + 5_000;
+  while (server1.getVersionCount() <= beforeKeepalive && Date.now() < keepaliveDeadline) {
+    await new Promise((r) => setTimeout(r, 25));
+  }
   assert.ok(server1.getVersionCount() > beforeKeepalive, 'keepalive must reuse the original CDP socket');
 
   // 2) Drop the CDP socket (as a Chrome restart / idle close would).
