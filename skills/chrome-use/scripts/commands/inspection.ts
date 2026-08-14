@@ -84,9 +84,21 @@ const get: Handler = async (ctx): Promise<CommandResult> => {
 
 const screenshot: Handler = async (ctx): Promise<CommandResult> => {
   const path = ctx.command.args[0] || `/tmp/chrome-use-${Date.now()}.png`;
+  // `fromSurface: true` captures the OS WINDOW surface, i.e. whichever tab is
+  // currently visible — NOT necessarily the tab this session is attached to. That
+  // silently produced screenshots of the wrong page (a real hazard when a
+  // screenshot is the evidence for a task). Bring the target tab to front first
+  // so the surface capture is guaranteed to be this tab; if that fails, fall back
+  // to a renderer-side capture that does not depend on visibility.
+  let fromSurface = true;
+  try {
+    await ctx.cdp.send('Page.bringToFront', {}, ctx.tab.sessionId, 5_000);
+  } catch {
+    fromSurface = false;
+  }
   const res = await ctx.cdp.send<any>(
     'Page.captureScreenshot',
-    { format: 'png', captureBeyondViewport: !!ctx.command.flags.full, fromSurface: true },
+    { format: 'png', captureBeyondViewport: !!ctx.command.flags.full, fromSurface },
     ctx.tab.sessionId,
   );
   const data = res?.data;

@@ -75,16 +75,28 @@ export class ProxyClient implements CdpClient {
   }
 
   /** Send a raw CDP command (or a `__control` method) through the proxy. */
-  send<T = any>(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<T> {
+  send<T = any>(
+    method: string,
+    params: Record<string, unknown> = {},
+    sessionId?: string,
+    timeoutMs?: number,
+  ): Promise<T> {
     if (this.#closed) return Promise.reject(new Error('Proxy connection closed'));
     const id = this.#nextId++;
     const frame: Record<string, unknown> = { id, method, params };
     if (sessionId) frame.sessionId = sessionId;
+    // Forward the shortened deadline so the PROXY also stops waiting early; a
+    // client-only timer would leave the proxy blocked on the same hung request.
+    if (Number.isFinite(timeoutMs as number) && (timeoutMs as number) > 0) frame.timeoutMs = timeoutMs;
+    const localTimeout =
+      Number.isFinite(timeoutMs as number) && (timeoutMs as number) > 0
+        ? Math.min(timeoutMs as number, this.#defaultTimeout)
+        : this.#defaultTimeout;
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
         reject(new Error(`CDP request timed out: ${method}`));
-      }, this.#defaultTimeout);
+      }, localTimeout);
       this.#pending.set(id, {
         resolve: (v) => {
           clearTimeout(timer);

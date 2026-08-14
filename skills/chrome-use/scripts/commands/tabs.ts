@@ -29,12 +29,16 @@ const tab: Handler = async (ctx): Promise<CommandResult> => {
   if (!sub) {
     await ctx.state.syncTabs();
     const lines: string[] = [];
-    const data: Array<{ tabId: string; url: string; title: string; active: boolean }> = [];
+    const data: Array<{ tabId: string; targetId: string; url: string; title: string; active: boolean }> = [];
     for (const t of ctx.state.tabs.values()) {
       const active = t.targetId === ctx.state.activeTargetId;
       const title = await tabTitle(ctx, t);
       lines.push(`${active ? '*' : ' '} ${t.tabId}  ${t.url}${title ? `  ${title}` : ''}`);
-      data.push({ tabId: t.tabId, url: t.url, title, active });
+      // targetId is exposed so a caller can pin work to THIS exact tab via
+      // CHROME_USE_PIN_TARGET. Positional tabIds (t1, t2 …) are recomputed per
+      // invocation and the active-tab pointer is shared machine-wide, so another
+      // concurrent session can move it between two of your commands.
+      data.push({ tabId: t.tabId, targetId: t.targetId, url: t.url, title, active });
     }
     return { ok: true, text: lines.join('\n') || 'No tabs open', data };
   }
@@ -44,7 +48,7 @@ const tab: Handler = async (ctx): Promise<CommandResult> => {
     const url = ctx.command.args[1];
     const incognito = ctx.command.flags.incognito === true;
     const created = await ctx.state.newTab(url, { incognito });
-    return { ok: true, text: `Opened ${created.tabId}`, data: { tabId: created.tabId } };
+    return { ok: true, text: `Opened ${created.tabId}`, data: { tabId: created.tabId, targetId: created.targetId } };
   }
 
   // tab close [tN]

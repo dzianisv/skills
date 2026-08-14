@@ -196,7 +196,7 @@ const inserttext: Handler = async (ctx): Promise<CommandResult> => {
 // the tab to the front. Idempotent; persists on the connection until navigation.
 const focuspage: Handler = async (ctx): Promise<CommandResult> => {
   const s = ctx.tab.sessionId;
-  try { await ctx.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, s); } catch { /* not fatal */ }
+  try { await ctx.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, s, 3_000); } catch { /* not fatal */ }
   try { await ctx.cdp.send('Page.bringToFront', {}, s); } catch { /* not fatal */ }
   return { ok: true, text: 'Focus emulation enabled + tab brought to front' };
 };
