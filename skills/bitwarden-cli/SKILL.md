@@ -72,6 +72,82 @@ bw sync --session "$BW_SESSION"
 
 Always `bw sync` after unlock to pull latest state.
 
+## "The decryption operation failed" — diagnose before you declare the vault lost (AGE-677)
+
+On 2026-08-18 an agent hit `bitwarden_crypto::keys::master_key: error=The decryption operation failed`,
+concluded the master password no longer decrypted the vault, and filed a total-lockout incident. The
+master password was fine. The agent had read the **wrong file**.
+
+Canonical master password path on this host:
+
+| Path | What it is |
+|---|---|
+| `~/.bitwarden_master_password` | **source of truth** (22 chars, `0600`) |
+| `~/.secrets/bitwarden` | symlink → the above (kept because this skill documents it) |
+| `~/.bitwarden_credentials` | `BW_CLIENTID` / `BW_CLIENTSECRET` / `BW_PASSWORD`; its `BW_PASSWORD` matches the file above |
+| `~/.secrets/bitwarden.stale-2026-08-18` | a 14-char **non-master** value that used to sit at `~/.secrets/bitwarden` and caused the false alarm |
+
+Before you conclude the vault is unrecoverable:
+
+1. **Cross-check every candidate file by hash, not by guess** — never echo them:
+   ```bash
+   for f in ~/.bitwarden_master_password ~/.secrets/bitwarden \
+            <(grep -E '^BW_PASSWORD=' ~/.bitwarden_credentials | sed 's/^BW_PASSWORD=//; s/"//g'); do
+     v=$(cat "$f"); printf '%s len=%s hash=%s\n' "$f" "${#v}" "$(printf %s "$v" | sha256sum | cut -c1-12)"
+   done
+   ```
+   Two files agreeing on a 22-char value is your master password. A lone short value is a different
+   secret that was misfiled — do not treat its failure as vault loss.
+2. **A wrong password is a local failure, not an account lockout.** `bw unlock` derives the key
+   locally; it sends no request. Trying a *different* candidate value is not a retry of the failed
+   attempt.
+3. **`bw sync` succeeding proves the account is healthy.** Sync uses the stored refresh token, and a
+   master-password change rotates the security stamp and kills that token. Sync OK ⇒ the password was
+   not rotated behind you ⇒ the problem is on your side of the disk.
+
+### `bw unlock` rotates the session — always write it back (AGE-677)
+
+Every successful `bw unlock` mints a **new** session key and invalidates the previous one. Verified
+2026-08-18: a session written to `~/.env.d/bitwarden.env` reported `Vault is unlocked!`, then failed
+`--check` immediately after an unrelated `bw unlock` ran in another shell.
+
+On a host where several agents share one vault, that means:
+
+- Never call `bw unlock` "just to check". Use `bw unlock --check --session "$BW_SESSION"` — it is
+  read-only and rotates nothing.
+- If you *do* unlock, you own the fallout: write the new value to `~/.env.d/bitwarden.env`
+  (`umask 077`, `chmod 600`) in the same command, or you have silently broken every other agent.
+- Prefer `source ~/.env.d/bitwarden.env` and reuse. Unlock only when `--check` says locked.
+
+## Never lock yourself out (AGE-677)
+
+`BW_SESSION` does **not** expire on a clock — it is the vault key, valid until something invalidates
+the local key blob. So the danger is never "the session timed out", it is an agent running one of
+these while it is the only access path:
+
+- `bw lock` — drops the session. Recoverable only with the master password.
+- `bw logout` — wipes `~/.config/Bitwarden CLI/data.json`. Requires a **full re-login** (email +
+  password + 2FA). Never run it to "get a clean state".
+- `bw login` on an already-authenticated host — same blast radius.
+
+If you need a clean session, `bw unlock` again. Never `logout`. Rotating or re-minting working vault
+access to tidy up is the exact failure `/home/azureuser/.paperclip/AGENTS.md` bans.
+
+Secret hygiene for these files: `~/.secrets/*` and `~/.env.d/bitwarden.env` are `0600`. Verify with
+`[ -n "$BW_SESSION" ]` or a 12-char hash prefix — never `echo` the value.
+
+**API key login (if not yet logged in):**
+```bash
+source ~/.bitwarden_credentials   # BW_CLIENTID, BW_CLIENTSECRET
+bw login --apikey
+NEW_SESSION=$(BW_PASSWORD=$(cat ~/.secrets/bitwarden) bw unlock --passwordenv BW_PASSWORD --raw)
+echo "export BW_SESSION=\"$NEW_SESSION\"" > ~/.env.d/bitwarden.env
+source ~/.env.d/bitwarden.env
+bw sync --session "$BW_SESSION"
+```
+
+Always `bw sync` after unlock to pull latest state.
+
 ## List secrets
 
 ```bash
