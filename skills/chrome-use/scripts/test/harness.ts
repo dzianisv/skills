@@ -1,9 +1,8 @@
 /**
  * Eval harness — my-browser style, host/VM safe.
  *
- * The suite exercises chrome-use's REAL connection path: it does NOT launch Chrome
- * and does NOT use --remote-debugging-port. It drives the chrome-use CLI against the
- * chrome-use proxy, which autoConnects to your real running Chrome via
+ * The suite exercises chrome-use's real connection path. It drives the chrome-use
+ * CLI against the chrome-use proxy, which autoConnects to your real running Chrome via
  * DevToolsActivePort (reusing the already-approved connection — no new dialog).
  *
  * Fixtures are loaded as `data:` URLs (encoded from test/fixtures/*.html), NOT from a

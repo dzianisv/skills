@@ -14,16 +14,20 @@
  * Control methods (answered without touching Chrome): `__status`, `__stop`.
  *
  * Daemonizes (double-fork) unless CHROME_USE_DAEMON=1. Exits 0 if another proxy
- * already owns the socket. Socket path overridable via CHROME_USE_SOCKET.
+ * already owns the socket. Socket path overridable via CHROME_USE_SOCKET, but only
+ * together with CHROME_USE_TEST_USER_DATA_DIR (an isolated test fixture) — any other
+ * override is rejected at startup so a stray socket name can't silently open a second
+ * connection to the real Chrome (see lib/socket-config.ts).
  *
  * Startup is gated by an exclusive lock file (`<socket>.lock`) so concurrent
  * launches can't race past the unlink+listen+connect sequence — that race was
  * the other source of duplicate dialogs (two proxies, two approved CDP
  * connections). `__status` reports a content-hash `version` of this file +
- * lib/cdp.ts + lib/devtools-port.ts so cli.ts can detect a running proxy that
- * predates a fix to those files and restart it once. Daemon stdout/stderr are
- * appended to `<socket>.log` (single-generation rotation at 5MB, ISO-timestamped
- * lines) instead of being discarded, so incidents can be reconstructed from logs.
+ * lib/cdp.ts + lib/devtools-port.ts, informational only — nothing currently
+ * restarts a live proxy on a version mismatch (see cli.ts's ensureProxy()).
+ * Daemon stdout/stderr are appended to `<socket>.log` (single-generation
+ * rotation at 5MB, ISO-timestamped lines) instead of being discarded, so
+ * incidents can be reconstructed from logs.
  *
  * `ensureConnected()` is single-flight (concurrent commands share one in-flight
  * CDP connect attempt — never open a second WebSocket while the first is still
@@ -32,7 +36,6 @@
  * automatic recovery would turn a broken browser into repeated dialogs.
  */
 import fs from 'node:fs';
-import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -41,8 +44,18 @@ import { fileURLToPath } from 'node:url';
 
 import { Cdp } from './lib/cdp.ts';
 import { buildWsEndpoint, buildWsEndpointAuto } from './lib/devtools-port.ts';
+import { resolveSocketConfig } from './lib/socket-config.ts';
 
-const SOCKET_PATH = process.env.CHROME_USE_SOCKET ?? `/tmp/chrome-use-${os.userInfo().uid}.sock`;
+// Validate before touching socket/lock files or connecting to Chrome.
+let socketConfig: ReturnType<typeof resolveSocketConfig>;
+try {
+  socketConfig = resolveSocketConfig();
+} catch (err) {
+  process.stderr.write(`[chrome-use proxy] ${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(1);
+}
+
+const SOCKET_PATH = socketConfig.socketPath;
 const LOCK_PATH = `${SOCKET_PATH}.lock`;
 const LOG_PATH = `${SOCKET_PATH}.log`;
 const MAX_LOCK_ATTEMPTS = 3;
@@ -53,15 +66,6 @@ const REQUEST_TIMEOUT_MS = Number(process.env.CHROME_USE_REQUEST_TIMEOUT_MS) || 
 const KEEPALIVE_MS = Number(process.env.CHROME_USE_KEEPALIVE_MS) || 20_000;
 /** CHROME_USE_TRACE=1 logs every relayed CDP method — used to bisect connection drops. */
 const TRACE = process.env.CHROME_USE_TRACE === '1';
-/**
- * Fail-closed-on-drop exists ONLY to avoid re-triggering Chrome's native
- * "Allow remote debugging?" dialog, which is specific to autoConnect against the
- * user's real profile. A dedicated agent instance launched with
- * `--remote-debugging-port=0` (see agent-chrome.sh) has no such dialog, so there
- * is nothing to protect and latching closed just wedges unattended work.
- * agent-chrome.sh sets this; the shared human-session path never does.
- */
-const ALLOW_RECONNECT = process.env.CHROME_USE_ALLOW_RECONNECT === '1';
 // How long a browser-level liveness probe gets before we conclude the CDP
 // connection itself (not just one request) is dead. See handle()'s catch block.
 const LIVENESS_PROBE_MS = Number(process.env.CHROME_USE_LIVENESS_PROBE_MS) || 5_000;
@@ -276,14 +280,6 @@ function stopKeepalive(): void {
 }
 
 function blockReconnect(reason: string): void {
-  if (ALLOW_RECONNECT) {
-    // No approval dialog can be triggered on this profile, so a dropped socket is
-    // just a transport failure: drop the cached handle and let the next command
-    // redial. Never latch.
-    stopKeepalive();
-    log(`${reason} Reconnect is allowed on this profile — the next command will redial.`);
-    return;
-  }
   if (connectionBlocked) return;
   connectionBlocked = reason;
   stopKeepalive();
@@ -358,16 +354,13 @@ function ensureConnected(): Promise<void> {
   // of opening a second one — only one dialog can be pending at a time.
   if (connecting) return connecting;
   connecting = (async () => {
-    // Always connect via DevToolsActivePort autoConnect (my-browser style).
-    // CHROME_USE_USER_DATA_DIR optionally points at a non-default Chrome profile;
-    // it still reads that profile's DevToolsActivePort — never a debugging port.
-    // Re-read on every (re)connect so a Chrome restart's new port/ws is picked up.
-    // If a specific profile dir is given, use it directly; otherwise auto-detect
-    // across all Chrome channels (stable, dev, beta, canary) and pick the first
-    // whose port is reachable — prevents stale/wrong-channel port file mismatches.
-    const userDataDir = process.env.CHROME_USE_USER_DATA_DIR || undefined;
-    const ws = userDataDir
-      ? buildWsEndpoint('stable', userDataDir)
+    // Production always auto-detects the user's real Chrome across stable, dev,
+    // beta, and canary channels. Tests may point an isolated proxy at a temporary
+    // DevToolsActivePort fixture via CHROME_USE_TEST_USER_DATA_DIR — resolveSocketConfig()
+    // at module load already rejected every other combination, so `testUserDataDir`
+    // here is only ever set together with a non-default, isolated test socket.
+    const ws = socketConfig.testUserDataDir
+      ? buildWsEndpoint('stable', socketConfig.testUserDataDir)
       : await buildWsEndpointAuto();
     log(`Connecting to ${ws}`);
     log('Chrome shows a one-time "Allow remote debugging?" dialog — click Allow (waits up to 5 min).');

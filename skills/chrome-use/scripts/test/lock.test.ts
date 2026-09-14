@@ -155,7 +155,7 @@ test('two proxies launched concurrently: only one ever serves / connects to CDP'
     ...process.env,
     CHROME_USE_DAEMON: '1',
     CHROME_USE_SOCKET: sockPath,
-    CHROME_USE_USER_DATA_DIR: udd,
+    CHROME_USE_TEST_USER_DATA_DIR: udd,
   };
 
   let procA: ChildProcess | undefined;

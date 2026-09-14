@@ -113,7 +113,7 @@ test('status control probe (__status) resolves fast while a CDP connect is hung/
       ...process.env,
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
-      CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_TEST_USER_DATA_DIR: udd,
     },
     stdio: 'ignore',
   });
@@ -157,7 +157,7 @@ test('real `chrome-use status` CLI returns within a few seconds when Chrome is n
       ...process.env,
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
-      CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_TEST_USER_DATA_DIR: udd,
     },
     stdio: 'ignore',
   });
@@ -168,7 +168,7 @@ test('real `chrome-use status` CLI returns within a few seconds when Chrome is n
   const start = Date.now();
   const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
     cli = spawn(process.execPath, ['--experimental-strip-types', CLI, 'status', '--json'], {
-      env: { ...process.env, CHROME_USE_SOCKET: sockPath, CHROME_USE_USER_DATA_DIR: udd },
+      env: { ...process.env, CHROME_USE_SOCKET: sockPath, CHROME_USE_TEST_USER_DATA_DIR: udd },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

@@ -133,6 +133,35 @@ async function waitForSocket(sockPath: string, timeoutMs = 8000): Promise<void> 
   }
 }
 
+// CLI clients exit independently of the daemon; capture its PID for cleanup.
+function getDaemonPid(sockPath: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const c = net.createConnection({ path: sockPath });
+    const timer = setTimeout(() => {
+      c.destroy();
+      reject(new Error('Timed out reading the test daemon PID'));
+    }, 2000);
+    let buf = '';
+    c.setEncoding('utf8');
+    c.on('connect', () => c.write(JSON.stringify({ id: 1, method: '__status' }) + '\n'));
+    c.on('data', (chunk) => {
+      buf += chunk;
+      const nl = buf.indexOf('\n');
+      if (nl === -1) return;
+      clearTimeout(timer);
+      c.destroy();
+      try {
+        const pid: unknown = JSON.parse(buf.slice(0, nl)).result?.pid;
+        assert.ok(typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0, 'invalid test daemon PID');
+        resolve(pid);
+      } catch (error) {
+        reject(error);
+      }
+    });
+    c.on('error', (error) => { clearTimeout(timer); reject(error); });
+  });
+}
+
 test('concurrent CLI invocations only trigger one upstream CDP connect', async (t) => {
   const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-cli-concurrency-'));
   const sockPath = path.join(udd, 'proxy.sock');
@@ -143,7 +172,7 @@ test('concurrent CLI invocations only trigger one upstream CDP connect', async (
     ...process.env,
     CHROME_USE_DAEMON: '1',
     CHROME_USE_SOCKET: sockPath,
-    CHROME_USE_USER_DATA_DIR: udd,
+    CHROME_USE_TEST_USER_DATA_DIR: udd,
   };
 
   const procs = Array.from({ length: 10 }, () => spawn(process.execPath, ['--experimental-strip-types', CLI, 'status'], {
@@ -151,15 +180,24 @@ test('concurrent CLI invocations only trigger one upstream CDP connect', async (
     stdio: 'pipe',
   }));
 
+  let daemonPid: number | undefined;
   t.after(async () => {
     for (const proc of procs) {
       try { proc.kill('SIGTERM'); } catch { /* ignore */ }
+    }
+    if (daemonPid !== undefined) {
+      try {
+        process.kill(daemonPid, 'SIGTERM');
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) throw error;
+      }
     }
     try { await fakeCdp.close(); } catch { /* ignore */ }
     try { fs.rmSync(udd, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
   await waitForSocket(sockPath);
+  daemonPid = await getDaemonPid(sockPath);
   await new Promise((r) => setTimeout(r, 2500));
 
   assert.equal(fakeCdp.getConnectCount(), 1, 'only one proxy should connect to the CDP target during concurrent startup');

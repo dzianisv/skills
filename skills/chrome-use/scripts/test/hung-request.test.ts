@@ -192,7 +192,7 @@ async function startHarness(t: any, prefix: string): Promise<Harness> {
       ...process.env,
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
-      CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_TEST_USER_DATA_DIR: udd,
       // Keep the test fast: short request deadline and short liveness probe.
       CHROME_USE_REQUEST_TIMEOUT_MS: '600',
       CHROME_USE_LIVENESS_PROBE_MS: '600',
