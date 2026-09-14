@@ -14,7 +14,7 @@
  * a human/maintainer — never exposed through the agent CLI.
  *
  * Fully isolated: the proxy runs on a throwaway CHROME_USE_SOCKET in a mkdtemp
- * dir with an empty CHROME_USE_USER_DATA_DIR (so it starts, stays alive, and
+ * dir with an empty CHROME_USE_TEST_USER_DATA_DIR (so it starts, stays alive, and
  * simply never completes a CDP connection). The real user proxy socket
  * (/tmp/chrome-use-<uid>.sock) and the live proxy are never referenced.
  *
@@ -84,10 +84,11 @@ function probeStatus(sockPath: string): Promise<any> {
 function runCli(
   args: string[],
   sockPath: string,
+  testUserDataDir: string,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const cli = spawn(process.execPath, ['--experimental-strip-types', CLI, ...args], {
-      env: { ...process.env, CHROME_USE_SOCKET: sockPath },
+      env: { ...process.env, CHROME_USE_SOCKET: sockPath, CHROME_USE_TEST_USER_DATA_DIR: testUserDataDir },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -116,7 +117,7 @@ test('`chrome-use stop` is rejected (unknown command, exit 1) and leaves an isol
   // user-data-dir → it has no DevToolsActivePort to connect to, so it stays up
   // and simply reports connected:false — perfect for asserting it is untouched.
   const proxy: ChildProcess = spawn(process.execPath, [PROXY], {
-    env: { ...process.env, CHROME_USE_DAEMON: '1', CHROME_USE_SOCKET: sockPath, CHROME_USE_USER_DATA_DIR: udd },
+    env: { ...process.env, CHROME_USE_DAEMON: '1', CHROME_USE_SOCKET: sockPath, CHROME_USE_TEST_USER_DATA_DIR: udd },
     stdio: 'ignore',
   });
   t.after(() => {
@@ -138,7 +139,7 @@ test('`chrome-use stop` is rejected (unknown command, exit 1) and leaves an isol
   const pidBefore = before.pid as number;
   assert.doesNotThrow(() => process.kill(pidBefore, 0), 'proxy process should be alive before the stop attempt');
 
-  const res = await runCli(['stop'], sockPath);
+  const res = await runCli(['stop'], sockPath, udd);
 
   // Rejected via the normal unknown-command path, non-zero exit.
   assert.equal(res.code, 1, `stop must exit non-zero (stderr: ${res.stderr})`);

@@ -1,8 +1,7 @@
 # chrome-use eval suite
 
-A golden test set that proves chrome-use actually drives a browser — **my-browser
-style**: it exercises the real connection path (DevToolsActivePort autoConnect), not a
-`--remote-debugging-port` instance. Zero dependencies (Node's built-in `node:test`).
+A golden test set that proves chrome-use drives the user's real browser through
+DevToolsActivePort autoConnect. Zero dependencies (Node's built-in `node:test`).
 
 ```bash
 cd skills/chrome-use/scripts

@@ -195,7 +195,7 @@ test('single-flight: N concurrent commands while disconnected trigger exactly ON
       ...process.env,
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
-      CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_TEST_USER_DATA_DIR: udd,
     },
     stdio: 'ignore',
   });
@@ -237,7 +237,7 @@ test('connection failure: never opens another debugger connection', async (t) =>
       ...process.env,
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
-      CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_TEST_USER_DATA_DIR: udd,
     },
     stdio: 'ignore',
   });
@@ -289,7 +289,7 @@ test('approval timeout: never opens another debugger connection', async (t) => {
       ...process.env,
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
-      CHROME_USE_USER_DATA_DIR: udd,
+      CHROME_USE_TEST_USER_DATA_DIR: udd,
       CHROME_USE_CONNECT_TIMEOUT_MS: '100',
       CHROME_USE_RECONNECT_COOLDOWN_MS: '50',
     },
