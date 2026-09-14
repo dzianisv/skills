@@ -8,7 +8,6 @@
  * behavior can change without restarting the proxy — so no repeated Chrome prompts.
  */
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -18,6 +17,7 @@ import { parseArgv } from './lib/argv.ts';
 import { ProxyClient } from './lib/proxy-client.ts';
 import { ClientState } from './lib/session.ts';
 import type { Command, CommandResult, Ctx, Handler, TabSession } from './lib/types.ts';
+import { resolveSocketConfig } from './lib/socket-config.ts';
 
 import { handlers as navigationHandlers } from './commands/navigation.ts';
 import { handlers as interactionHandlers } from './commands/interaction.ts';
@@ -25,7 +25,14 @@ import { handlers as inspectionHandlers } from './commands/inspection.ts';
 import { handlers as tabsHandlers } from './commands/tabs.ts';
 import { handlers as cookiesHandlers } from './commands/cookies.ts';
 
-const SOCKET_PATH = process.env.CHROME_USE_SOCKET ?? `/tmp/chrome-use-${os.userInfo().uid}.sock`;
+// Reject unsafe overrides before probing or spawning any proxy.
+let SOCKET_PATH: string;
+try {
+  SOCKET_PATH = resolveSocketConfig().socketPath;
+} catch (err) {
+  process.stderr.write('Error: ' + (err instanceof Error ? err.message : String(err)) + '\n');
+  process.exit(1);
+}
 const PROXY_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'proxy.ts');
 const LOG_PATH = `${SOCKET_PATH}.log`;
 const PROXY_START_LOCK_PATH = `${SOCKET_PATH}.ensure.lock`;
@@ -389,8 +396,9 @@ async function main(): Promise<void> {
   // through to the normal unknown-command path below (exit 1, proxy untouched).
   // Terminating a genuinely broken proxy is an explicit out-of-band OS action for
   // a human/maintainer (e.g. `kill <pid>`), never something the agent CLI exposes.
-  // (`__stop` still exists as an internal control method, used only by
-  // ensureProxy()'s one-shot restart when the proxy is running stale code.)
+  // (`__stop` still exists as an internal proxy control method, but nothing in
+  // this CLI calls it: ensureProxy() never restarts a live proxy, on a version
+  // mismatch or otherwise — see its docstring above.)
 
   const handler = registry[command.name];
   if (!handler) {

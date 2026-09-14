@@ -42,7 +42,7 @@ Drive real and remote Chrome browsers via CDP — your live profile, cookies, se
 
 | Skill | What it does | Install |
 |-------|--------------|---------|
-| [`chrome-use`](skills/chrome-use) | Use when the user wants to drive their real running Chrome with agent-browser-style commands — open pages, snapshot interactive elements as @e1 refs, click, fill, type, screenshot, scroll, eval. | `npx -y skills add dzianisv/skills -s chrome-use -g` |
+| [`chrome-use`](skills/chrome-use) | Drive the user's real running Chrome with agent-browser-style commands: open pages, snapshot interactive elements as @e1 refs, click, fill, type, screenshot, scroll, and eval. | `npx -y skills add dzianisv/skills -s chrome-use -g` |
 | [`chrome-devtools-remote`](skills/chrome-devtools-remote) | Drive a remote chrome-devtools-mcp server (typically on a tailnet) over HTTPS using the chrome-devtools CLI. | `npx -y skills add dzianisv/skills -s chrome-devtools-remote -g` |
 | [`duckdns-domain`](skills/duckdns-domain) | Register a free DuckDNS subdomain (*.duckdns.org) and point it at a server IP using the Chrome DevTools browser automation. | `npx -y skills add dzianisv/skills -s duckdns-domain -g` |
 | [`spaceship-dns`](skills/spaceship-dns) | Manage DNS records for domains registered at Spaceship (spaceship.com). | `npx -y skills add dzianisv/skills -s spaceship-dns -g` |
