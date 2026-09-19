@@ -12,8 +12,11 @@
  *  1. A request that hangs while the BROWSER-level connection still answers must
  *     fail only that request. The proxy stays connected and usable.
  *  2. A request that hangs because the connection really is dead (browser-level
- *     probe also unanswered) must still latch the proxy closed — that invariant
- *     ("never open a second dialog automatically") is preserved.
+ *     probe also unanswered) must drop that dead handle and reconnect in the
+ *     background, returning a retryable error. It must NOT latch the proxy closed:
+ *     reconnecting to an already-approved running Chrome raises no dialog at all
+ *     (measured 2026-09-19 — approval is per browser session, not per debugger
+ *     client), so failing closed only stranded every session behind a manual kill.
  *
  * Both run against the REAL proxy.ts over its real Unix socket with a fake
  * in-process CDP server — no real Chrome, no real dialogs.
@@ -85,6 +88,8 @@ interface FakeCdp {
   wsPath: string;
   /** Stop answering EVERYTHING, including browser-level Browser.getVersion. */
   goDark: () => void;
+  /** Start answering again — lets us prove the proxy recovers on its own. */
+  lightUp: () => void;
   close: () => Promise<void>;
 }
 
@@ -134,6 +139,7 @@ function startPartiallyHangingCdp(): Promise<FakeCdp> {
         port,
         wsPath: '/devtools/browser/fake-hang',
         goDark: () => { dark = true; },
+        lightUp: () => { dark = false; },
         close: () => new Promise<void>((r) => { for (const s of sockets) s.destroy(); server.close(() => r()); }),
       });
     });
@@ -228,26 +234,54 @@ test('a hung request does NOT block the proxy while the CDP connection still ans
   assert.equal(status.connectionBlocked, null, 'proxy must NOT be latched closed by one hung request');
 });
 
-test('a hung request DOES block the proxy when the connection is genuinely unresponsive', async (t) => {
+/**
+ * The mirror case: the request hangs AND the browser-level probe also goes
+ * unanswered, so the connection really is dead. The proxy must drop that dead
+ * handle — but it must NOT latch closed. This test previously asserted the
+ * opposite ("must latch closed rather than silently reconnecting into a new
+ * native dialog"); that rationale was measured on 2026-09-19 and is false.
+ * Reconnecting to an already-approved, running Chrome raises no dialog at all
+ * (fresh connect + Browser.getVersion in ~1.4s against Chrome 152) because
+ * approval is granted per browser session, not per debugger client. Latching here
+ * simply stranded every session on the machine behind a manual proxy kill.
+ */
+test('a hung request on a dead connection drops it and self-heals — it does NOT latch the proxy closed', async (t) => {
   const { client, fake } = await startHarness(t, 'cu-hung-dead-');
 
   fake.goDark(); // browser-level probe will now hang too
   const message = await expectRejection(client.send(HANGING_METHOD, { enabled: true }, 'fake-session'));
-  assert.match(message, /timed out/);
+  assert.match(message, /timed out/, 'the hung request itself must still fail');
+  assert.match(
+    message,
+    /reconnecting automatically/,
+    'the caller must be told this is retryable, not told to go kill the proxy',
+  );
 
   const status = await client.send<any>('__status');
   assert.equal(status.connected, false, 'a dead connection must be dropped');
-  assert.match(
-    String(status.connectionBlocked ?? ''),
-    /unresponsive/,
-    'the proxy must latch closed rather than silently reconnecting into a new native dialog',
-  );
+  assert.equal(status.connectionBlocked, null, 'a dead socket is a reconnect case, not a human-approval case');
+  assert.equal(status.reconnecting, true, '__status must advertise that recovery is in progress');
 
-  const next = await expectRejection(client.send('Browser.getVersion'));
-  assert.match(
-    next,
-    /will not open another remote-debugging dialog/,
-    'later commands must fail fast without triggering another approval dialog',
+  // Chrome starts answering again; the proxy must recover with no restart and no
+  // human. Retry because the reconnect may land a moment after the probe failed.
+  fake.lightUp();
+  let product: string | undefined;
+  const deadline = Date.now() + 15_000;
+  let lastErr = '';
+  while (Date.now() < deadline) {
+    try {
+      product = (await client.send<any>('Browser.getVersion')).product;
+      break;
+    } catch (err: any) {
+      lastErr = String(err?.message ?? err);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+  assert.equal(product, 'FakeChrome-hang', `the proxy must serve commands again once Chrome answers (last error: ${lastErr})`);
+  assert.equal(
+    (await client.send<any>('__status')).connectionBlocked,
+    null,
+    'nothing in this sequence may ever latch the shared proxy closed',
   );
 });
 

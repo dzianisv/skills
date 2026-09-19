@@ -51,14 +51,33 @@ const tab: Handler = async (ctx): Promise<CommandResult> => {
     return { ok: true, text: `Opened ${created.tabId}`, data: { tabId: created.tabId, targetId: created.targetId } };
   }
 
-  // tab close [tN]
+  // tab close [tN|targetId]
   if (sub === 'close') {
     const target = ctx.command.args[1];
     let victim: TabSession | undefined;
     if (target) {
-      victim = await ctx.state.getTab(target);
+      // Accept a stable targetId as well as a positional tN. Positional ids are
+      // recomputed on every invocation, so a concurrent session opening or
+      // closing a tab between two of your commands shifts them under you — a
+      // targetId cannot drift.
+      await ctx.state.syncTabs();
+      victim = ctx.state.tabs.get(target) ?? (await ctx.state.getTab(target));
       if (!victim) return { ok: false, error: `No such tab: ${target}` };
     } else {
+      // Closing is destructive and irreversible. The active-tab pointer is
+      // shared machine-wide, so a bare `close` can silently destroy a tab that
+      // another concurrent session is mid-way through loading — tabs have
+      // disappeared under running tasks exactly this way. Only close by
+      // implicit "active" when this shell has pinned the tab it owns.
+      if (!process.env.CHROME_USE_PIN_TARGET) {
+        return {
+          ok: false,
+          error:
+            'Refusing to close a tab chosen by the shared active-tab pointer: another session may own it.\n' +
+            'Either set CHROME_USE_PIN_TARGET to the targetId your task created, or pass an explicit tab: ' +
+            '`tab close <targetId>` (get it from `tab --json`).',
+        };
+      }
       victim = ctx.tab;
     }
     const id = victim.tabId;
