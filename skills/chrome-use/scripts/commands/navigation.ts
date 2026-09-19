@@ -98,6 +98,17 @@ const reload: Handler = async (ctx): Promise<CommandResult> => {
 };
 
 const close: Handler = async (ctx): Promise<CommandResult> => {
+  // Same guard as `tab close` with no argument: the active-tab pointer is shared
+  // machine-wide, so without a pin this closes whichever tab another concurrent
+  // session last touched. Destructive and unrecoverable — refuse to guess.
+  if (!process.env.CHROME_USE_PIN_TARGET) {
+    return {
+      ok: false,
+      error:
+        'Refusing to close a tab chosen by the shared active-tab pointer: another session may own it.\n' +
+        'Set CHROME_USE_PIN_TARGET to the targetId your task created, or use `tab close <targetId>`.',
+    };
+  }
   const tabId = ctx.tab.tabId;
   await ctx.state.closeTab(ctx.tab.targetId);
   return { ok: true, text: `Closed tab ${tabId}` };

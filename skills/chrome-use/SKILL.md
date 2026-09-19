@@ -64,16 +64,35 @@ Acting on a stale ref returns a clear "page changed — re-run `snapshot`" error
 
 ## Installation and shared connection
 
-Use one maintained skill directory. On this machine, `~/.agents/skills/chrome-use`
-and `~/.hermes/skills/browser-control/chrome-use` must resolve to the same directory;
-keep Hermes linked to it instead of installing a separate copy. Confirm with
-`realpath` on both paths. An old copy can retain automatic reconnect/restart
-behavior even after the maintained skill is fixed.
+Use one maintained skill directory — **every install path must be a symlink to it, never a copy.**
+On this machine the canonical directory is `~/workspace/skills/skills/chrome-use`, and both
+`~/.agents/skills/chrome-use` and every Hermes path
+(`~/.hermes/skills/browser-control/chrome-use` and
+`~/.hermes/profiles/*/skills/browser-control/chrome-use`) must resolve to it.
+
+Verify with:
+
+```bash
+for p in ~/.agents/skills/chrome-use \
+         ~/.hermes/skills/browser-control/chrome-use \
+         ~/.hermes/profiles/*/skills/browser-control/chrome-use; do
+  printf '%s -> %s\n' "$p" "$(realpath "$p")"
+done | sort -u -k3
+```
+
+All lines must show the same target. **A stale copy is the known cause of repeated
+"Allow remote debugging?" dialogs.** Pre-2026-08 copies shipped an `ensureProxy()` that
+compared a content hash of the running proxy against its own files and, on any mismatch,
+**stopped the shared proxy and respawned its own** — so a single out-of-date copy tore
+down a healthy proxy every time it ran. Per-profile installs made this worse: seven
+frozen copies fought the maintained one, and each teardown cost a dialog. The current
+CLI never restarts a live proxy, and the proxy now refuses `__stop`, but an old copy can
+still misbehave, so keep every path symlinked.
 
 Production uses `/tmp/chrome-use-<uid>.sock`. Leave `CHROME_USE_SOCKET` unset:
-task-specific socket overrides are rejected because each independent proxy can
-trigger another Chrome approval. Isolated sockets are for the offline fake-CDP
-tests only; never use test configuration to bypass production sharing.
+task-specific socket overrides are rejected because each independent proxy opens its own
+Chrome connection. Isolated sockets are for the offline fake-CDP tests only; never use
+test configuration to bypass production sharing.
 
 ## Concurrency: isolate tasks with pinned tabs
 
@@ -100,7 +119,7 @@ If your tool starts a fresh shell for each invocation, set `CHROME` and
 |---------|---------|-------|
 | `open` / `goto` / `navigate` | `$CHROME open https://example.com` | Aliases; no url → `about:blank` |
 | `back` / `forward` / `reload` | `$CHROME back` | History navigation |
-| `close` | `$CHROME close` | Close the pinned/active tab, only if task-owned. A positional argument does not select a tab: `close t3` does not mean close t3. Use the task's pinned target, or `tab close <tN>` after resolving the current list. |
+| `close` | `$CHROME close` | Closes the **pinned** tab. Requires `CHROME_USE_PIN_TARGET`; without a pin it refuses, because the active-tab pointer is shared and you would be closing someone else's tab. A positional argument does not select a tab: `close t3` does not mean close t3 — use `tab close <targetId>`. |
 | `snapshot` | `$CHROME snapshot -i --json -s "#login"` | `-i` interactive-only; assigns `@eN`; `-s` scopes to a CSS root; `--json` structured output |
 | `click` | `$CHROME click @e3 --new-tab` | Trusted mouse event; `--new-tab` opens link in a new tab |
 | `fill` | `$CHROME fill @e1 "me@example.com"` | Clears the field, then inserts text |
@@ -112,7 +131,7 @@ If your tool starts a fresh shell for each invocation, set `CHROME` and
 | `eval` | `$CHROME eval "document.title"` | `Runtime.evaluate`; returns JSON result |
 | `scroll` | `$CHROME scroll down 800` | `up\|down\|left\|right [px]` |
 | `wait` | `$CHROME wait "#ready" --text Done --url /dashboard` | Selector, ms duration, text, or url pattern |
-| `tab` | `$CHROME tab new https://github.com` | `tab` (list) / `tab new [url]` / `tab <tN>` (switch) / `tab close [tN]`; `--json` also returns each tab's stable `targetId` |
+| `tab` | `$CHROME tab new https://github.com` | `tab` (list) / `tab new [url]` / `tab <tN>` (switch) / `tab close <tN\|targetId>`; `--json` also returns each tab's stable `targetId`. `tab close` with no argument requires a pin |
 | `cookies` | `$CHROME cookies set session abc123` | `cookies` (list) / `cookies set <name> <val>` / `cookies clear`; scoped to active tab's URL |
 | `status` | `$CHROME status` | Daemon + browser health, page count |
 
@@ -157,12 +176,66 @@ frames of any size. Regression coverage lives in `test/large-message.test.ts` �
 
 Two pieces with a deliberate split:
 
-- **The proxy is a transparent CDP relay.** It holds *one* approved CDP connection to Chrome and forwards raw `{method, params, sessionId}` frames to it. It contains **no command logic** — no snapshot walker, no selector resolver, no input sequences. Because Chrome's permission dialog fires on every *new* debugger client, funnelling everything through this one long-lived connection means the dialog fires **once per proxy lifetime**.
+- **The proxy is a transparent CDP relay.** It holds *one* connection to Chrome and forwards raw `{method, params, sessionId}` frames to it. It contains **no command logic** — no snapshot walker, no selector resolver, no input sequences. Funnelling every session through this single long-lived connection is what keeps approval alive: Chrome's approval lapses when the last approved client disconnects, so one never-closing client means one dialog, ever. It is also the single place to run the heartbeat and reconnect loop.
 - **The CLI holds all the logic.** Each `chrome-use …` invocation is a fresh one-shot process: it parses argv, builds the raw CDP payloads itself, sends them through the proxy, prints the result, and exits. It auto-starts the proxy (double-fork) if the socket is absent.
 
 A key consequence: since command behavior lives entirely in the CLI, **you can change/upgrade command logic without restarting the proxy** — so the approval prompt is not re-triggered. Proxy code changes require a deliberate maintainer transition to take effect; the CLI never automatically restarts a live proxy just because its code changed.
 
 State that must outlive a one-shot CLI process lives outside it: the **active-tab pointer** is a small file (`/tmp/chrome-use-active-<uid>`), and **`@eN` refs live in the page** (`window.__chromeUseRefs`), so they persist across invocations and reset naturally on navigation. Page sessions are attached lazily (only the tab a command touches) and detached when the command finishes.
+
+## Connection loss and recovery
+
+The proxy **reconnects on its own**. You never need to restart it, and you must never
+ask the user to kill it.
+
+```
+        ┌──────────────┐  ws close / heartbeat fails  ┌───────────────┐
+        │  connected   │ ───────────────────────────▶ │ reconnecting  │
+        │  (heartbeat  │ ◀─────────────────────────── │ backoff 0.5s  │
+        │   every 20s) │        handshake ok          │ …→ 30s cap    │
+        └──────────────┘                              └───────┬───────┘
+                                                              │ 2 connect attempts
+                                                              │ stall to timeout
+                                                              ▼
+                                                      ┌───────────────┐
+                                                      │    blocked    │  ← human clicks
+                                                      │ (dialog       │    Allow, then
+                                                      │  unanswered)  │    retry
+                                                      └───────────────┘
+```
+
+- **Heartbeat.** Every 20s the proxy sends a browser-level `Browser.getVersion`. This is
+  a *detector*, not just a keepalive: it catches half-open connections where TCP is still
+  up but Chrome stopped answering — the usual cause of a "stale connection".
+- **Backoff.** A lost connection is retried at 0.5s, 1s, 2s … capped at 30s, **forever**.
+  Close Chrome and the proxy just keeps retrying; reopen it and the proxy heals with no
+  dialog and no restart. A user command cancels the pending backoff and attempts at once,
+  so you never wait out the timer.
+- **Blocked** is the single state a human must resolve, and it means one specific thing:
+  two consecutive connect attempts stalled to their timeout, which is the signature of an
+  **unanswered approval dialog**. Fix it by clicking **Allow** at
+  `chrome://inspect/#remote-debugging` — not by restarting anything.
+
+Why reconnecting is worth attempting: Chrome's approval behaves as follows (measured
+on Chrome 152) — while an approved client is **still connected**, an additional
+browser-level CDP connection is accepted immediately with no dialog (~1.4s, 21 hours
+after the original approval). But once the **last** approved client disconnects,
+approval lapses and the next connect stalls on a fresh dialog.
+
+So a reconnect is a bounded gamble, not a free action: a transient blip reconnects
+silently, a lapsed approval stalls and needs one human click. An earlier version of
+this skill assumed the worst case always applied and failed closed forever on any
+drop. That was strictly worse — its documented cure was for a human to kill the proxy
+and re-approve, i.e. the same click preceded by a pointless restart, while every other
+session on the machine stayed broken in the meantime.
+
+**The corollary is the real reason never to restart the proxy: it is the last approved
+client.** Killing it lapses Chrome's approval and *guarantees* a new dialog. That is
+the opposite of a fix.
+
+Requests are **not** replayed across a reconnect. A click or form submit may already have
+reached Chrome before the socket died, so the proxy returns a retryable error instead of
+risking a duplicate action. Retrying is your job, and it is cheap.
 
 ## Connection contract
 
@@ -197,14 +270,15 @@ File format: two lines — port number, then WebSocket path:
 | Permission dialog appears on every run | New connections, task-specific sockets, or an outdated skill copy | Use the canonical installation and default socket above. Read `status`; preserve a healthy shared proxy rather than restarting it |
 | Production socket override rejected | `CHROME_USE_SOCKET` points to a task-specific socket | Unset the override and isolate the task with `CHROME_USE_PIN_TARGET`; do not switch to another socket after a failure |
 | Connection hangs on first command | Chrome is showing the "Allow remote debugging?" dialog | Switch to Chrome, click **Allow** before its five-minute timeout |
-| `will not open another remote-debugging dialog` | CDP approval, connection, or request failed | Do not retry browser commands. A human must stop proxy PID from `chrome-use status`, then run one browser command while ready to approve one dialog |
+| `will not open another remote-debugging dialog` | Chrome refused a debugging connection twice in a row — an approval dialog is waiting unanswered | Open `chrome://inspect/#remote-debugging`, click **Allow**, then retry the command. The proxy reconnects itself; killing it does not grant approval |
 | `page changed — re-run snapshot` | Acting on a stale `@eN` after navigation | Re-run `snapshot`, then use the fresh refs |
 | `Daemon did not start in time` | Daemon failed to launch or Chrome not responding | Go to `chrome://inspect/#remote-debugging`, click **Allow**; check `./chrome-use status` |
 | `/json/version` connection refused | Expected in autoConnect mode | Use the bundled CLI; the proxy handles `DevToolsActivePort` discovery and reuses its connection |
 | Another debugger attached error | DevTools panel open on the same tab | Close DevTools panels / disconnect other debuggers |
-| `Chrome debugging connection closed` | Chrome restarted or CDP socket dropped | Proxy fails closed. It will not auto-reconnect or create another dialog. A human must stop proxy PID from `chrome-use status`, then run one browser command while ready to approve it. |
+| `connection dropped; the proxy is reconnecting automatically` | Chrome restarted, slept, or the CDP socket dropped | **Just retry the command.** The proxy reconnects on its own with backoff. Do not restart anything |
+| `status` says `reconnecting` | Chrome is closed, restarting, or briefly unreachable | Make sure Chrome is running, then retry. The proxy retries forever and self-heals — no restart needed |
 | A single command times out but `status` still says `proxy up` | One wedged page/target (or an optional per-target command) hung; the browser-level connection is fine | Expected since the 2026-08-14 fix: only that request fails. Retry the command, or re-run it on a fresh tab. Do **not** treat this as a dead proxy. |
-| You think the proxy is broken and want to "reset" it | The proxy is **shared** and holds the one approved Chrome connection; there is intentionally **no `chrome-use stop`** | Run `chrome-use status` and report it. A human/maintainer handles a genuinely wedged proxy out-of-band; keep the user's Chrome running |
+| You think the proxy is broken and want to "reset" it | The proxy is **shared** and holds the Chrome connection; there is intentionally **no `chrome-use stop`**, and `__stop` is refused | Run `chrome-use status` and report it. Restarting fixes nothing the proxy does not already fix itself |
 
 ## Testing
 
@@ -234,7 +308,8 @@ one-time approval. `test:offline` skips them. See `scripts/test/README.md`.
 
 ## Do NOT
 
-- **Do not try to stop or restart the proxy.** There is intentionally **no `chrome-use stop`** command — the proxy is **shared across all sessions** and holds the single approved Chrome connection, so stopping it forces a fresh "Allow remote debugging?" dialog for **everyone**. If a session looks unhealthy, run `chrome-use status` and **report** it. Terminating a genuinely broken proxy is an explicit **out-of-band OS action for a human/maintainer** (e.g. `kill <pid>`), never something an agent does.
+- **Do not stop or restart the proxy, and do not tell the user to.** There is intentionally **no `chrome-use stop`**, and the proxy refuses the internal `__stop` method. The proxy is **shared across all sessions** and is the *last approved client* — Chrome's remote-debugging approval lapses the moment it disconnects, so killing it **guarantees** the dialog you were trying to avoid. It also recovers from connection loss by itself (see "Connection loss and recovery"). If a session looks unhealthy, run `chrome-use status` and **report** it.
+- **Do not treat a dropped connection as fatal.** `connection dropped; the proxy is reconnecting automatically` means: retry the command. It is transient.
 - Kill or restart a **healthy proxy** — it forces a new Chrome permission dialog. The CLI probes and reuses it automatically. (Changing *command* logic does not require a proxy restart — only changes to `proxy.ts` do.)
 - **Do not swap `lib/ws.ts` back to Node's global `WebSocket`.** It caps messages at 4 MiB over `permessage-deflate` and destroys the socket past that — which is exactly the bug that made `screenshot` kill browser automation machine-wide.
 - Launch, clone, seed, or switch to another Chrome profile. Wait for access to the user's running Chrome instead.
