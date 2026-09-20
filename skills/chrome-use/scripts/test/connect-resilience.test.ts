@@ -173,6 +173,8 @@ interface StallableFakeCdp {
   /** Stop completing the WebSocket handshake: the exact shape of an unanswered
    *  "Allow remote debugging?" dialog — TCP accepted, handshake never finishes. */
   stall: () => void;
+  /** Resume completing handshakes — models the human finally clicking Allow. */
+  unstall: () => void;
   dropAll: () => void;
   close: () => Promise<void>;
 }
@@ -227,6 +229,7 @@ function startStallableFakeCdp(): Promise<StallableFakeCdp> {
         wsPath: '/devtools/browser/fake-stallable',
         upgradeCount: () => upgrades,
         stall: () => { stalling = true; },
+        unstall: () => { stalling = false; },
         dropAll: () => { for (const s of sockets) s.destroy(); sockets.clear(); },
         close: () => new Promise<void>((r) => { for (const s of sockets) s.destroy(); server.close(() => r()); }),
       });
@@ -386,7 +389,9 @@ test('a connect that fails fast is retried in the background, and recovers when 
  * click Allow), and only later attempts use the short, test-shortened
  * CHROME_USE_RECONNECT_TIMEOUT_MS that makes stalling observable here.
  */
-test('repeated approval stalls (handshake never completes) still latch the proxy closed', async (t) => {
+const COOLDOWN_MS = 1500;
+
+test('repeated approval stalls latch the proxy closed, but a later command re-arms it', async (t) => {
   const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-approval-timeout-'));
   const sockPath = path.join(udd, 'proxy.sock');
   const fake = await startStallableFakeCdp();
@@ -410,6 +415,8 @@ test('repeated approval stalls (handshake never completes) still latch the proxy
       CHROME_USE_RECONNECT_TIMEOUT_MS: '400',
       // The heartbeat must not contribute attempts of its own.
       CHROME_USE_KEEPALIVE_MS: '100000',
+      // Short latch cooldown so the re-arm path is observable in-test.
+      CHROME_USE_BLOCK_RETRY_COOLDOWN_MS: String(COOLDOWN_MS),
     },
     stdio: 'ignore',
   });
@@ -449,11 +456,52 @@ test('repeated approval stalls (handshake never completes) still latch the proxy
   for (let i = 0; i < 3; i++) {
     const c = await ProxyClient.open(sockPath, 5_000);
     clients.push(c);
-    await assert.rejects(c.send<any>('Browser.getVersion'), /will not open another remote-debugging dialog/);
+    await assert.rejects(c.send<any>('Browser.getVersion'), /Approve remote debugging/);
   }
   assert.equal(
     fake.upgradeCount(),
     upgradesWhenBlocked,
-    'once latched, commands must fail fast without queueing another approval dialog',
+    'during the cooldown, commands must fail fast without queueing another approval dialog',
+  );
+
+  // …but the latch is NOT terminal. Making it terminal was the last remaining
+  // reason anyone killed the shared proxy, and killing it is counterproductive:
+  // the proxy is the last approved client, so stopping it LAPSES Chrome's
+  // approval rather than restoring it. Once the cooldown expires, one explicit
+  // user command must re-arm exactly one attempt, so a human who has just
+  // clicked Allow only has to retry.
+  const blockedStatus = await client.send<any>('__status');
+  assert.ok(
+    blockedStatus.blockRetryInMs > 0,
+    '__status must advertise how long the latch suppresses retries',
+  );
+
+  await new Promise((r) => setTimeout(r, COOLDOWN_MS + 250));
+
+  // Chrome starts completing the handshake again (the human clicked Allow).
+  fake.unstall();
+
+  const rearmed = await ProxyClient.open(sockPath, 5_000);
+  clients.push(rearmed);
+  const product = await (async () => {
+    const deadline2 = Date.now() + 10_000;
+    let lastErr = '';
+    while (Date.now() < deadline2) {
+      try {
+        return (await rearmed.send<any>('Browser.getVersion')).product;
+      } catch (err: any) {
+        lastErr = String(err?.message ?? err);
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    }
+    throw new Error(`proxy never re-armed after the cooldown (last error: ${lastErr})`);
+  })();
+  assert.equal(product, 'FakeChrome-stallable', 'a user command after the cooldown must re-arm the connection');
+
+  const healed = await client.send<any>('__status');
+  assert.equal(healed.connectionBlocked, null, 're-arming must clear the latch');
+  assert.ok(
+    fake.upgradeCount() > upgradesWhenBlocked,
+    'the re-armed attempt must actually reach Chrome',
   );
 });

@@ -327,8 +327,10 @@ async function ensureProxy(): Promise<void> {
       throw new Error(
         `chrome-use: Chrome is not accepting a debugging connection.\n` +
           `${initialStatus.connectionBlocked}\n` +
-          `Open chrome://inspect/#remote-debugging and click Allow, then retry — the proxy reconnects on its own.\n` +
-          `Do not kill the proxy: it is shared, and restarting it does not grant approval.`,
+          `Open chrome://inspect/#remote-debugging, click Allow, then RETRY this command — ` +
+          `the proxy re-arms itself and connects.\n` +
+          `Do not kill the proxy: it is the last approved client, so restarting it lapses ` +
+          `Chrome's approval rather than restoring it.`,
       );
     }
     return;
