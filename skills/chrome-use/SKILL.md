@@ -70,24 +70,22 @@ On this machine the canonical directory is `~/workspace/skills/skills/chrome-use
 (`~/.hermes/skills/browser-control/chrome-use` and
 `~/.hermes/profiles/*/skills/browser-control/chrome-use`) must resolve to it.
 
-Verify with:
+Verify with the bundled checker (exits non-zero on drift, `--fix` relinks):
 
 ```bash
-for p in ~/.agents/skills/chrome-use \
-         ~/.hermes/skills/browser-control/chrome-use \
-         ~/.hermes/profiles/*/skills/browser-control/chrome-use; do
-  printf '%s -> %s\n' "$p" "$(realpath "$p")"
-done | sort -u -k3
+~/.agents/skills/chrome-use/scripts/check-install.sh
+~/.agents/skills/chrome-use/scripts/check-install.sh --fix
 ```
 
-All lines must show the same target. **A stale copy is the known cause of repeated
-"Allow remote debugging?" dialogs.** Pre-2026-08 copies shipped an `ensureProxy()` that
-compared a content hash of the running proxy against its own files and, on any mismatch,
-**stopped the shared proxy and respawned its own** — so a single out-of-date copy tore
-down a healthy proxy every time it ran. Per-profile installs made this worse: seven
-frozen copies fought the maintained one, and each teardown cost a dialog. The current
-CLI never restarts a live proxy, and the proxy now refuses `__stop`, but an old copy can
-still misbehave, so keep every path symlinked.
+**A stale copy is the known cause of repeated "Allow remote debugging?" dialogs.**
+Pre-2026-08 copies shipped an `ensureProxy()` that compared a content hash of the
+running proxy against its own files and, on any mismatch, **stopped the shared proxy and
+respawned its own** — so a single out-of-date copy tore down a healthy, approved
+connection every time it ran. Per-profile installs made this worse: seven frozen copies
+fought the maintained one, and each teardown cost a dialog. The current CLI never
+restarts a live proxy, and the proxy now refuses `__stop`, but Hermes creates a
+per-profile skills tree, so **a newly created profile can reintroduce a copy at any
+time** — re-run the checker after adding one.
 
 Production uses `/tmp/chrome-use-<uid>.sock`. Leave `CHROME_USE_SOCKET` unset:
 task-specific socket overrides are rejected because each independent proxy opens its own
