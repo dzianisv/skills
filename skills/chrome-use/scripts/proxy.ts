@@ -119,6 +119,13 @@ const RECONNECT_MAX_DELAY_MS = 30_000;
  * tolerates one genuinely slow/flaky handshake without nagging the user.
  */
 const MAX_APPROVAL_STALLS = 2;
+/**
+ * How long a `connectionBlocked` latch suppresses further connect attempts.
+ * After this, one explicit user command re-arms a single attempt (see
+ * ensureConnected). Long enough that a retry loop cannot nag the user with
+ * dialogs, short enough that a human who just clicked Allow is not stuck.
+ */
+const BLOCK_RETRY_COOLDOWN_MS = Number(process.env.CHROME_USE_BLOCK_RETRY_COOLDOWN_MS) || 60_000;
 
 function log(...a: unknown[]): void {
   process.stderr.write(`[${new Date().toISOString()}] [chrome-use proxy] ` + a.join(' ') + '\n');
@@ -320,6 +327,7 @@ let cdp: Cdp | null = null;
 let connecting: Promise<void> | null = null;
 let server: net.Server | null = null;
 let connectionBlocked: string | null = null;
+let blockedAt = 0;
 let keepalive: ReturnType<typeof setInterval> | null = null;
 let keepaliveInFlight = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -343,6 +351,7 @@ function stopKeepalive(): void {
 function blockConnection(reason: string): void {
   if (connectionBlocked) return;
   connectionBlocked = reason;
+  blockedAt = Date.now();
   stopKeepalive();
   cancelReconnect();
   log(`${reason} Automatic recovery exhausted — a human must approve remote debugging.`);
@@ -466,12 +475,29 @@ async function connectionAlive(client: Cdp): Promise<boolean> {
 function ensureConnected(): Promise<void> {
   if (cdp?.connected) return Promise.resolve();
   if (connectionBlocked) {
-    return Promise.reject(
-      new Error(
-        `${connectionBlocked} This proxy will not open another remote-debugging dialog. ` +
-          'Start a new browser-control session only when a human is ready to approve it.',
-      ),
-    );
+    // Blocked is NOT permanent. It means "two connect attempts stalled, so a
+    // human probably has to click Allow" — and once they have, the fix must be
+    // to simply retry the command. Making this state terminal was the last
+    // remaining reason anyone ever killed the shared proxy, and killing it is
+    // strictly counterproductive: the proxy is the last approved client, so
+    // stopping it lapses Chrome's approval instead of restoring it.
+    //
+    // So: an explicit user command re-arms one attempt, rate-limited to one per
+    // BLOCK_RETRY_COOLDOWN_MS. The cooldown is what keeps the original guarantee
+    // intact — a session retrying in a loop still cannot queue dialogs at nobody.
+    if (Date.now() - blockedAt < BLOCK_RETRY_COOLDOWN_MS) {
+      return Promise.reject(
+        new Error(
+          `${connectionBlocked} Approve remote debugging at chrome://inspect/#remote-debugging, ` +
+            `then retry this command — the proxy will try again (no restart needed, and restarting ` +
+            `would only lapse Chrome's approval).`,
+        ),
+      );
+    }
+    log('Re-arming after a block: a user command is asking for one more connect attempt.');
+    connectionBlocked = null;
+    approvalStalls = 0;
+    reconnectAttempt = 0;
   }
   // Single-flight: a connect attempt is already in progress (own WebSocket to
   // Chrome, own pending dialog if unapproved). Share that same promise instead
@@ -566,6 +592,9 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
       result: {
         connected: !!cdp?.connected,
         connectionBlocked,
+        blockRetryInMs: connectionBlocked
+          ? Math.max(0, BLOCK_RETRY_COOLDOWN_MS - (Date.now() - blockedAt))
+          : 0,
         reconnecting: !cdp?.connected && !connectionBlocked,
         reconnectAttempt,
         socketPath: SOCKET_PATH,

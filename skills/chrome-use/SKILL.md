@@ -209,10 +209,11 @@ ask the user to kill it.
   Close Chrome and the proxy just keeps retrying; reopen it and the proxy heals with no
   dialog and no restart. A user command cancels the pending backoff and attempts at once,
   so you never wait out the timer.
-- **Blocked** is the single state a human must resolve, and it means one specific thing:
-  two consecutive connect attempts stalled to their timeout, which is the signature of an
-  **unanswered approval dialog**. Fix it by clicking **Allow** at
-  `chrome://inspect/#remote-debugging` — not by restarting anything.
+- **Blocked** means one specific thing: two consecutive connect attempts stalled, which is
+  the signature of an **unanswered approval dialog**. Click **Allow** at
+  `chrome://inspect/#remote-debugging`, then just **retry your command** — a user command
+  re-arms one attempt (rate-limited to once a minute, so a retry loop still cannot nag
+  you with dialogs). Blocked is *not* terminal and never requires a restart.
 
 Why reconnecting is worth attempting: Chrome's approval behaves as follows (measured
 on Chrome 152) — while an approved client is **still connected**, an additional
@@ -268,7 +269,7 @@ File format: two lines — port number, then WebSocket path:
 | Permission dialog appears on every run | New connections, task-specific sockets, or an outdated skill copy | Use the canonical installation and default socket above. Read `status`; preserve a healthy shared proxy rather than restarting it |
 | Production socket override rejected | `CHROME_USE_SOCKET` points to a task-specific socket | Unset the override and isolate the task with `CHROME_USE_PIN_TARGET`; do not switch to another socket after a failure |
 | Connection hangs on first command | Chrome is showing the "Allow remote debugging?" dialog | Switch to Chrome, click **Allow** before its five-minute timeout |
-| `will not open another remote-debugging dialog` | Chrome refused a debugging connection twice in a row — an approval dialog is waiting unanswered | Open `chrome://inspect/#remote-debugging`, click **Allow**, then retry the command. The proxy reconnects itself; killing it does not grant approval |
+| `will not open another remote-debugging dialog` / `not accepting a debugging connection` | Chrome refused a connection twice — an approval dialog is waiting unanswered | Click **Allow** at `chrome://inspect/#remote-debugging`, then **retry the command**. The proxy re-arms itself after a 60s cooldown. Never kill it: it is the last approved client, so restarting *lapses* approval instead of restoring it |
 | `page changed — re-run snapshot` | Acting on a stale `@eN` after navigation | Re-run `snapshot`, then use the fresh refs |
 | `Daemon did not start in time` | Daemon failed to launch or Chrome not responding | Go to `chrome://inspect/#remote-debugging`, click **Allow**; check `./chrome-use status` |
 | `/json/version` connection refused | Expected in autoConnect mode | Use the bundled CLI; the proxy handles `DevToolsActivePort` discovery and reuses its connection |
