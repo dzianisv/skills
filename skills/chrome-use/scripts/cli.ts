@@ -323,14 +323,13 @@ async function ensureProxy(): Promise<void> {
   const initialStatus = await proxyStatus(2000);
 
   if (initialStatus.alive) {
+    // Do NOT throw here. The proxy re-arms a blocked connection only when a
+    // command reaches ensureConnected() (cooldown-limited). Throwing in the CLI
+    // meant retries never reached the proxy, so the block was permanent.
     if (initialStatus.connectionBlocked) {
-      throw new Error(
-        `chrome-use: Chrome is not accepting a debugging connection.\n` +
-          `${initialStatus.connectionBlocked}\n` +
-          `Open chrome://inspect/#remote-debugging, click Allow, then RETRY this command — ` +
-          `the proxy re-arms itself and connects.\n` +
-          `Do not kill the proxy: it is the last approved client, so restarting it lapses ` +
-          `Chrome's approval rather than restoring it.`,
+      process.stderr.write(
+        `chrome-use: previous connect stalled (${initialStatus.connectionBlocked}). ` +
+          `Retrying via proxy; if Chrome shows "Allow remote debugging?", click Allow.\n`,
       );
     }
     return;
