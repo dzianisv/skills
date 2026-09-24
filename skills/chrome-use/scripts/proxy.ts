@@ -335,6 +335,8 @@ let reconnectAttempt = 0;
 let approvalStalls = 0;
 /** True once this proxy has completed a handshake — i.e. approval is known-granted. */
 let everConnected = false;
+/** Set on re-arm after a block: the next attempt may wait on a human click. */
+let awaitingApproval = false;
 
 function stopKeepalive(): void {
   if (keepalive) clearInterval(keepalive);
@@ -498,6 +500,7 @@ function ensureConnected(): Promise<void> {
     connectionBlocked = null;
     approvalStalls = 0;
     reconnectAttempt = 0;
+    awaitingApproval = true;
   }
   // Single-flight: a connect attempt is already in progress (own WebSocket to
   // Chrome, own pending dialog if unapproved). Share that same promise instead
@@ -509,7 +512,7 @@ function ensureConnected(): Promise<void> {
 
   // Approval is a one-time human gate. Before it is granted, wait minutes for
   // the click; after it is granted, a slow handshake means something is wrong.
-  const timeout = everConnected ? RECONNECT_CONNECT_TIMEOUT_MS : CONNECT_TIMEOUT_MS;
+  const timeout = everConnected && !awaitingApproval ? RECONNECT_CONNECT_TIMEOUT_MS : CONNECT_TIMEOUT_MS;
 
   connecting = (async () => {
     // Production always auto-detects the user's real Chrome across stable, dev,
@@ -556,6 +559,7 @@ function ensureConnected(): Promise<void> {
     const v = await sendWithTimeout<any>(client, 'Browser.getVersion', {}, undefined, LIVENESS_PROBE_MS);
     log(`Connected. ${v?.product ?? 'Chrome'}`);
     everConnected = true;
+    awaitingApproval = false;
     reconnectAttempt = 0;
     approvalStalls = 0;
     startKeepalive(client);
