@@ -1,18 +1,29 @@
 /**
  * Connect-resilience regression tests for the "8 dialogs from 8 commands" bug:
  * every command that arrived while the proxy was disconnected used to start its
- * own fresh CDP WebSocket connect — each connect attempt makes Chrome show a new
- * "Allow remote debugging?" dialog, so N queued commands meant N dialogs.
+ * own fresh CDP WebSocket connect, so N queued commands meant N connects (and,
+ * on an UNAPPROVED Chrome, N "Allow remote debugging?" dialogs).
  *
- * Two behaviors are exercised against the REAL proxy.ts (spawned as a foreground
+ * Note what is and is not true about that dialog. Chrome asks ONCE per browser
+ * session, at the point approval is still missing; once a running Chrome has been
+ * approved, further browser-level connections to its DevToolsActivePort endpoint
+ * are accepted silently (measured 2026-09-19: fresh connect + Browser.getVersion
+ * in ~1.4s, no dialog, Chrome 152). So the thing worth preventing is a STORM of
+ * simultaneous connects while approval is still pending — not reconnection itself.
+ *
+ * Three behaviors are exercised against the REAL proxy.ts (spawned as a foreground
  * daemon) over its real Unix socket, using fake in-process CDP servers — no real
  * Chrome, no real dialogs:
  *
  *  1. Single-flight: several commands that arrive while a connect is already in
  *     progress must share that one attempt — never open a second upstream
  *     WebSocket connection while the first is still pending.
- *  2. A failed connection latches the proxy. Later commands fail fast and never
- *     trigger another upstream connection or native approval dialog.
+ *  2. A connect that FAILS FAST (Chrome closed / refusing) is not fatal: the proxy
+ *     stays unlatched, retries in the background, and serves commands as soon as
+ *     Chrome comes back — no human, no restart.
+ *  3. A connect that STALLS to its full timeout IS the approval-dialog signature,
+ *     and MAX_APPROVAL_STALLS consecutive stalls still latch the proxy closed so
+ *     it stops queueing dialogs at a user who is not answering.
  *
  * Run: node --test scripts/test/connect-resilience.test.ts
  */
@@ -155,6 +166,77 @@ function startRejectingServer(): Promise<{ port: number; connectionCount: () => 
   });
 }
 
+interface StallableFakeCdp {
+  port: number;
+  wsPath: string;
+  upgradeCount: () => number;
+  /** Stop completing the WebSocket handshake: the exact shape of an unanswered
+   *  "Allow remote debugging?" dialog — TCP accepted, handshake never finishes. */
+  stall: () => void;
+  /** Resume completing handshakes — models the human finally clicking Allow. */
+  unstall: () => void;
+  dropAll: () => void;
+  close: () => Promise<void>;
+}
+
+/**
+ * A fake CDP server that starts healthy and can be switched to stalling. The
+ * healthy phase matters: proxy.ts gives the FIRST connect of its life the full
+ * 5-minute CONNECT_TIMEOUT_MS (a human may be walking over to click Allow), and
+ * only uses the short RECONNECT_CONNECT_TIMEOUT_MS once it has connected at least
+ * once. So the approval-stall path is only reachable after one healthy connect.
+ */
+function startStallableFakeCdp(): Promise<StallableFakeCdp> {
+  const sockets = new Set<net.Socket>();
+  let upgrades = 0;
+  let stalling = false;
+  const server = http.createServer();
+  server.on('upgrade', (req, socket: net.Socket) => {
+    upgrades++;
+    sockets.add(socket);
+    socket.on('error', () => {});
+    socket.on('close', () => sockets.delete(socket));
+    if (stalling) return; // never write the 101 — the client waits out its timeout
+    const key = req.headers['sec-websocket-key'] as string;
+    const accept = crypto.createHash('sha1').update(key + WS_GUID).digest('base64');
+    socket.write(
+      'HTTP/1.1 101 Switching Protocols\r\n' +
+      'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
+      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
+    );
+    let buf = Buffer.alloc(0);
+    socket.on('data', (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      const { texts, closed, rest } = decodeFrames(buf);
+      buf = rest;
+      for (const t of texts) {
+        let msg: any;
+        try { msg = JSON.parse(t); } catch { continue; }
+        if (typeof msg.id !== 'number') continue;
+        const result = msg.method === 'Browser.getVersion'
+          ? { protocolVersion: '1.3', product: 'FakeChrome-stallable' }
+          : { ok: true, method: msg.method };
+        socket.write(encodeTextFrame(JSON.stringify({ id: msg.id, result })));
+      }
+      if (closed) socket.destroy();
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const port = (server.address() as net.AddressInfo).port;
+      resolve({
+        port,
+        wsPath: '/devtools/browser/fake-stallable',
+        upgradeCount: () => upgrades,
+        stall: () => { stalling = true; },
+        unstall: () => { stalling = false; },
+        dropAll: () => { for (const s of sockets) s.destroy(); sockets.clear(); },
+        close: () => new Promise<void>((r) => { for (const s of sockets) s.destroy(); server.close(() => r()); }),
+      });
+    });
+  });
+}
+
 function writePortFile(udd: string, fake: { port: number; wsPath: string }): void {
   fs.writeFileSync(path.join(udd, 'DevToolsActivePort'), `${fake.port}\n${fake.wsPath}\n`);
 }
@@ -217,11 +299,22 @@ test('single-flight: N concurrent commands while disconnected trigger exactly ON
   assert.equal(fake.upgradeCount(), 1, 'exactly one upstream WebSocket connect attempt must have been made — one dialog, not N');
 });
 
-test('connection failure: never opens another debugger connection', async (t) => {
+/**
+ * A fast-failing connect (Chrome closed, port refusing) is NOT the approval case
+ * and must not latch the proxy. It used to: one refused connect set
+ * `connectionBlocked` forever, so every session on the machine lost browser
+ * automation until a human killed the proxy — the very restart the policy claimed
+ * to prevent. The proxy now retries in the background and picks Chrome up the
+ * moment it returns, with no dialog (approval is per browser session, verified
+ * empirically against an already-approved Chrome 152).
+ */
+test('a connect that fails fast is retried in the background, and recovers when Chrome returns', async (t) => {
   const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-backoff-'));
   const sockPath = path.join(udd, 'proxy.sock');
   const rejecting = await startRejectingServer();
   writePortFile(udd, { port: rejecting.port, wsPath: '/devtools/browser/fake-reject' });
+  // Stood up now, pointed at later: this is "Chrome comes back" for the proxy.
+  const healthy = await startDelayedFakeCdp(0);
 
   let proxy: ChildProcess | undefined;
   const clients: ProxyClient[] = [];
@@ -229,6 +322,7 @@ test('connection failure: never opens another debugger connection', async (t) =>
     for (const c of clients) { try { c.close(); } catch { /* ignore */ } }
     try { proxy?.kill('SIGKILL'); } catch { /* ignore */ }
     try { await rejecting.close(); } catch { /* ignore */ }
+    try { await healthy.close(); } catch { /* ignore */ }
     try { fs.rmSync(udd, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
@@ -245,35 +339,62 @@ test('connection failure: never opens another debugger connection', async (t) =>
   // Let the eager startup connection fail against the rejecting server.
   await new Promise((r) => setTimeout(r, 500));
   assert.ok(rejecting.connectionCount() >= 1, 'the eager startup connect must have attempted (and failed) against the fake endpoint');
-  const connectionsAfterFailure = rejecting.connectionCount();
 
   const c1 = await ProxyClient.open(sockPath, 5000);
   clients.push(c1);
   await assert.rejects(
     c1.send<any>('Browser.getVersion'),
     (err: Error) => {
-      assert.match(err.message, /will not open another remote-debugging dialog/);
+      // The command fails — Chrome really is unreachable — but NOT with the
+      // terminal "a human must approve" verdict, which would strand every session.
+      assert.doesNotMatch(err.message, /will not open another remote-debugging dialog/);
       return true;
     },
-    'a command after connection failure must fail closed',
+    'a command while Chrome is unreachable must fail for this request only',
   );
 
-  const c2 = await ProxyClient.open(sockPath, 5000);
-  clients.push(c2);
-  await assert.rejects(c2.send<any>('Browser.getVersion'), /will not open another remote-debugging dialog/, 'a second command must also fail closed');
+  const blockedCheck = await c1.send<any>('__status');
+  assert.equal(blockedCheck.connectionBlocked, null, 'an unreachable Chrome must never latch the proxy closed');
+  assert.equal(blockedCheck.reconnecting, true, '__status must advertise that recovery is in progress');
+  assert.ok(blockedCheck.reconnectAttempt >= 1, 'the backoff loop must be armed');
 
-  assert.equal(
-    rejecting.connectionCount(),
-    connectionsAfterFailure,
-    'no new upstream connect attempt must have been made — that would mean a second dialog',
-  );
+  // Chrome comes back — on a new port, as a restarted Chrome would.
+  writePortFile(udd, healthy);
+
+  let product: string | undefined;
+  const deadline = Date.now() + 15_000;
+  let lastErr = '';
+  while (Date.now() < deadline) {
+    try {
+      product = (await c1.send<any>('Browser.getVersion')).product;
+      break;
+    } catch (err: any) {
+      lastErr = String(err?.message ?? err);
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+  assert.equal(product, 'FakeChrome-delayed', `the proxy must self-heal once Chrome is reachable (last error: ${lastErr})`);
 });
 
-test('approval timeout: never opens another debugger connection', async (t) => {
+/**
+ * The one case automatic recovery cannot fix, and therefore the ONLY case that
+ * still latches the proxy: Chrome accepts TCP but never completes the handshake.
+ * That is the signature of an "Allow remote debugging?" dialog sitting unanswered,
+ * so retrying just queues more dialogs at a user who is not there. After
+ * MAX_APPROVAL_STALLS (2) consecutive stalls the proxy gives up and fails every
+ * later command fast, until a human resolves it.
+ *
+ * The proxy must connect successfully FIRST: the very first connect of a proxy's
+ * life gets the full 5-minute CONNECT_TIMEOUT_MS (a human may be on their way to
+ * click Allow), and only later attempts use the short, test-shortened
+ * CHROME_USE_RECONNECT_TIMEOUT_MS that makes stalling observable here.
+ */
+const COOLDOWN_MS = 1500;
+
+test('repeated approval stalls latch the proxy closed, but a later command re-arms it', async (t) => {
   const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-approval-timeout-'));
   const sockPath = path.join(udd, 'proxy.sock');
-  // Deliberately hold the WebSocket handshake past the proxy's short test timeout.
-  const fake = await startDelayedFakeCdp(1_000);
+  const fake = await startStallableFakeCdp();
   writePortFile(udd, fake);
   let proxy: ChildProcess | undefined;
   const clients: ProxyClient[] = [];
@@ -290,19 +411,97 @@ test('approval timeout: never opens another debugger connection', async (t) => {
       CHROME_USE_DAEMON: '1',
       CHROME_USE_SOCKET: sockPath,
       CHROME_USE_TEST_USER_DATA_DIR: udd,
-      CHROME_USE_CONNECT_TIMEOUT_MS: '100',
-      CHROME_USE_RECONNECT_COOLDOWN_MS: '50',
+      // Short reconnect deadline so a stall is reached in ms, not 15s.
+      CHROME_USE_RECONNECT_TIMEOUT_MS: '400',
+      // The heartbeat must not contribute attempts of its own.
+      CHROME_USE_KEEPALIVE_MS: '100000',
+      // Short latch cooldown so the re-arm path is observable in-test.
+      CHROME_USE_BLOCK_RETRY_COOLDOWN_MS: String(COOLDOWN_MS),
     },
     stdio: 'ignore',
   });
   await waitForSocket(sockPath);
-  await new Promise((r) => setTimeout(r, 250));
-  assert.equal(fake.upgradeCount(), 1, 'startup creates one pending Chrome debugger connection');
+
+  const client = await ProxyClient.open(sockPath, 15_000);
+  clients.push(client);
+  assert.equal(
+    (await client.send<any>('Browser.getVersion')).product,
+    'FakeChrome-stallable',
+    'approval must be granted once before the reconnect path is reachable',
+  );
+
+  // Approval is now "revoked": the handshake never completes again.
+  fake.stall();
+  fake.dropAll();
+
+  // Two stalled attempts (~400ms each, 500ms then 1000ms apart) must latch it.
+  let status: any;
+  const deadline = Date.now() + 20_000;
+  for (;;) {
+    status = await client.send<any>('__status');
+    if (status.connectionBlocked) break;
+    if (Date.now() > deadline) throw new Error(`proxy never latched closed; last status: ${JSON.stringify(status)}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.match(
+    String(status.connectionBlocked),
+    /approval dialog is likely unanswered/i,
+    'the latch reason must name the one condition a human has to resolve',
+  );
+  assert.equal(status.reconnecting, false, 'a latched proxy must stop advertising recovery');
+
+  const upgradesWhenBlocked = fake.upgradeCount();
+  assert.ok(upgradesWhenBlocked >= 2, `MAX_APPROVAL_STALLS attempts must have been made (saw ${upgradesWhenBlocked})`);
 
   for (let i = 0; i < 3; i++) {
-    const client = await ProxyClient.open(sockPath, 5_000);
-    clients.push(client);
-    await assert.rejects(client.send<any>('Browser.getVersion'), /will not open another remote-debugging dialog/);
+    const c = await ProxyClient.open(sockPath, 5_000);
+    clients.push(c);
+    await assert.rejects(c.send<any>('Browser.getVersion'), /Approve remote debugging/);
   }
-  assert.equal(fake.upgradeCount(), 1, 'commands after an unanswered approval must not create another dialog');
+  assert.equal(
+    fake.upgradeCount(),
+    upgradesWhenBlocked,
+    'during the cooldown, commands must fail fast without queueing another approval dialog',
+  );
+
+  // …but the latch is NOT terminal. Making it terminal was the last remaining
+  // reason anyone killed the shared proxy, and killing it is counterproductive:
+  // the proxy is the last approved client, so stopping it LAPSES Chrome's
+  // approval rather than restoring it. Once the cooldown expires, one explicit
+  // user command must re-arm exactly one attempt, so a human who has just
+  // clicked Allow only has to retry.
+  const blockedStatus = await client.send<any>('__status');
+  assert.ok(
+    blockedStatus.blockRetryInMs > 0,
+    '__status must advertise how long the latch suppresses retries',
+  );
+
+  await new Promise((r) => setTimeout(r, COOLDOWN_MS + 250));
+
+  // Chrome starts completing the handshake again (the human clicked Allow).
+  fake.unstall();
+
+  const rearmed = await ProxyClient.open(sockPath, 5_000);
+  clients.push(rearmed);
+  const product = await (async () => {
+    const deadline2 = Date.now() + 10_000;
+    let lastErr = '';
+    while (Date.now() < deadline2) {
+      try {
+        return (await rearmed.send<any>('Browser.getVersion')).product;
+      } catch (err: any) {
+        lastErr = String(err?.message ?? err);
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    }
+    throw new Error(`proxy never re-armed after the cooldown (last error: ${lastErr})`);
+  })();
+  assert.equal(product, 'FakeChrome-stallable', 'a user command after the cooldown must re-arm the connection');
+
+  const healed = await client.send<any>('__status');
+  assert.equal(healed.connectionBlocked, null, 're-arming must clear the latch');
+  assert.ok(
+    fake.upgradeCount() > upgradesWhenBlocked,
+    'the re-armed attempt must actually reach Chrome',
+  );
 });

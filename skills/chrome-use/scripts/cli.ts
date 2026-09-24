@@ -323,11 +323,13 @@ async function ensureProxy(): Promise<void> {
   const initialStatus = await proxyStatus(2000);
 
   if (initialStatus.alive) {
+    // Do NOT throw here. The proxy re-arms a blocked connection only when a
+    // command reaches ensureConnected() (cooldown-limited). Throwing in the CLI
+    // meant retries never reached the proxy, so the block was permanent.
     if (initialStatus.connectionBlocked) {
-      const pid = initialStatus.pid;
-      throw new Error(
-        `chrome-use: proxy blocked after a Chrome connection failure. It will not reconnect automatically.\n` +
-          `A human must stop the proxy${pid ? ` (kill ${pid})` : ''}, then run one browser command while ready to click Chrome's Allow dialog.`,
+      process.stderr.write(
+        `chrome-use: previous connect stalled (${initialStatus.connectionBlocked}). ` +
+          `Retrying via proxy; if Chrome shows "Allow remote debugging?", click Allow.\n`,
       );
     }
     return;
@@ -396,9 +398,10 @@ async function main(): Promise<void> {
   // through to the normal unknown-command path below (exit 1, proxy untouched).
   // Terminating a genuinely broken proxy is an explicit out-of-band OS action for
   // a human/maintainer (e.g. `kill <pid>`), never something the agent CLI exposes.
-  // (`__stop` still exists as an internal proxy control method, but nothing in
-  // this CLI calls it: ensureProxy() never restarts a live proxy, on a version
-  // mismatch or otherwise — see its docstring above.)
+  // (`__stop` still exists as a control method NAME, but it is answered with an
+  // error and stops nothing — see proxy.ts. Nothing in this CLI calls it:
+  // ensureProxy() never restarts a live proxy, on a version mismatch or otherwise
+  // — see its docstring above.)
 
   const handler = registry[command.name];
   if (!handler) {
