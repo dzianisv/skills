@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S /usr/bin/python3
 """
 Telegram CLI — send messages/media to and read messages/media from Telegram chats.
 
@@ -521,6 +521,38 @@ async def cmd_send_media(
         await client.disconnect()  # type: ignore[func-returns-value]
 
 
+async def _sender_label(client: "TelegramClient", msg: object, fallback: str) -> str:
+    """Human-readable author for a message: '@handle (Name)', 'Name', or a fallback.
+
+    Group chats have many authors, so printing the chat name for every message
+    (the old behaviour) made it impossible to tell who said what. Anonymous
+    admins, channel-signed posts and deleted accounts have no sender -> we fall
+    back to the chat/target label so output never breaks.
+    """
+    try:
+        sender = await msg.get_sender()  # type: ignore[attr-defined]
+    except Exception:
+        sender = None
+    if sender is None:
+        post_author = getattr(msg, "post_author", None)
+        return post_author or fallback
+    username = getattr(sender, "username", None)
+    name = " ".join(
+        part for part in (getattr(sender, "first_name", "") or "",
+                          getattr(sender, "last_name", "") or "")
+        if part
+    ).strip()
+    title = getattr(sender, "title", None)  # channel/supergroup senders
+    if username:
+        return f"@{username} ({name})" if name else f"@{username}"
+    if name:
+        return name
+    if title:
+        return title
+    sender_id = getattr(sender, "id", None)
+    return f"id:{sender_id}" if sender_id is not None else fallback
+
+
 async def cmd_read(target: str, limit: int, topic_id: int | None = None) -> int:
     client = await _connect()
     try:
@@ -537,7 +569,7 @@ async def cmd_read(target: str, limit: int, topic_id: int | None = None) -> int:
             print("(no messages)")
             return 0
         for msg in reversed(messages):
-            sender = "you" if msg.out else target
+            sender = "you" if msg.out else await _sender_label(client, msg, target)
             ts = msg.date.strftime("%Y-%m-%d %H:%M:%S") if msg.date else "?"
             text = msg.text or ""
             media_tag = _media_tag(msg)
@@ -550,7 +582,22 @@ async def cmd_read(target: str, limit: int, topic_id: int | None = None) -> int:
         await client.disconnect()  # type: ignore[func-returns-value]
 
 
-async def cmd_get_voice(target: str, limit: int, out_dir: str, scan: int) -> int:
+async def cmd_get_voice(
+    target: str,
+    limit: int,
+    out_dir: str,
+    scan: int,
+    kinds: tuple[str, ...] = ("voice",),
+    transcribe: bool = False,
+    whisper_model: str = "small",
+    language: str | None = None,
+) -> int:
+    """Download voice/video_note/video messages, optionally transcribing them.
+
+    kinds: subset of ("voice", "video_note", "video") selecting which media
+    types to download. video_note = round "telescope" video messages;
+    video = regular video attachments/files.
+    """
     client = await _connect()
     try:
         entity = await client.get_input_entity(_coerce_target(target))
@@ -563,28 +610,107 @@ async def cmd_get_voice(target: str, limit: int, out_dir: str, scan: int) -> int
             print("(no messages)")
             return 0
 
+        def _matches(msg) -> bool:
+            if "voice" in kinds and getattr(msg, "voice", None):
+                return True
+            if "video_note" in kinds and getattr(msg, "video_note", None):
+                return True
+            if "video" in kinds and getattr(msg, "video", None) and not getattr(msg, "video_note", None):
+                return True
+            return False
+
         downloaded = 0
+        saved_paths: list[str] = []
         for msg in messages:  # newest first
-            if not getattr(msg, "voice", None):
+            if not _matches(msg):
                 continue
             saved = await client.download_media(msg, file=str(output_dir))
             ts = msg.date.strftime("%Y-%m-%d %H:%M:%S") if msg.date else "?"
             if saved:
-                print(f"[{ts}] downloaded voice message_id={msg.id} -> {saved}")
+                print(f"[{ts}] downloaded message_id={msg.id} -> {saved}")
+                saved_paths.append(str(saved))
                 downloaded += 1
             if downloaded >= limit:
                 break
 
         if downloaded == 0:
-            print("(no voice messages found in scanned history)")
-        else:
-            print(f"downloaded {downloaded} voice message(s) into {output_dir}")
+            print("(no matching media found in scanned history)")
+            return 0
+
+        print(f"downloaded {downloaded} media file(s) into {output_dir}")
+
+        if transcribe:
+            rc = _transcribe_files(saved_paths, whisper_model, language)
+            if rc != 0:
+                return rc
         return 0
     except Exception as exc:
         print(f"ERROR: {exc}")
         return 1
     finally:
         await client.disconnect()  # type: ignore[func-returns-value]
+
+
+def _transcribe_files(paths: list[str], whisper_model: str, language: str | None) -> int:
+    """Transcribe a list of audio/video files with faster-whisper.
+
+    Video/video_note files are extracted to audio with ffmpeg first (whisper
+    needs audio; video containers work too if ffmpeg is on PATH, but we
+    normalize to wav for reliability).
+    """
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+    except ImportError:
+        print(
+            "ERROR: faster-whisper not installed. Install with: "
+            "pip install faster-whisper"
+        )
+        return 1
+
+    import subprocess
+    import tempfile
+
+    model = WhisperModel(whisper_model, device="cpu", compute_type="int8")
+
+    for path in paths:
+        print(f"--- {path}")
+        src = Path(path)
+        audio_path = src
+        tmp_wav = None
+        # .oga/.ogg voice notes and .mp4 video/video_note both decode fine via
+        # ffmpeg; normalize to wav for the widest whisper/ffmpeg compatibility.
+        if src.suffix.lower() not in (".wav", ".mp3", ".flac"):
+            tmp_wav = Path(tempfile.mktemp(suffix=".wav"))
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", str(src), "-ar", "16000", "-ac", "1", str(tmp_wav)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                print(f"ERROR: ffmpeg failed for {src}: {result.stderr[-500:]}")
+                continue
+            audio_path = tmp_wav
+
+        try:
+            segments, info = model.transcribe(str(audio_path), language=language)
+            text = " ".join(seg.text.strip() for seg in segments)
+            print(text if text else "(empty transcription)")
+        except Exception as exc:
+            print(f"ERROR: transcription failed for {src}: {exc}")
+        finally:
+            if tmp_wav is not None and tmp_wav.exists():
+                tmp_wav.unlink()
+
+    return 0
+
+
+async def cmd_transcribe(paths: list[str], whisper_model: str, language: str | None) -> int:
+    """Transcribe local audio/video files (no Telegram connection needed)."""
+    missing = [p for p in paths if not Path(p).expanduser().exists()]
+    if missing:
+        print(f"ERROR: file(s) not found: {', '.join(missing)}")
+        return 1
+    return _transcribe_files([str(Path(p).expanduser()) for p in paths], whisper_model, language)
 
 
 async def cmd_ask(target: str, message: str, wait_seconds: int, topic_id: int | None = None) -> int:
@@ -719,25 +845,65 @@ def build_parser() -> argparse.ArgumentParser:
     # get-voice
     p_get_voice = sub.add_parser(
         "get-voice",
-        help="Download recent voice messages from a chat",
+        help="Download (and optionally transcribe) recent voice/video-note/video messages from a chat",
     )
     p_get_voice.add_argument("target", help="Username (@bot) or numeric Telegram ID")
     p_get_voice.add_argument(
         "--limit",
         type=int,
         default=5,
-        help="Number of voice messages to download (default: 5)",
+        help="Number of media messages to download (default: 5)",
     )
     p_get_voice.add_argument(
         "--scan",
         type=int,
         default=50,
-        help="How many recent messages to scan for voice notes (default: 50)",
+        help="How many recent messages to scan for matching media (default: 50)",
     )
     p_get_voice.add_argument(
         "--out-dir",
         default="./downloads",
-        help="Output directory for downloaded voice files (default: ./downloads)",
+        help="Output directory for downloaded media files (default: ./downloads)",
+    )
+    p_get_voice.add_argument(
+        "--kinds",
+        default="voice",
+        help=(
+            "Comma-separated media kinds to download: voice, video_note, video, "
+            "or 'all' (default: voice). video_note = round telescope video messages."
+        ),
+    )
+    p_get_voice.add_argument(
+        "--transcribe",
+        action="store_true",
+        help="Transcribe downloaded media with faster-whisper after downloading",
+    )
+    p_get_voice.add_argument(
+        "--whisper-model",
+        default="small",
+        help="faster-whisper model size for --transcribe (default: small)",
+    )
+    p_get_voice.add_argument(
+        "--language",
+        default=None,
+        help="Language hint for --transcribe, e.g. ru, en (default: auto-detect)",
+    )
+
+    # transcribe (local files, no Telegram connection)
+    p_transcribe = sub.add_parser(
+        "transcribe",
+        help="Transcribe local audio/video file(s) with faster-whisper",
+    )
+    p_transcribe.add_argument("paths", nargs="+", help="Path(s) to audio/video file(s)")
+    p_transcribe.add_argument(
+        "--whisper-model",
+        default="small",
+        help="faster-whisper model size (default: small)",
+    )
+    p_transcribe.add_argument(
+        "--language",
+        default=None,
+        help="Language hint, e.g. ru, en (default: auto-detect)",
     )
 
     # ask (send + wait for reply)
@@ -775,7 +941,25 @@ def main() -> None:
     elif args.command == "read":
         rc = asyncio.run(cmd_read(args.target, args.limit, args.topic_id))
     elif args.command == "get-voice":
-        rc = asyncio.run(cmd_get_voice(args.target, args.limit, args.out_dir, args.scan))
+        raw_kinds = args.kinds.strip().lower()
+        if raw_kinds == "all":
+            kinds = ("voice", "video_note", "video")
+        else:
+            kinds = tuple(k.strip() for k in raw_kinds.split(",") if k.strip())
+        rc = asyncio.run(
+            cmd_get_voice(
+                args.target,
+                args.limit,
+                args.out_dir,
+                args.scan,
+                kinds=kinds,
+                transcribe=args.transcribe,
+                whisper_model=args.whisper_model,
+                language=args.language,
+            )
+        )
+    elif args.command == "transcribe":
+        rc = asyncio.run(cmd_transcribe(args.paths, args.whisper_model, args.language))
     elif args.command == "ask":
         rc = asyncio.run(cmd_ask(args.target, args.message, args.wait, args.topic_id))
     else:
