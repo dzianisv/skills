@@ -97,6 +97,14 @@ Build, verify and release mobile apps with emulator-tested first-run flows.
 |-------|--------------|---------|
 | [`flutter-android-release`](skills/flutter-android-release) | Build, verify and release a Flutter Android app via GitHub Actions so a broken first-run flow can never ship green. | `npx -y skills add dzianisv/skills -s flutter-android-release -g` |
 
+### Content & Social
+
+Turn raw work into build-in-public posts: reels, threads and captions with verified numbers.
+
+| Skill | What it does | Install |
+|-------|--------------|---------|
+| [`build-in-public-reel`](skills/build-in-public-reel) | Turn a short raw clip (about 10s) plus a one-line work story into a viral-ready build-in-public package: a vertical Reel with the story burned in as timed text cards, an X thread, and an Instagram caption, with every number verified live before it is used. | `npx -y skills add dzianisv/skills -s build-in-public-reel -g` |
+
 ### Other
 
 | Skill | What it does | Install |
