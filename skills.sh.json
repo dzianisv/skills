@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "Browser Automation",
-      "description": "Drive real and remote Chrome browsers via CDP \u2014 your live profile, cookies, sessions.",
+      "description": "Drive real and remote Chrome browsers via CDP — your live profile, cookies, sessions.",
       "skills": [
         "chrome-use",
         "chrome-devtools-remote",
@@ -56,6 +56,13 @@
       "description": "Build, verify and release mobile apps with emulator-tested first-run flows.",
       "skills": [
         "flutter-android-release"
+      ]
+    },
+    {
+      "title": "Content & Social",
+      "description": "Turn raw work into build-in-public posts: reels, threads and captions with verified numbers.",
+      "skills": [
+        "build-in-public-reel"
       ]
     }
   ]
