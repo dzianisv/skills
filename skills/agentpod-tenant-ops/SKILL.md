@@ -113,7 +113,30 @@ Every tenant runs an OpenAI-compatible API server (Hermes seeds it with
 from the Admin API record. Use it only as the Bearer token for that
 tenant. Never print it in chat, reports, logs, or files.
 
-### 3a. Standing instructions
+### 3a. Pre-flight: prove the agent can actually think
+
+Before sending any configuration, send one trivial chat message
+("What is your name? Reply in one short sentence.") and require a real
+answer. A Hermes tenant can be `running`, pass `/v1/models`, and still be
+brain-dead: if the reply is the fallback text *"custom:litellm rejected
+your API key… key not allowed to access model… Tried to access auto"*,
+the tenant's LLM path is broken and NO chat-based setup is possible —
+stop and escalate as a platform bug instead of "configuring" a dead
+agent.
+
+Root cause (verified Oct 2026): plans carry `defaultModel: "auto"` and a
+`litellmAccessGroup` (`"pro"` / `"max"`). Tenant LiteLLM keys are scoped
+to the group (`models: ["max"]`), and group membership authorizes only
+**bare model names** present in the LiteLLM config (e.g. `gpt-5.1`).
+`auto` is not a bare model name in the groups, so every Hermes tenant
+seeded with model `auto` 401s on its first LLM call. OpenClaw tenants
+are unaffected (the gateway resolves catalog refs). There is no
+Admin-API fix for a tenant's model (PATCH tenant is rollout-pin only);
+the fix is platform-side (seed a bare in-group model for Hermes, or add
+an `auto` model to the groups in the LiteLLM config) plus a rebootstrap,
+or a manual model change in the tenant's Settings → Providers.
+
+### 3b. Standing instructions
 
 Send the tenant's instruction document in 2–3 chunks in one conversation,
 framed as standing operator instructions the agent must **persist to its
@@ -122,7 +145,7 @@ the agent to reply with: its role, its hard rules, its workflows, and
 **where it stored the instructions**. If it cannot name a storage
 location, re-send with an explicit persist instruction.
 
-### 3b. Jobs
+### 3c. Jobs
 
 Jobs are created by asking the agent, in the same conversation, to create
 each recurring job with an explicit name, schedule, and task text. Rules:
@@ -137,7 +160,7 @@ each recurring job with an explicit name, schedule, and task text. Rules:
   separated). Jobs inherit the rules — restate them in the job-creation
   message anyway.
 
-### 3c. Verify by read-back (same conversation)
+### 3d. Verify by read-back (same conversation)
 
 Never trust "done". Three checks:
 
