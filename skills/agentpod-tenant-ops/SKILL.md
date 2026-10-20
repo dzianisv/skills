@@ -136,6 +136,18 @@ the fix is platform-side (seed a bare in-group model for Hermes, or add
 an `auto` model to the groups in the LiteLLM config) plus a rebootstrap,
 or a manual model change in the tenant's Settings → Providers.
 
+**Status:** the operator fixed this platform-side on 2026-10-20, and the
+fix was verified live the same day on tenant `oc-e1753d` — `/v1/models`
+200 and a real chat answer ("I'm Mallow, your AI assistant running on
+Hermes Agent"), no 401 fallback. A tenant still returning the fallback
+after that date is most likely not yet rebootstrapped with the fix:
+rebootstrap it (or check its Settings → Providers model) before
+escalating as a new bug. The pre-flight stays mandatory either way —
+`tenantStatus: "running"` and a 200 on `/v1/models` never prove the
+agent can think; only a real answer to a real message does. The admin
+console is for *finding* the endpoint (subdomain + gatewayToken in the
+user record); it cannot prove tenant health.
+
 ### 3b. Standing instructions
 
 Send the tenant's instruction document in 2–3 chunks in one conversation,
