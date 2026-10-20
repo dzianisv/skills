@@ -150,6 +150,43 @@ Never trust "done". Three checks:
 Any mismatch: re-send the missing part and re-verify once. Report the
 read-back results, not the agent's assurances.
 
+## Alternative spawn path — promo deep link (sendable to the customer)
+
+When the operator wants one link to send the customer instead of asking
+for a bare `/start`:
+
+- Format: `https://t.me/OpenClawBoxBot?start=promo_<CODE>`
+  (`promoDeepLink()` in `src/db/promo-codes.ts`). The `/start` payload is
+  `promo_<code>`; the code is uppercased on parse.
+- Codes are 16 chars, A–Z0–9, stored in the `promo_codes` table:
+  `code`, `planId`, `grantsFriend` (friend codes require `planId` in
+  `friend` / `friend_unlimited`), `maxRedemptions`, `note`, `expiresAt`,
+  `freeMonths` (NULL for friend codes — friend grants use the
+  `FRIEND_EXPIRES_AT` sentinel, no expiry).
+- **There is no Admin API or console route that mints codes.**
+  `createPromoCode()` is a DB-layer function; production minting is a
+  direct insert into `promo_codes` by whoever holds prod DB access
+  (see `docs/admin.md` for the kubectl/psql path). An agent without DB
+  access prepares the code + insert for the operator instead of
+  pretending an endpoint exists.
+- One tap on the link does everything: `/start` upserts the user,
+  claims the code atomically (single-writer; a lost claim replies
+  "This code has already been used."), creates + friend-grants the
+  subscription, and provisions the tenant. Redemption is rejected if
+  the user already has an active subscription or a tenant.
+- Differences from the admin-provision path: placement is resolved
+  **by plan** (`resolvePlacement`) — for `friend_unlimited` that means
+  **LXD, not Kubernetes** — and `deploymentType` is the provisioner
+  default for new tenants. If the operator specifically needs
+  Kubernetes placement, use the admin provision path (Step 1) after a
+  plain `/start` instead.
+- The automatic-grant spend cap applies to promo redemption; a capped
+  grant still provisions but may defer LiteLLM key setup (the bot tells
+  the user model setup is in progress).
+- After redemption, configure the agent exactly as in Step 3 — the
+  tenant is reachable via the same chat API with the record's
+  `gatewayToken`.
+
 ## Step 4 — hand over
 
 Configuration ends at verification. First-run onboarding (integration
