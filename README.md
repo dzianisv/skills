@@ -89,11 +89,18 @@ CLI tools, secret management, messaging, and deploy helpers.
 | [`mermaid2excalidraw`](skills/mermaid2excalidraw) | Convert Mermaid diagrams (sequenceDiagram, flowchart, graph) into native Excalidraw elements (rectangles, arrows, text) and merge them into an existing `.excalidraw` file. | `npx -y skills add dzianisv/skills -s mermaid2excalidraw -g` |
 | [`macro-panel`](skills/macro-panel) | Convene the macro-economist panel — run a market, asset, or portfolio question through multiple thinker-lenses at once and surface their AGREEMENT and DISAGREEMENT instead of one view. | `npx -y skills add dzianisv/skills -s macro-panel -g` |
 
+### Mobile Development
+
+Build, verify and release mobile apps with emulator-tested first-run flows.
+
+| Skill | What it does | Install |
+|-------|--------------|---------|
+| [`flutter-android-release`](skills/flutter-android-release) | Build, verify and release a Flutter Android app via GitHub Actions so a broken first-run flow can never ship green. | `npx -y skills add dzianisv/skills -s flutter-android-release -g` |
+
 ### Other
 
 | Skill | What it does | Install |
 |-------|--------------|---------|
-| [`brevo`](skills/brevo) | Send business email from an @agentlabs.cc (or other Brevo-verified domain) address via the official Brevo MCP server — no CLI, no SDK wrapper. | `npx -y skills add dzianisv/skills -s brevo -g` |
 | [`github-copilot-sessions`](skills/github-copilot-sessions) | Find a past GitHub Copilot CLI agent session on this machine by project or topic via BM25 search, then summarize what was done. | `npx -y skills add dzianisv/skills -s github-copilot-sessions -g` |
 | [`google-workspace-cli`](skills/google-workspace-cli) | Use the preinstalled gws CLI for Google Drive, Gmail, and Calendar workflows, including customer-assisted OAuth login and multi-account control. | `npx -y skills add dzianisv/skills -s google-workspace-cli -g` |
 | [`opencode`](skills/opencode) | Control a remote or local OpenCode server via opencode-cli (or its REST API directly). | `npx -y skills add dzianisv/skills -s opencode -g` |
