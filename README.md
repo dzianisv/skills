@@ -103,7 +103,15 @@ Turn raw work into build-in-public posts: reels, threads and captions with verif
 
 | Skill | What it does | Install |
 |-------|--------------|---------|
-| [`build-in-public-reel`](skills/build-in-public-reel) | Turn a short raw clip (about 10s) plus a one-line work story into a viral-ready build-in-public package: a vertical Reel with the story burned in as timed text cards, an X thread, and an Instagram caption, with every number verified live before it is used. | `npx -y skills add dzianisv/skills -s build-in-public-reel -g` |
+| [`build-in-public-reel`](skills/build-in-public-reel) | Create viral build-in-public videos for a founder: turn a short raw clip (about 10s) plus a one-line work story into a vertical Reel with the story burned in as timed text cards, an X thread, and an Instagram caption, with every number verified live before it is used. | `npx -y skills add dzianisv/skills -s build-in-public-reel -g` |
+
+### AgentPod Operations
+
+Spawn and configure AgentPod tenants through the Admin API and the tenant chat API.
+
+| Skill | What it does | Install |
+|-------|--------------|---------|
+| [`agentpod-tenant-ops`](skills/agentpod-tenant-ops) | Spawn and configure an AgentPod tenant end to end: provision it through the Admin API, then set the agent's standing instructions and recurring jobs through the tenant's own Hermes chat API. | `npx -y skills add dzianisv/skills -s agentpod-tenant-ops -g` |
 
 ### Other
 
