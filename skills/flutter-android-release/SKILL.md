@@ -66,16 +66,31 @@ AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
 Green tests plus a green build do not prove the app works. Before
 calling a release ready, run the critical first-run flow in an emulator:
 
-- Use an arm64 emulator image (Apple Silicon CI runner, google_apis,
-  API 35) for an arm64-only APK. x86 images cannot install it.
+- Run the emulator where it can actually boot: Linux + KVM with an
+  x86_64 google_apis image (API 35) works in GitHub Actions; the macOS
+  arm64 route failed to boot (HVF error) in practice. If the flow under
+  test is ABI-independent platform code (e.g. a download — native libs
+  load later), a fat debug APK on x86_64 is a valid route; keep
+  ABI-bound claims (on-device inference) out of this gate.
 - Install the APK, launch the app, and drive the real UI: dump the UI
-  hierarchy (`adb shell uiautomator dump`), find the control by its text,
-  tap its bounds center. Never hard-code tap coordinates.
+  hierarchy (`adb shell uiautomator dump`), find the control, tap its
+  bounds center. Never hard-code tap coordinates. Flutter exposes
+  widget labels as `content-desc` in uiautomator dumps, NOT `text` —
+  match both attributes, and poll for the control (first frames can
+  dump empty); scroll if the screen's title is present but the
+  control is below the fold.
 - Pre-grant runtime permissions the flow needs (`adb shell pm grant`)
   so permission dialogs cannot stall the test.
 - Require the real outcome, not a screenshot: UI progress advancing AND
-  the payload bytes on disk (`adb shell run-as <pkg> du -sm files`).
+  the payload bytes on disk across the WHOLE app data dir
+  (`adb shell run-as <pkg> du -sm .` — the installed payload may not
+  live in `files/`; a downloader temp file moving out of `files/` at
+  completion looks exactly like a deletion if you measure only there).
   Fail fast the moment the app shows an error string.
+- Bytes are not enough: after the payload lands, dump the UI once more
+  and require that the app has LEFT the first-run screen (no setup
+  title, no error). A release can pass every byte check while the
+  post-download step is broken.
 - Reference implementation: `.github/workflows/emulator-smoke.yml`
   (reactivecircus/android-emulator-runner) plus a `tool/` shell script
   in the app repo.
@@ -85,6 +100,16 @@ calling a release ready, run the critical first-run flow in an emulator:
 - Download the APK from the published release (`gh release download`)
   and re-check it: package id, versionName and versionCode against
   pubspec, permissions, native libraries present (`unzip -l`), size sane.
+- Confirm the dex is NOT obfuscated: `Lkotlin/coroutines/Continuation;`
+  must appear in `classes*.dex`. An obfuscated release renames Kotlin
+  classes (Continuation became `jb`), and plugins that resolve JVM
+  methods BY NAME at runtime — shared_preferences_android's JNI/pigeon
+  bridge — then die with `NoSuchMethodError` when they first save
+  state (in the tutor app: "Download failed" at model-install time on
+  the user's phone, while every debug/emulator run stayed green —
+  debug builds never obfuscate). Keep `isMinifyEnabled = false` and
+  `isShrinkResources = false` explicit in the release build type for
+  prototypes, and fail the CI build if the descriptor disappears.
 - Verify every asset the app downloads at runtime with `curl -I` on the
   exact URL: expect a 200 after redirects and a content-length matching
   the documented size, from an ungated source.
