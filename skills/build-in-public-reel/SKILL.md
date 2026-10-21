@@ -50,8 +50,7 @@ before asking them anything — the angle is almost always already there.
 ### Hook engineering (the first second decides everything)
 
 - The first frame IS the thumbnail and the first card IS the hook. No
-  logo, no intro, no "hey guys", no series branding before the hook —
-  branding lives in the persistent top bar only.
+  logo, no intro, no "hey guys", no branding anywhere on the video.
 - Hook shape: **[famous name] + [violent verb] + [concrete object]** —
   "MICROSOFT LOCKED MY STARTUP ACCOUNT." Variants that work: a shocking
   number ("$60,844. FOR NOTHING."), a confession ("I REBUILT MY ENTIRE
@@ -140,9 +139,11 @@ Rules:
   not fit, cut words, never shrink the font below readability.
 - Card 4 ends on a principle the audience can repeat ("open models can't
   be locked"), not on a spec.
-- Add one persistent top bar for series identity and context:
-  "BUILD IN PUBLIC - 1:30 AM - SF" (time/place from the clip's real
-  metadata and story).
+- **No top bar, no timestamp, no "BUILD IN PUBLIC" text on the video**
+  (user direction, Oct 21 2026: it looks cleaner — just tell the story).
+  Series identity lives in the caption/thread, not burned into the
+  frame. Add a top bar only if the user explicitly asks for one on that
+  specific post.
 
 For longer clips, scale at ~2.5s per card and keep the same 4 jobs —
 merge beats, do not add new ones.
@@ -164,9 +165,9 @@ ffmpeg -y -v error -i in.mp4 -vf "select=eq(n\,30)" \
   Inline text in the filter string breaks on apostrophes and colons.
 - Render: `scale=1080:1920:force_original_aspect_ratio=increase,
   crop=1080:1920`, font DejaVuSans-Bold (or Noto Sans Bold), 54-58px for
-  cards, 34px for the top bar, white text on `box=1:boxcolor=black@0.55:
-  boxborderw=22`, centered `x=(w-text_w)/2`, cards at `y=150`, top bar at
-  `y=56`. Final card in yellow for the payoff.
+  cards, white text on `box=1:boxcolor=black@0.55:boxborderw=22`,
+  centered `x=(w-text_w)/2`, cards at `y=150`.
+  Final card in yellow for the payoff.
 - Time each card with `enable='between(t,<start>,<end>)'`.
 - Encode `libx264 -crf 18 -preset medium -pix_fmt yuv420p`, audio to AAC
   128k, `-movflags +faststart`. Output lands next to the copy, named
@@ -221,7 +222,7 @@ it is how they can defend every number in replies.
 - **End with an arguable question, not "thoughts?"** — e.g. "Would you
   trust your whole agent stack to one cloud account?" Specific takes
   get replies; generic CTAs get scrolled past.
-- **Series is the growth engine.** Same top-bar format, same visual
+- **Series is the growth engine.** Same clean card format and visual
   identity, numbered days when the saga continues ("Day 2: the results").
   One viral clip spikes; a recognisable series compounds followers.
 - **Promise a sequel with a date and keep it** — "results tomorrow" in
@@ -272,7 +273,7 @@ re-cut of the failing element, not out the door:
 - [ ] Story figures verified against the user's records (Gate 0).
 - [ ] Every benchmark traced to a live OpenRouter page opened today,
       with vendor-claimed numbers labelled as such.
-- [ ] Reel is 1080x1920, source length, 4 timed cards + top bar.
+- [ ] Reel is 1080x1920, source length, 4 timed cards, no top bar.
 - [ ] First-card and last-card stills inspected and clean (Gate 5).
 - [ ] `post-copy.md` holds the X thread, IG caption, and sources.
 - [ ] Nothing posted anywhere without the user's per-post go-ahead.
