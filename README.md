@@ -99,6 +99,7 @@ CLI tools, secret management, messaging, and deploy helpers.
 | [`opencode`](skills/opencode) | Control a remote or local OpenCode server via opencode-cli (or its REST API directly). | `npx -y skills add dzianisv/skills -s opencode -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
 | [`stocks-advisor-fast`](skills/stocks-advisor-fast) |  | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
+| [`vibebrowser-cli`](skills/vibebrowser-cli) | Use for Vibe extension mode via @vibebrowser/cli, not CDP. | `npx -y skills add dzianisv/skills -s vibebrowser-cli -g` |
 
 <!-- SKILLS:END -->
 
