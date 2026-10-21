@@ -198,12 +198,22 @@ for a bare `/start`:
   `friend` / `friend_unlimited`), `maxRedemptions`, `note`, `expiresAt`,
   `freeMonths` (NULL for friend codes — friend grants use the
   `FRIEND_EXPIRES_AT` sentinel, no expiry).
-- **There is no Admin API or console route that mints codes.**
-  `createPromoCode()` is a DB-layer function; production minting is a
-  direct insert into `promo_codes` by whoever holds prod DB access
-  (see `docs/admin.md` for the kubectl/psql path). An agent without DB
-  access prepares the code + insert for the operator instead of
-  pretending an endpoint exists.
+- **Minting is an Admin API call** (corrected 2026-10-21, verified live;
+  an earlier version of this skill wrongly claimed no route exists — the
+  routes live in `src/dashboard/server.ts`):
+  `POST /admin/api/promo-codes` with
+  `{"planId": "friend_unlimited", "maxRedemptions": 1, "note": "<customer>"}`
+  returns 201 with the server-generated `code` and `deepLink`.
+  `maxRedemptions` is required (positive integer, or `null` = unlimited);
+  `grantsFriend` is derived from `planId`, never sent. Full procedure —
+  list/reuse rules, request validation, verification, clearing a failed
+  redemption (`POST /admin/api/promo/clear`) — is in the `admin_console`
+  skill, § "Promo codes — generate, reuse, send".
+- **Reuse before minting:** `GET /admin/api/promo-codes` lists existing
+  codes with redemption counts. A code with `active: true`, no/past
+  expiry in the future, and `currentRedemptions < maxRedemptions` can be
+  sent to another customer as-is — e.g. the operator's multi-use
+  `friend_unlimited` invite links.
 - One tap on the link does everything: `/start` upserts the user,
   claims the code atomically (single-writer; a lost claim replies
   "This code has already been used."), creates + friend-grants the
