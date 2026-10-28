@@ -78,6 +78,7 @@ import { fileURLToPath } from 'node:url';
 import { Cdp } from './lib/cdp.ts';
 import { buildWsEndpoint, buildWsEndpointAuto } from './lib/devtools-port.ts';
 import { resolveSocketConfig } from './lib/socket-config.ts';
+import { AgentTabRegistry } from './lib/agent-tabs.ts';
 
 // Validate before touching socket/lock files or connecting to Chrome.
 let socketConfig: ReturnType<typeof resolveSocketConfig>;
@@ -102,6 +103,8 @@ const TRACE = process.env.CHROME_USE_TRACE === '1';
 // How long a browser-level liveness probe gets before we conclude the CDP
 // connection itself (not just one request) is dead. See handle()'s catch block.
 const LIVENESS_PROBE_MS = Number(process.env.CHROME_USE_LIVENESS_PROBE_MS) || 5_000;
+const AGENT_TAB_CLEANUP_INTERVAL_MS = Number(process.env.CHROME_USE_AGENT_TAB_CLEANUP_INTERVAL_MS) || 60_000;
+const AGENT_TAB_IDLE_MS = Number(process.env.CHROME_USE_AGENT_TAB_IDLE_MS) || 60 * 60 * 1000;
 
 // ── Reconnect policy ───────────────────────────────────────────────────────────
 // The FIRST connect of this proxy's life may legitimately wait on a human to
@@ -144,6 +147,7 @@ const VERSION_FILES = [
   THIS_FILE,
   path.join(path.dirname(THIS_FILE), 'lib', 'cdp.ts'),
   path.join(path.dirname(THIS_FILE), 'lib', 'devtools-port.ts'),
+  path.join(path.dirname(THIS_FILE), 'lib', 'agent-tabs.ts'),
 ];
 
 /** Stable content hash of VERSION_FILES, exposed via `__status` as `version`. */
@@ -333,6 +337,9 @@ let keepaliveInFlight = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let approvalStalls = 0;
+const agentTabs = new AgentTabRegistry({ idleMs: AGENT_TAB_IDLE_MS });
+const sessionTargets = new Map<string, string>();
+let agentTabCleanup: ReturnType<typeof setInterval> | null = null;
 /** True once this proxy has completed a handshake — i.e. approval is known-granted. */
 let everConnected = false;
 /** Set on re-arm after a block: the next attempt may wait on a human click. */
@@ -585,6 +592,63 @@ function ensureConnected(): Promise<void> {
   return connecting;
 }
 
+// ── Agent-tab ownership and idle cleanup ───────────────────────────────────────
+
+/** Update ownership metadata only for target/session operations initiated by agents. */
+function recordAgentTabActivity(method: string, params: any, sessionId: string | undefined, result: any): void {
+  if (sessionId) {
+    const targetId = sessionTargets.get(sessionId);
+    if (targetId) agentTabs.markUsed(targetId);
+  }
+
+  if (method === 'Target.createTarget' && typeof result?.targetId === 'string') {
+    agentTabs.markCreated(result.targetId);
+    return;
+  }
+  if (method === 'Target.attachToTarget' && typeof params?.targetId === 'string' && typeof result?.sessionId === 'string') {
+    sessionTargets.set(result.sessionId, params.targetId);
+    agentTabs.markUsed(params.targetId);
+    return;
+  }
+  if (method === 'Target.detachFromTarget' && typeof params?.sessionId === 'string') {
+    sessionTargets.delete(params.sessionId);
+    return;
+  }
+  if (method === 'Target.closeTarget' && typeof params?.targetId === 'string') {
+    agentTabs.markClosed(params.targetId);
+    return;
+  }
+  if (typeof params?.targetId === 'string') agentTabs.markUsed(params.targetId);
+}
+
+async function closeIdleAgentTabs(): Promise<void> {
+  const client = cdp;
+  if (!client?.connected) return;
+  for (const metadata of agentTabs.idle()) {
+    try {
+      await sendWithTimeout(client, 'Target.closeTarget', { targetId: metadata.targetId }, undefined, 5_000);
+      agentTabs.markClosed(metadata.targetId);
+      log(`Closed agent-created tab ${metadata.targetId} after ${AGENT_TAB_IDLE_MS}ms idle.`);
+    } catch (err: any) {
+      // Keep the record so a transient target/CDP failure is retried later.
+      log(`Could not close idle agent tab ${metadata.targetId}: ${err?.message ?? err}`);
+    }
+  }
+}
+
+function startAgentTabCleanup(): void {
+  if (agentTabCleanup) return;
+  agentTabCleanup = setInterval(() => {
+    closeIdleAgentTabs().catch((err) => log('Agent-tab cleanup failed:', err?.message ?? err));
+  }, AGENT_TAB_CLEANUP_INTERVAL_MS);
+  (agentTabCleanup as any).unref?.();
+}
+
+function stopAgentTabCleanup(): void {
+  if (agentTabCleanup) clearInterval(agentTabCleanup);
+  agentTabCleanup = null;
+}
+
 // ── Per-request relay ────────────────────────────────────────────────────────────
 
 async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: string }> {
@@ -601,6 +665,8 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
           : 0,
         reconnecting: !cdp?.connected && !connectionBlocked,
         reconnectAttempt,
+        agentTabIdleMs: AGENT_TAB_IDLE_MS,
+        agentTabCount: agentTabs.snapshot().length,
         socketPath: SOCKET_PATH,
         version: PROXY_VERSION,
         pid: process.pid,
@@ -621,6 +687,15 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
         `If it is genuinely wedged, a human must stop pid ${process.pid} out-of-band.`,
     };
   }
+  if (method === '__pin_agent_tab' || method === '__unpin_agent_tab') {
+    const targetId = typeof params?.targetId === 'string' ? params.targetId : '';
+    if (!targetId) return { id, error: `${method} requires targetId` };
+    const changed = method === '__pin_agent_tab' ? agentTabs.pin(targetId) : agentTabs.unpin(targetId);
+    return { id, result: { targetId, changed } };
+  }
+  if (method === '__agent_tabs') {
+    return { id, result: agentTabs.snapshot() };
+  }
 
   try {
     await ensureConnected();
@@ -634,6 +709,7 @@ async function handle(msg: any): Promise<{ id: any; result?: unknown; error?: st
         ? Math.min(requested, REQUEST_TIMEOUT_MS)
         : REQUEST_TIMEOUT_MS;
     const result = await sendWithTimeout(client, method, params ?? {}, sessionId, deadline);
+    recordAgentTabActivity(method, params, sessionId, result);
     return { id, result };
   } catch (err: any) {
     const message = String(err?.message ?? err);
@@ -751,6 +827,7 @@ async function main(): Promise<void> {
     log('Failed to start server:', err?.message ?? String(err));
     process.exit(1);
   }
+  startAgentTabCleanup();
   // Connect eagerly so the approval dialog appears at startup, not on first command.
   ensureConnected().catch((err) =>
     log('Initial connection failed; retrying with backoff:', err.message),
@@ -769,6 +846,7 @@ async function main(): Promise<void> {
         /* ignore */
       }
       stopKeepalive();
+      stopAgentTabCleanup();
       process.exit(0);
     });
   }

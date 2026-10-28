@@ -40,6 +40,14 @@ Usage:
     # topic/forum support before sending anything.
     python scripts/telegram-cli.py capabilities
 
+    # Delete messages whose text contains a substring (own messages, or a
+    # bot's messages in a bot DM). Never deletes a whole chat: --match is required.
+    python scripts/telegram-cli.py delete @SomeBot --match "PAUSED" --since 2026-09-26T00:00:00 --dry-run
+    python scripts/telegram-cli.py delete @SomeBot --match "PAUSED" --topic-id 593502
+
+    # Delete specific message ids the caller already has
+    python scripts/telegram-cli.py delete-ids @SomeBot 1001 1002 1003
+
 Environment variables (optional):
     TELEGRAM_API_ID       (default: 1993898)
     TELEGRAM_API_HASH     (default: 59d1e009d7ecb0c0a7224af3f461bb2e)
@@ -63,6 +71,7 @@ try:
     from telethon import TelegramClient, events
     from telethon.tl import types as tl_types
     from telethon.tl import functions as tl_functions
+    from telethon.errors import FloodWaitError, MessageDeleteForbiddenError
 except ImportError:
     print("ERROR: telethon not installed. Run: pip install telethon")
     sys.exit(1)
@@ -71,7 +80,8 @@ except ImportError:
 # Flag/commands surfaced by `capabilities` and documented in SKILL.md so a
 # caller can detect topic support without sending anything.
 TOPIC_FLAG = "--topic-id"
-TOPIC_AWARE_COMMANDS = ("send", "ask", "read", "send-image", "send-file", "send-voice")
+TOPIC_AWARE_COMMANDS = ("send", "ask", "read", "send-image", "send-file", "send-voice", "delete")
+DELETE_BATCH_SIZE = 100
 
 
 API_ID = int(os.environ.get("TELEGRAM_API_ID", "1993898"))
@@ -763,6 +773,215 @@ async def cmd_ask(target: str, message: str, wait_seconds: int, topic_id: int | 
         await client.disconnect()  # type: ignore[func-returns-value]
 
 
+# --- Delete -------------------------------------------------------------------
+#
+# A user session can delete its own messages, and in a bot DM it can also
+# delete the bot's messages. It cannot delete other people's messages in a
+# group. --match is required so a bare `delete <chat>` can never wipe a chat.
+
+
+def _parse_iso(value: str | None):
+    """Parse an optional ISO-8601 timestamp. Returns an aware UTC datetime or None."""
+    if not value:
+        return None
+    from datetime import datetime, timezone
+
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    dt = datetime.fromisoformat(text)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _in_time_window(msg: object, since, until) -> bool:
+    """True when msg.date falls inside [since, until]. Missing bounds are open."""
+    if since is None and until is None:
+        return True
+    when = getattr(msg, "date", None)
+    if when is None:
+        return False
+    if when.tzinfo is None:
+        from datetime import timezone
+
+        when = when.replace(tzinfo=timezone.utc)
+    if since is not None and when < since:
+        return False
+    if until is not None and when > until:
+        return False
+    return True
+
+
+def _text_matches(msg: object, match: str) -> bool:
+    """Case-sensitive substring check against message text. Empty match never matches."""
+    if not match:
+        return False
+    return match in (getattr(msg, "text", None) or "")
+
+
+def _is_get_replies_invalid(exc: BaseException) -> bool:
+    """True when GetReplies cannot filter this peer (typical of a plain DM)."""
+    name = type(exc).__name__
+    if name in ("MsgIdInvalidError", "PeerIdInvalidError"):
+        return True
+    text = str(exc).lower()
+    return "getreplies" in text or "msg_id_invalid" in text or "invalid" in name.lower() and "reply" in text
+
+
+async def _iter_history(client: "TelegramClient", entity: object, scan: int, topic_id: int | None):
+    """Yield up to `scan` messages, newest first.
+
+    With topic_id, try the server-side reply_to filter first. If that peer
+    rejects GetReplies (a DM), fall back to the main history and say so.
+    Caller still applies `_belongs_to_topic`.
+    """
+    if topic_id is None:
+        messages = await client.get_messages(entity, limit=scan)
+        for msg in messages:
+            yield msg
+        return
+
+    try:
+        messages = await client.get_messages(entity, limit=scan, reply_to=topic_id)
+    except Exception as exc:
+        if not _is_get_replies_invalid(exc):
+            raise
+        print(
+            f"topic filter rejected ({type(exc).__name__}); "
+            "scanning main history and matching reply_to_top_id"
+        )
+        messages = await client.get_messages(entity, limit=scan)
+    for msg in messages:
+        yield msg
+
+
+async def _delete_id_batches(
+    client: "TelegramClient",
+    entity: object,
+    ids: list[int],
+    revoke: bool,
+) -> tuple[int, int, int]:
+    """Delete `ids` in groups of 100. Returns (deleted, skipped, flood_waits).
+
+    FloodWaitError: sleep retry_after + 1 and retry the same batch. Never abort.
+    MessageDeleteForbiddenError: drop the forbidden ids from this batch (the
+    whole batch, since the API does not name which id failed), count them
+    skipped, and continue with later batches.
+    """
+    deleted = 0
+    skipped = 0
+    flood_waits = 0
+    for start in range(0, len(ids), DELETE_BATCH_SIZE):
+        batch = ids[start : start + DELETE_BATCH_SIZE]
+        while batch:
+            try:
+                await client.delete_messages(entity, batch, revoke=revoke)
+                deleted += len(batch)
+                batch = []
+            except FloodWaitError as exc:
+                flood_waits += 1
+                wait = int(getattr(exc, "seconds", 0) or 0) + 1
+                print(f"flood wait {wait}s (retry_after+1); continuing")
+                await asyncio.sleep(wait)
+            except MessageDeleteForbiddenError:
+                print(f"delete forbidden for {len(batch)} id(s); skipping that batch")
+                skipped += len(batch)
+                batch = []
+        if start + DELETE_BATCH_SIZE < len(ids):
+            await asyncio.sleep(1)
+    return deleted, skipped, flood_waits
+
+
+def _print_delete_summary(
+    scanned: int,
+    matched: int,
+    deleted: int,
+    skipped: int,
+    flood_waits: int,
+    sample_ids: list[int],
+    dry_run: bool,
+) -> None:
+    """Ids only. Never print message bodies — they may contain secrets."""
+    mode = "dry-run" if dry_run else "deleted"
+    print(f"scanned={scanned} matched={matched} {mode}={deleted} skipped={skipped} flood_waits={flood_waits}")
+    if sample_ids:
+        shown = sample_ids[:5]
+        extra = len(sample_ids) - len(shown)
+        suffix = f" (+{extra} more)" if extra > 0 else ""
+        print(f"ids={','.join(str(i) for i in shown)}{suffix}")
+
+
+async def cmd_delete(
+    target: str,
+    match: str,
+    topic_id: int | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 5000,
+    scan: int = 5000,
+    dry_run: bool = False,
+    revoke: bool = True,
+) -> int:
+    """Delete messages whose text contains `match` (case-sensitive substring)."""
+    if not match:
+        print("ERROR: --match is required and must be non-empty (refusing to delete a whole chat)")
+        return 2
+
+    since_dt = _parse_iso(since)
+    until_dt = _parse_iso(until)
+    client = await _connect()
+    try:
+        entity = await client.get_input_entity(_coerce_target(target))
+        scanned = 0
+        matched_ids: list[int] = []
+        async for msg in _iter_history(client, entity, scan, topic_id):
+            scanned += 1
+            if topic_id is not None and not _belongs_to_topic(msg, topic_id):
+                continue
+            if not _in_time_window(msg, since_dt, until_dt):
+                continue
+            if not _text_matches(msg, match):
+                continue
+            msg_id = getattr(msg, "id", None)
+            if msg_id is None:
+                continue
+            matched_ids.append(msg_id)
+            if len(matched_ids) >= limit:
+                break
+
+        if dry_run:
+            _print_delete_summary(scanned, len(matched_ids), 0, 0, 0, matched_ids, dry_run=True)
+            return 0
+
+        deleted, skipped, flood_waits = await _delete_id_batches(client, entity, matched_ids, revoke)
+        _print_delete_summary(scanned, len(matched_ids), deleted, skipped, flood_waits, matched_ids, dry_run=False)
+        return 0
+    except Exception as exc:
+        print(f"ERROR: {exc}")
+        return 1
+    finally:
+        await client.disconnect()  # type: ignore[func-returns-value]
+
+
+async def cmd_delete_ids(target: str, ids: list[int], revoke: bool = True) -> int:
+    """Delete specific message ids. Same batching and flood-wait behavior as delete."""
+    if not ids:
+        print("ERROR: at least one message id is required")
+        return 2
+    client = await _connect()
+    try:
+        entity = await client.get_input_entity(_coerce_target(target))
+        deleted, skipped, flood_waits = await _delete_id_batches(client, entity, ids, revoke)
+        _print_delete_summary(0, len(ids), deleted, skipped, flood_waits, ids, dry_run=False)
+        return 0
+    except Exception as exc:
+        print(f"ERROR: {exc}")
+        return 1
+    finally:
+        await client.disconnect()  # type: ignore[func-returns-value]
+
+
 _TOPIC_HELP = (
     "Forum/monoforum topic root message id (the id after the underscore in "
     "Telegram's '#<chat_id>_<topic_id>' notation, e.g. 593502). When set, "
@@ -913,6 +1132,44 @@ def build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument("--wait", type=int, default=30, help="Seconds to wait for reply (default: 30)")
     p_ask.add_argument("--topic-id", type=int, default=None, help=_TOPIC_HELP)
 
+    # delete (substring match — never a whole chat)
+    p_delete = sub.add_parser(
+        "delete",
+        help="Delete messages whose text contains --match (own messages, or a bot's messages in a bot DM)",
+    )
+    p_delete.add_argument("target", help="Username (@bot) or numeric Telegram ID")
+    p_delete.add_argument(
+        "--match",
+        required=True,
+        help="Case-sensitive substring. Required. Empty match is refused (exit 2).",
+    )
+    p_delete.add_argument("--topic-id", type=int, default=None, help=_TOPIC_HELP)
+    p_delete.add_argument("--since", default=None, help="ISO timestamp; skip messages before this")
+    p_delete.add_argument("--until", default=None, help="ISO timestamp; skip messages after this")
+    p_delete.add_argument("--limit", type=int, default=5000, help="Max deletes (default: 5000)")
+    p_delete.add_argument("--scan", type=int, default=5000, help="How far back to look (default: 5000)")
+    p_delete.add_argument("--dry-run", action="store_true", help="Print count and a few ids; delete nothing")
+    p_delete.add_argument(
+        "--revoke",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Delete for everyone (default: true). Use --no-revoke to delete only for yourself.",
+    )
+
+    # delete-ids (caller already has the ids)
+    p_delete_ids = sub.add_parser(
+        "delete-ids",
+        help="Delete specific message ids (same batching and flood-wait behavior as delete)",
+    )
+    p_delete_ids.add_argument("target", help="Username (@bot) or numeric Telegram ID")
+    p_delete_ids.add_argument("ids", nargs="+", type=int, help="Message ids to delete")
+    p_delete_ids.add_argument(
+        "--revoke",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Delete for everyone (default: true). Use --no-revoke to delete only for yourself.",
+    )
+
     return parser
 
 
@@ -962,6 +1219,26 @@ def main() -> None:
         rc = asyncio.run(cmd_transcribe(args.paths, args.whisper_model, args.language))
     elif args.command == "ask":
         rc = asyncio.run(cmd_ask(args.target, args.message, args.wait, args.topic_id))
+    elif args.command == "delete":
+        # Refuse before connect so an empty match can never touch a chat.
+        if not args.match:
+            print("ERROR: --match is required and must be non-empty (refusing to delete a whole chat)")
+            sys.exit(2)
+        rc = asyncio.run(
+            cmd_delete(
+                args.target,
+                args.match,
+                topic_id=args.topic_id,
+                since=args.since,
+                until=args.until,
+                limit=args.limit,
+                scan=args.scan,
+                dry_run=args.dry_run,
+                revoke=args.revoke,
+            )
+        )
+    elif args.command == "delete-ids":
+        rc = asyncio.run(cmd_delete_ids(args.target, args.ids, revoke=args.revoke))
     else:
         parser.print_help()
         rc = 1
