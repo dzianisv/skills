@@ -137,11 +137,13 @@ export async function buildWsEndpointAuto(userDataDir?: string): Promise<string>
     }
   }
 
-  if (candidates.length === 0) {
-    throw new Error(
-      `DevToolsActivePort not found for any Chrome channel (stable, dev, beta, canary).\n` +
-        `Make sure Chrome is running and remote debugging is allowed at chrome://inspect/#remote-debugging.`,
-    );
+  // Chrome with chrome://inspect remote debugging on can listen on the default
+  // port without (re)writing DevToolsActivePort (seen on Chrome 153). Its
+  // browser endpoint accepts the GUID-less path, so fall back to it.
+  const noPortFile = candidates.length === 0;
+  if (noPortFile) {
+    const port = Number(process.env.CHROME_USE_FALLBACK_PORT || 9222);
+    candidates.push({ channel: 'stable', endpoint: `ws://127.0.0.1:${port}/devtools/browser` });
   }
 
   // Pick the first candidate whose port actually accepts connections.
@@ -164,6 +166,13 @@ export async function buildWsEndpointAuto(userDataDir?: string): Promise<string>
     // accepting it; if we can't confirm either way, accept it (best-effort).
     if (isThrowawayDebugChrome(port)) continue;
     return endpoint;
+  }
+
+  if (noPortFile) {
+    throw new Error(
+      `DevToolsActivePort not found for any Chrome channel (stable, dev, beta, canary), and nothing on the fallback port.\n` +
+        `Make sure Chrome is running and remote debugging is allowed at chrome://inspect/#remote-debugging.`,
+    );
   }
 
   // All port files exist but none are reachable — return the first candidate's

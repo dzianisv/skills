@@ -5,7 +5,8 @@
  *
  * Wire protocol: newline-delimited JSON. Request `{ id, method, params, sessionId }`,
  * response `{ id, result }` or `{ id, error }`. Control methods are prefixed `__`
- * (e.g. `__status`, `__stop`) and are answered by the proxy without touching Chrome.
+ * (e.g. `__status`) and are answered by the proxy without touching Chrome. (`__stop`
+ * is recognized but refused — the shared proxy cannot be stopped by a client.)
  */
 import net from 'node:net';
 import type { CdpClient } from './types.ts';

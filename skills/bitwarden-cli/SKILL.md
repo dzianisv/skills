@@ -58,7 +58,7 @@ Unlock vault before any operation.
 **API key login (non-interactive — preferred):**
 ```bash
 # Requires: BW_CLIENTID, BW_CLIENTSECRET, BW_PASSWORD set in environment
-source ~/.bitwarden_credentials   # or export vars manually
+set -a; source ~/.bitwarden_credentials; set +a   # or export vars manually
 bw login --apikey
 export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
 bw sync --session "$BW_SESSION"
@@ -66,6 +66,7 @@ bw sync --session "$BW_SESSION"
 
 **Already logged in:**
 ```bash
+set -a; source ~/.bitwarden_credentials; set +a
 export BW_SESSION=$(bw unlock --passwordenv BW_PASSWORD --raw)
 bw sync --session "$BW_SESSION"
 ```

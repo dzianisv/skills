@@ -13,7 +13,14 @@ npm run live-smoke        # guided LIVE reconnect smoke (needs Chrome + 1 Allow 
 ## Reconnect / live smoke
 
 `reconnect.test.ts` (in `test:offline`) proves the proxy keepalive reuses its one
-approved CDP socket and that a dropped socket fails closed without auto-reconnect.
+approved CDP socket, that a dropped socket **auto-reconnects in the same proxy**
+without ever latching `connectionBlocked`, that recovery is single-flight and
+exponentially backed off (no connect storm), and that the heartbeat detects a
+half-open connection. Auto-reconnect is safe because Chrome grants remote-debugging
+approval **per browser session, not per debugger client** — verified empirically
+(fresh connect + `Browser.getVersion` in ~1.4s, no dialog, Chrome 152).
+`connect-resilience.test.ts` pins the one remaining fail-closed case: repeated
+connect attempts that stall to their full timeout (an unanswered approval dialog).
 
 `npm run live-smoke` is the **end-to-end** version against your real Chrome (it can't
 be fully automated because Chrome's one-time "Allow remote debugging?" dialog needs a

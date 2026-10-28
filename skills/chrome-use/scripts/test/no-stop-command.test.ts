@@ -5,10 +5,12 @@
  *   "agents call stop too often for no reason, killing the approved connection
  *    and re-triggering consent."
  *
- * There is intentionally NO `chrome-use stop`. Invoking it must:
+ * There is intentionally NO `chrome-use stop`, and the internal `__stop` control
+ * method no longer stops anything either. Invoking the CLI command must:
  *   - follow the normal unknown-command path,
  *   - exit non-zero,
  *   - and leave the running proxy's PID/socket completely untouched.
+ * Sending `__stop` on the wire must return an error and leave the proxy running.
  *
  * Terminating a genuinely broken proxy is an explicit out-of-band OS action for
  * a human/maintainer — never exposed through the agent CLI.
@@ -52,16 +54,17 @@ function waitForSocket(sockPath: string, timeoutMs = 8000): Promise<void> {
   })();
 }
 
-function probeStatus(sockPath: string): Promise<any> {
+/** Send one control method over the proxy socket and return the raw reply. */
+function probeControl(sockPath: string, method: string): Promise<{ result?: any; error?: string }> {
   return new Promise((resolve, reject) => {
     const c = net.createConnection({ path: sockPath });
     const timer = setTimeout(() => {
       c.destroy();
-      reject(new Error('probeStatus timed out'));
+      reject(new Error(`probeControl(${method}) timed out`));
     }, 2000);
     let buf = '';
     c.setEncoding('utf8');
-    c.on('connect', () => c.write(JSON.stringify({ id: 1, method: '__status' }) + '\n'));
+    c.on('connect', () => c.write(JSON.stringify({ id: 1, method }) + '\n'));
     c.on('data', (chunk) => {
       buf += chunk;
       const nl = buf.indexOf('\n');
@@ -69,7 +72,7 @@ function probeStatus(sockPath: string): Promise<any> {
       clearTimeout(timer);
       c.destroy();
       try {
-        resolve(JSON.parse(buf.slice(0, nl)).result);
+        resolve(JSON.parse(buf.slice(0, nl)));
       } catch (e) {
         reject(e as Error);
       }
@@ -79,6 +82,10 @@ function probeStatus(sockPath: string): Promise<any> {
       reject(e);
     });
   });
+}
+
+function probeStatus(sockPath: string): Promise<any> {
+  return probeControl(sockPath, '__status').then((r) => r.result);
 }
 
 function runCli(
@@ -151,4 +158,40 @@ test('`chrome-use stop` is rejected (unknown command, exit 1) and leaves an isol
   assert.doesNotThrow(() => process.kill(pidBefore, 0), 'proxy process must still be alive after the rejected stop');
   const after = await probeStatus(sockPath);
   assert.equal(after.pid, pidBefore, 'proxy PID must be unchanged — stop must never signal it');
+});
+
+/**
+ * `__stop` used to be a working control method, and outdated skill copies still
+ * send it (they called it on a `__status` version mismatch, tearing down a healthy
+ * shared proxy that every other session depended on). It is now answered with an
+ * error and does nothing: the proxy holds the one approved Chrome connection and
+ * stopping it is a human out-of-band OS action (`kill <pid>`), never something a
+ * client can trigger.
+ */
+test('`__stop` no longer stops the proxy — it returns an error and the proxy stays alive', async (t) => {
+  const udd = fs.mkdtempSync(path.join(os.tmpdir(), 'cu-stop-noop-'));
+  const sockPath = path.join(udd, 'proxy.sock');
+
+  const proxy: ChildProcess = spawn(process.execPath, [PROXY], {
+    env: { ...process.env, CHROME_USE_DAEMON: '1', CHROME_USE_SOCKET: sockPath, CHROME_USE_TEST_USER_DATA_DIR: udd },
+    stdio: 'ignore',
+  });
+  t.after(() => {
+    try { proxy.kill('SIGKILL'); } catch { /* ignore */ }
+    try { fs.rmSync(udd, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  await waitForSocket(sockPath);
+  const pidBefore = (await probeStatus(sockPath)).pid as number;
+  assert.equal(typeof pidBefore, 'number');
+
+  const stopReply = await probeControl(sockPath, '__stop');
+  assert.equal(stopReply.result, undefined, '__stop must not succeed');
+  assert.match(String(stopReply.error ?? ''), /cannot be stopped remotely/i, '__stop must explain why it refused');
+
+  // Give any (bogus) shutdown path time to take effect before asserting liveness.
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(fs.existsSync(sockPath), 'proxy socket must still exist after __stop');
+  assert.doesNotThrow(() => process.kill(pidBefore, 0), 'proxy process must still be alive after __stop');
+  assert.equal((await probeStatus(sockPath)).pid, pidBefore, 'proxy PID must be unchanged after __stop');
 });
