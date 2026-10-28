@@ -48,6 +48,7 @@ const VERSION_FILES = [
   PROXY_PATH,
   path.join(path.dirname(PROXY_PATH), 'lib', 'cdp.ts'),
   path.join(path.dirname(PROXY_PATH), 'lib', 'devtools-port.ts'),
+  path.join(path.dirname(PROXY_PATH), 'lib', 'agent-tabs.ts'),
 ];
 
 /** Content hash of the currently-installed proxy files (see proxy.ts's computeVersion). */
@@ -415,6 +416,12 @@ async function main(): Promise<void> {
   // One persistent proxy connection for this invocation; long timeout so the first
   // command can wait through Chrome's approval dialog.
   const cdp = await ProxyClient.open(SOCKET_PATH, 320_000);
+  const pinnedTarget = process.env.CHROME_USE_PIN_TARGET;
+  if (pinnedTarget) {
+    // Pinning is advisory and only succeeds for a target this proxy recorded as
+    // agent-created; user-owned targets remain outside the ownership registry.
+    await cdp.send('__pin_agent_tab', { targetId: pinnedTarget }).catch(() => {});
+  }
   const state = new ClientState(cdp);
 
   try {

@@ -3,6 +3,9 @@ name: chrome-use
 description: Drive the user's real running Chrome with agent-browser-style commands: open pages, snapshot interactive elements as @e1 refs, click, fill, type, screenshot, scroll, and eval. Use for Chrome, browser automation, web automation, forms, clicks, screenshots, or @e1 refs. Always connects to the user's actual Chrome profile and live sessions via DevToolsActivePort autoConnect; it never launches or copies another browser profile.
 ---
 
+> NEVER for Notion: notion.so / app.notion.com are read and edited only via the ntn CLI or the Notion API (Den). Refuse and use the API.
+
+
 # chrome-use
 
 A zero-dependency TypeScript CLI that drives the user's **real running Chrome** with [agent-browser](https://skills.volces.com/skills/vercel-labs/agent-browser)-style commands. It speaks the Chrome DevTools Protocol (CDP) through the bundled WebSocket client and connects via Chrome 144+ autoConnect — no Puppeteer or `npm install`.
@@ -12,6 +15,8 @@ A zero-dependency TypeScript CLI that drives the user's **real running Chrome** 
 - Use only the bundled `chrome-use` CLI. It resolves the user's Chrome through `DevToolsActivePort`.
 - Preserve user-owned tabs. Create dedicated task tabs when needed, pin evidence tabs by `targetId`, and close only tabs created by the task.
 - If Chrome needs native approval, ask the user to click **Allow** at `chrome://inspect/#remote-debugging`; wait instead of launching another Chrome or copying a profile.
+- **Never restart or kill the chrome-use proxy, and never open your own WebSocket to Chrome.** Every new debugger connection pops a new "Allow" dialog in the user's browser. The proxy holds the one approved connection. CLI code changes take effect without a restart. If a `lib/` fix needs the proxy reloaded, ask the user first.
+- `DevToolsActivePort` missing but remote debugging on (seen on Chrome 153): the resolver falls back to `ws://127.0.0.1:9222/devtools/browser` (override with `CHROME_USE_FALLBACK_PORT`). Check with `lsof -nP -iTCP:9222 -sTCP:LISTEN` before telling the user remote debugging is off.
 </constraints>
 
 ## Prerequisites
@@ -110,6 +115,17 @@ If the pinned tab is gone, commands fail loudly instead of silently falling back
 
 If your tool starts a fresh shell for each invocation, set `CHROME` and
 `CHROME_USE_PIN_TARGET` in each call; exports from an earlier shell do not persist.
+
+### Agent-tab ownership and idle cleanup
+
+The shared proxy records only page targets returned by agent-issued `Target.createTarget`
+requests. Each record includes `createdAt` and `lastUsedAt`; activity through an attached
+CDP session refreshes `lastUsedAt`. Existing tabs are never inserted into this registry,
+so the automatic cleanup cannot close user-owned tabs. Unpinned recorded tabs that have
+been unused for one hour are closed by the proxy. Set `CHROME_USE_PIN_TARGET` to preserve
+a recorded task tab while it is intentionally pinned; pinning a user-owned target is a
+no-op. Jobs must still close their run-owned tabs in an unconditional cleanup step rather
+than waiting for the one-hour safety timeout. Never stop or restart the shared proxy.
 
 ## Command reference
 
@@ -307,7 +323,7 @@ one-time approval. `test:offline` skips them. See `scripts/test/README.md`.
 
 ## Do NOT
 
-- **Do not stop or restart the proxy, and do not tell the user to.** There is intentionally **no `chrome-use stop`**, and the proxy refuses the internal `__stop` method. The proxy is **shared across all sessions** and is the *last approved client* — Chrome's remote-debugging approval lapses the moment it disconnects, so killing it **guarantees** the dialog you were trying to avoid. It also recovers from connection loss by itself (see "Connection loss and recovery"). If a session looks unhealthy, run `chrome-use status` and **report** it.
+- **Never stop or restart the proxy, or recommend that action.** There is intentionally **no `chrome-use stop`**, and the proxy refuses the internal `__stop` method. The proxy is **shared across all sessions** and is the *last approved client* — Chrome's remote-debugging approval lapses the moment it disconnects, so killing it **guarantees** the dialog you were trying to avoid. It also recovers from connection loss by itself (see "Connection loss and recovery"). If a session looks unhealthy, run `chrome-use status` and **report** it.
 - **Do not treat a dropped connection as fatal.** `connection dropped; the proxy is reconnecting automatically` means: retry the command. It is transient.
 - Kill or restart a **healthy proxy** — it forces a new Chrome permission dialog. The CLI probes and reuses it automatically. (Changing *command* logic does not require a proxy restart — only changes to `proxy.ts` do.)
 - **Do not swap `lib/ws.ts` back to Node's global `WebSocket`.** It caps messages at 4 MiB over `permessage-deflate` and destroys the socket past that — which is exactly the bug that made `screenshot` kill browser automation machine-wide.

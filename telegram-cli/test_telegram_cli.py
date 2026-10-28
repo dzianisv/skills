@@ -156,6 +156,63 @@ class ArgumentParsingTests(unittest.TestCase):
             self.parser.parse_args(["send"])
         self.assertEqual(ctx.exception.code, 2)
 
+    def test_delete_requires_match(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self.parser.parse_args(["delete", "@SomeBot"])
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_delete_parses_filters_and_dry_run(self):
+        args = self.parser.parse_args([
+            "delete", "@SomeBot",
+            "--match", "PAUSED",
+            "--topic-id", "593502",
+            "--since", "2026-09-26T00:00:00",
+            "--until", "2026-09-26T12:00:00Z",
+            "--limit", "10",
+            "--scan", "100",
+            "--dry-run",
+        ])
+        self.assertEqual(args.match, "PAUSED")
+        self.assertEqual(args.topic_id, 593502)
+        self.assertEqual(args.limit, 10)
+        self.assertEqual(args.scan, 100)
+        self.assertTrue(args.dry_run)
+        self.assertTrue(args.revoke)
+
+    def test_delete_no_revoke(self):
+        args = self.parser.parse_args(["delete", "@SomeBot", "--match", "x", "--no-revoke"])
+        self.assertFalse(args.revoke)
+
+    def test_delete_ids_parses_ids(self):
+        args = self.parser.parse_args(["delete-ids", "@SomeBot", "1001", "1002"])
+        self.assertEqual(args.ids, [1001, 1002])
+        self.assertTrue(args.revoke)
+
+
+class DeleteFilterTests(unittest.TestCase):
+    def test_empty_match_never_matches(self):
+        msg = _stdlib_types.SimpleNamespace(text="hello", id=1)
+        self.assertFalse(telegram_cli._text_matches(msg, ""))
+
+    def test_match_is_case_sensitive_substring(self):
+        msg = _stdlib_types.SimpleNamespace(text="bot PAUSED now", id=1)
+        self.assertTrue(telegram_cli._text_matches(msg, "PAUSED"))
+        self.assertFalse(telegram_cli._text_matches(msg, "paused"))
+
+    def test_missing_text_does_not_match(self):
+        msg = _stdlib_types.SimpleNamespace(text=None, id=1)
+        self.assertFalse(telegram_cli._text_matches(msg, "PAUSED"))
+
+    def test_time_window_skips_outside(self):
+        from datetime import datetime, timezone
+
+        msg = _stdlib_types.SimpleNamespace(date=datetime(2026, 9, 26, 6, 0, tzinfo=timezone.utc))
+        since = telegram_cli._parse_iso("2026-09-26T00:00:00")
+        until = telegram_cli._parse_iso("2026-09-26T12:00:00Z")
+        self.assertTrue(telegram_cli._in_time_window(msg, since, until))
+        self.assertFalse(telegram_cli._in_time_window(msg, telegram_cli._parse_iso("2026-09-26T07:00:00Z"), None))
+        self.assertTrue(telegram_cli._in_time_window(msg, None, None))
+
 
 class CapabilitiesCommandTests(unittest.TestCase):
     def test_capabilities_runs_offline_and_reports_topic_support(self):
