@@ -1,0 +1,5 @@
+name: yc-pitch-deck
+description: Build a short, no-fluff seed pitch deck. Use when asked for a pitch deck, investor deck, YC deck, or to rebuild a deck that reads as AI slop.
+version: "1.0"
+created: "2026-10-27"
+source: "YC Startup Library seed-deck guidance, applied as a strict anti-fluff rule set"

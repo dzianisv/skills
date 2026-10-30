@@ -66,6 +66,20 @@
       "skills": [
         "build-in-public-reel"
       ]
+    },
+    {
+      "title": "Fundraising",
+      "description": "Founder materials for raising capital: pitch decks and investor narratives.",
+      "skills": [
+        "yc-pitch-deck"
+      ]
+    },
+    {
+      "title": "AgentPod Operations",
+      "description": "Spawn and configure AgentPod tenants through the Admin API and the tenant chat API.",
+      "skills": [
+        "agentpod-tenant-ops"
+      ]
     }
   ]
 }
