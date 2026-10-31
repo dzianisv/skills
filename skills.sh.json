@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "Browser Automation",
-      "description": "Drive real and remote Chrome browsers via CDP — your live profile, cookies, sessions.",
+      "description": "Drive real and remote Chrome browsers via CDP \u2014 your live profile, cookies, sessions.",
       "skills": [
         "chrome-use",
         "chrome-devtools-remote",
@@ -21,7 +21,8 @@
         "take-ownership",
         "take-ownership-meta-agent",
         "no-github-backlog",
-        "no-pr-backlog"
+        "no-pr-backlog",
+        "dev-workflow"
       ]
     },
     {
