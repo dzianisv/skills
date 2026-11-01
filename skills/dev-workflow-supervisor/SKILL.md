@@ -5,13 +5,14 @@ description: "Use when an hourly project check must find stalled tasks, check li
 
 # Dev Workflow Supervisor
 
-The Supervisor protocol for the per-project hourly cron jobs (`agentpod-hourly`, `vibebrowser-hourly`, `homesteadlink-hourly`, `opencode-hourly`). The shared core process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`); the per-task work belongs to the Overflow (`~/workspace/custom-skills/overflow/SKILL.md`). This skill is generic — every project-specific value (links, repos, constraints) comes from the job body that invokes it.
+The Supervisor protocol for the per-project hourly cron jobs (`agentpod-hourly`, `vibebrowser-hourly`, `homesteadlink-hourly`, `opencode-hourly`). The shared core process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`); the task subagent also follows `overflow` (`~/workspace/custom-skills/overflow/SKILL.md`). This skill is generic — every project-specific value (links, repos, constraints) comes from the job body that invokes it.
 
 ## Roles
 
-- **Supervisor (this job):** scans the Work Log, diagnoses, dispatches, verifies receipts, reflects, self-edits. It NEVER implements code or runs task stages itself.
-- **Overflow (task manager):** the per-task lead subagent the Supervisor dispatches. It owns ONE task end-to-end per `overflow` + `dev_workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
-- A task with no live Overflow and no artifact movement >2h is a diagnosis candidate, not an automatic re-dispatch. A live Overflow that went quiet is steered, never duplicated.
+- **Main session running the Supervisor (this job):** scans the Work Log, diagnoses, dispatches, verifies receipts, reflects, self-edits. It NEVER implements code or runs task stages itself.
+- **Task subagent:** the single subagent the Supervisor dispatches. It owns ONE task end-to-end per `overflow` + `dev_workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
+- **Stage subagent:** runs only its assigned stage under the task subagent’s claim; it does not reclaim the task or restart the workflow.
+- An incomplete task with no live task subagent is a diagnosis candidate on every run; do not wait two hours to recover a dropped chain. A live task subagent that went quiet is steered, never duplicated.
 
 ## Inputs (from the invoking job body)
 
@@ -27,26 +28,37 @@ Before dispatch, map the available tools for spawning task/stage subagents (incl
 2. The Work Log rows in ALL statuses (In progress / Blocked / Unblocked / Not started / Done). Use the available Notion connector or CLI. Fetch each row’s current page before editing it; preserve unrelated fields.
 3. The Decision Log, PRD and Design doc — context for judging the work.
 4. GitHub state via the project's pull route.
-5. The live subagent list (using the runtime’s supported tool): which rows have a live Overflow right now.
+5. The live subagent list (using the runtime’s supported tool): which rows have a live task subagent right now.
 
 ## Dispatch and resume contract
 
-The Supervisor starts or resumes ONE task-manager subagent per task with `dev-workflow` + `overflow`; that manager runs the stages and spawns stage subagents. Never dispatch stage work directly from this job.
+The Supervisor starts or resumes ONE task subagent per task with `dev-workflow` + `overflow`; that task subagent runs the stages and spawns stage subagents. Never dispatch stage work directly from this job.
 
-Send through the runtime's actual subagent message/resume tool, addressed to the owning manager/session—not just a recap in the user chat. Use only tools the runtime exposes (including Muse); do not invent API names. Message:
+Send through the runtime's actual subagent message/resume tool, addressed to the owning task subagent/session—not just a recap in the user chat. Use only tools the runtime exposes (including Muse); do not invent API names. Message:
 `task ID + record link | current stage | verified SHA/artifact/run | next action | acceptance check + expected artifact | permissions/gates | report-back destination`.
 An accepted dispatch proves handoff only. Read back actual stage activity/results on the next check.
 
-Resume a completed/stopped manager if supported and ownership remains valid. Otherwise confirm its ownership is inactive or cleared before starting a replacement; it reloads the persistent task record and resumes the owed stage. Never duplicate a quiet manager. Before dispatch, re-read the row and claim; overlapping cron runs must not both claim it. Use the runtime's claim/lock mechanism if available; if ownership cannot be established safely, leave dispatch pending.
+Resume a completed/stopped task subagent if supported and ownership remains valid. Otherwise confirm its ownership is inactive or cleared before starting a replacement; it reloads the persistent task record and resumes the owed stage. Never duplicate a quiet task subagent. Before dispatch, re-read the row and claim; overlapping cron runs must not both claim it. Use the runtime's claim/lock mechanism if available; if ownership cannot be established safely, leave dispatch pending.
+
+## Task slots and priority
+
+Keep at most **three active tasks per project across all runs**, including existing executions. This is a task limit, not a three-agent limit. An admitted task keeps its slot through stage completions, handoffs and recovery until Done or a recorded external wait with no live execution. A waiting parent and its child count as one task. Default to one active stage child per task and yield waiting parents so runtime execution slots remain available to their children. If the runtime cannot support three task chains, run fewer; do not create idle parents that prevent their children from running.
+
+Serialize project admission across overlapping runs using a supported lock or atomic reservation: reconcile task/stage IDs, claims, artifacts and live executions, reserve a slot, then dispatch or resume. Count in-flight spawn/resume reservations too; release a failed admission only after confirming no execution started. If safe admission cannot be established, leave it pending rather than race another run. A verified external wait frees a project slot only when no execution remains live; keep the owner, gate and resume condition in the row. Resuming that task must acquire a slot again. Unknown execution state does not free a slot.
+
+Build a **READY queue** from actionable new and resumable tasks, highest project priority first, oldest first within equal priority. READY is a queue, not a new Work Log status. Fill free slots from it after reconciliation; do not replace an active task or interrupt its stage merely because priorities changed. If three tasks are already active, steer them rather than dispatching another.
 
 ## The loop
 
-1. **Diagnose before dispatch.** For each Blocked, Unblocked or stale In progress row, read the issue/PR, current code SHA, latest relevant run/job/step and live owner/session. Compare failures with the fix SHA: an old failed run or green summary/classifier does not establish the current dependency. Record: `cause | evidence + checked time | exact step held | owner | next action | expected artifact`.
+1. **Diagnose before dispatch.** For each Blocked, Unblocked or incomplete In progress row, read the issue/PR, current code SHA, latest relevant run/job/step and live owner/session. Compare failures with the fix SHA: an old failed run or green summary/classifier does not establish the current dependency. Record: `cause | evidence + checked time | exact step held | owner | next action | expected artifact`.
 2. **Test the gate.** Classify it as a dependency, permission, access/tool failure, execution failure, or stale claim. Name the exact operation that cannot proceed. A merged fix advances to the next owed stage; it does not require reimplementation. An independent workflow need not wait for an application release tag. Use an already-authorized alternative route or independent substeps; never invent a founder gate or bypass a real approval, credential, spend or release restriction. Ask once for a specific bounded decision if needed, and continue independent work.
-3. **Steer, then verify.** Send the existing live Overflow a concrete next step, required artifact and check point. Never duplicate it. `Unblocked` means the Supervisor reviewed the blocker and posted an actionable next-step comment; it is not permission, resumed execution or delivery. Keep any unresolved gate explicit. Mark In progress only after executor acknowledgment and evidence of resumed work. Comments, status changes, dispatch receipts and Last updated are not artifact progress. Keep the last artifact URL/SHA and its movement time in the row notes; never advance that time for a check/comment/status edit.
-4. **Recover stalled ownership.** On the next cycle, read back the promised artifact or inspect the owner's live session for actual activity. If nothing moved, diagnose the failed handoff and send one corrected instruction. If the owner is confirmed stopped/failed, transfer the claim before dispatching ONE replacement for the exact stage owed. An unobservable owner is not a dead owner: record the access problem, do independent work, and do not duplicate it. Three cycles with the same failure: stop identical retries, record the cause and exact unblock, escalate if required, and recheck that dependency each cycle; resume when it changes.
-5. **Start actionable work.** An open issue with owed work first gets a Not started row with scope and acceptance criteria. Start the oldest actionable unclaimed row, respecting concurrency and model-cost limits. Check other actors' claims, branch prefixes and fresh pushes; shared bot authors prove no ownership. If a gate holds only part of a task, brief the lead on the permitted substep, not the blocked action.
-6. **Reconcile completion.** Done requires API-read-back merge SHA, recorded Stage 5.5 Design/PRD sync, Stage 6 acceptance evidence and any required live-delivery proof. Merge or issue closure alone is not Done. Keep merged-not-deployed work explicit. Reconcile active GitHub work into the Work Log without inventing an active owner.
+3. **Continue completed stages.** On a completion notification or result found during a scan, read back the stage artifact and acceptance evidence. For an incomplete task, use the actual message/resume tool to have its task subagent start the next allowed stage or rework, or record the concrete external gate and resume condition when no work is permitted. Receiving or reporting a stage result is not task completion.
+4. **Steer, then verify.** Send the existing live task subagent a concrete next step, required artifact and check point. Never duplicate it. `Unblocked` means the Supervisor reviewed the blocker and posted an actionable next-step comment; it is not permission, resumed execution or delivery. Keep any unresolved gate explicit. Mark In progress only after task-subagent acknowledgment and evidence of resumed work. Comments, status changes, dispatch receipts and Last updated are not artifact progress. Keep the last artifact URL/SHA and its movement time in the row notes; never advance that time for a check/comment/status edit.
+5. **Recover stalled ownership.** On the next cycle, read back the promised artifact or inspect the owner's live session for actual activity. If nothing moved, diagnose the failed handoff and send one corrected instruction. If the owner is confirmed stopped/failed, transfer the claim before dispatching ONE replacement for the exact stage owed. An unobservable owner is not a dead owner: record the access problem, do independent work, and do not duplicate it. Three cycles with the same failure: stop identical retries, record the cause and exact unblock, escalate if required, and recheck that dependency each cycle; resume when it changes.
+6. **Start actionable work.** An open issue with owed work first gets a Not started row with scope and acceptance criteria. Fill available project slots from the priority-ordered READY queue, respecting runtime capacity and model-cost limits. Check other actors' claims, branch prefixes and fresh pushes; shared bot authors prove no ownership. If a gate holds only part of a task, brief the task subagent on the permitted substep, not the blocked action.
+7. **Reconcile completion.** Done requires API-read-back merge SHA, recorded Stage 5.5 Design/PRD sync, Stage 6 acceptance evidence and any required live-delivery proof. Merge or issue closure alone is not Done. Keep merged-not-deployed work explicit. Reconcile active GitHub work into the Work Log without inventing an active owner.
+
+Before ending a run, ensure each active incomplete task has a live responsible task subagent or a confirmed continuation action. For a stopped owner, use the recovery contract above; for a real wait or missing capability, record the exact gate and resume condition. A summary alone does not keep the chain running.
 
 ## Reporting
 
@@ -81,3 +93,4 @@ Every project has one, titled "Agents Context", under its Notion hub. The job bo
 - Do not wait on the CI queue — merges follow `dev_workflow` (clean review + local verification).
 - Verify live, never from document audits alone; "unverified" is a hypothesis, not a task.
 - Never print secret values anywhere. Observations worth keeping go to the daily log `~/memory/YYYY-MM-DD.md`, never `MEMORY.md`.
+
