@@ -1,6 +1,6 @@
 ---
 name: dev-workflow-supervisor
-description: "Supervise a project hourly: check the Work Log and live subagents, diagnose stalled tasks, dispatch task leads, and verify completion without duplicating active owners."
+description: "Use when an hourly project check must find stalled tasks, check live subagent ownership, dispatch actionable work, and verify completion."
 ---
 
 # Dev Workflow Supervisor
