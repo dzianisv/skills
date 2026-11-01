@@ -1,22 +1,12 @@
 # Overflow
 
-The Overflow is the per-task lead subagent dispatched by a Supervisor (the per-project hourly job, `~/workspace/custom-skills/dev-workflow-supervisor/SKILL.md`) or by the orchestrator in chat. It owns ONE task end-to-end. The stage-by-stage process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`) — this skill is the lead's operating contract: how it claims, staffs, gates, and reports. The lead coordinates and verifies; it does not implement inline — it spawns one subagent per stage.
+The Overflow is the per-task lead subagent dispatched by a Supervisor (the per-project hourly job, `~/workspace/custom-skills/dev-workflow-supervisor/SKILL.md`) or by the orchestrator in chat. It owns ONE task end-to-end. The stage-by-stage process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`) — that skill is the canonical stage, ownership, blocker and continuation contract. This compatibility entry summarizes the lead role and receipt; if its summary differs, follow the current `dev-workflow`. The lead coordinates and verifies; it does not implement inline — it delegates substantive stage work. Only the task manager claims; stage subagents inherit that claim and execute only their assigned stage, never Stage 0 or the whole workflow.
 
-## Claim (Stage 0, before any work)
+## Execution
 
-1. The task exists as a GitHub issue (scope + acceptance criteria) and as a row in the project's Work Log (Status "In progress", Last updated = now). No row, no start.
-2. Check nobody else is working it: issue comments, open PRs, commits from the last 48h. Another active claim → stand down, withdraw any claim posted, report, pick different work. Attribution only by self-signed claims (branch prefix `codex/…`, a "Codex chat <uuid>" comment, an OpenCode `ses_…` claim); bot authors are shared credentials and prove nothing.
-3. Post the claim comment as the first action: session/agent id + "in progress" + scope. Update the issue at design-done, fix-shipped, merge.
+Load the current `dev-workflow` skill and follow its task-manager contract: Stage 0 ownership, assigned stage subagents, verified result → next stage/rework, blocker checks, persistent manager/child IDs and supported runtime recovery. Do not maintain a second copy of those rules here.
 
-## Run the stages (per dev_workflow)
-
-- **Stage 1 — Context:** a context subagent reads the issue fully (body, all comments, linked PRs/issues) plus the Notion design/PRD from the brief, and returns ONE context brief. Later stages work from the brief; they do not re-gather. Never work from the title alone.
-- **Stage 2 — Design:** the design must exist in Notion and pass an architecture review against the ticket + PRD before implementation. Missing → a design subagent writes it (per `dev_docs`: 30-second read, concrete nouns and numbers), then the review runs. Bug hunts take the investigation track in `dev_workflow` instead (root cause first; a found bug does not get fixed until the design is repaired).
-- **Stage 3 — Implementation:** an implementation subagent works in a branch, opens a PR linking the issue, reports the diff summary + its own local test evidence. It does NOT merge.
-- **Stage 4 — Review loop:** a review subagent (never the implementer) reads the Notion design/PRD + acceptance criteria, then the PR diff; evidence claims are checked, criteria tested one by one. Findings → implementation fixes → re-review, until clean. Two rounds bouncing with substantive findings = structural problem: stop, fix the design or the brief, restart.
-- **Stage 5 — Merge:** the gate is the review verdict comment read back via the API (comment id + the head SHA it names) — a delivered PASS is not the gate. CI green on the PR head → merge; CI globally broken on main → the local-verification fallback in `dev_workflow`. Verify the merge by SHA readback. The issue does NOT close here.
-- **Stage 5.5 — Design/PRD sync:** check whether the merged change makes the Notion Design or PRD wrong; update what it changed, and record the outcome on the issue either way. No recorded sync outcome, no closure.
-- **Stage 6 — Validation:** a validation subagent (never the implementer) checks the merged result end-to-end in a real environment and the adjacent flows. Failure reopens the relevant stage. The issue closes and the Work Log row goes Done ONLY when validation passes AND the Stage 5.5 outcome is recorded. A merge is not a deploy: until Den's release tag deploys it, the residual is classified deploy-proof and reported merged-not-deployed, never done.
+Only the manager claims the task; stage subagents inherit its claim and execute only their assigned stage. Reuse context but refresh changed ownership, decisions, code and run evidence. A child’s PASS/Blocked report must be verified. `Unblocked` means reviewed with a concrete next-step comment; In progress requires resumed work, and Done requires the canonical validation/delivery gates.
 
 ## The receipt (what the Overflow returns)
 
