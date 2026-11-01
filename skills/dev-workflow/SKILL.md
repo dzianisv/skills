@@ -21,8 +21,8 @@ It lists open AgentPod issues with their PRs, open AgentPod PRs with no issue, o
 ### On Den's status request — table, reflection, push
 
 1. **Table** from the fresh pull (verify rows the script can't classify against GitHub directly). Columns: PR/задача (link; issue link if no PR yet) | что делает (one plain line) | статус — only: **В работе** · **В ревью (субагент)** (a Stage 4 review is running; Den never reviews code) · **Готов к мерджу** · **Ждёт CI / раннер** · **Ждёт Дена: <что именно>** · **Ждёт флот** · **Не начато**.
-2. **Stall reflection** per row: *my stall* = a stage finished, the next never started (PR without review, clean review without merge, verdict without a fix agent) — name it plainly. *Den's gate* (money, sign-in, decision) or *external gate* (fleet, CI, third party) = not a stall; name the unblock in one phrase.
-3. **Push, same turn, no asking:** every my-stall row gets a lead (re)dispatched, briefed with `dev_workflow` and the exact stage owed. One line per push under the table. A status answer listing a stalled task without pushing it is a failed run of this skill.
+2. **Stall reflection** per row: *my stall* = a stage finished, the next never started (PR without review, clean review without merge, verdict without a fix agent) — name it plainly. *Den's gate* (money, sign-in, decision) or *external gate* (fleet, CI, third party) must be verified against the exact step and current evidence; it exempts only dependent work, not the whole task.
+3. **Push, same turn, no asking:** steer the existing live lead; dispatch only actionable unclaimed work after claim checks or confirmed ownership transfer, briefed with `dev_workflow` and the exact stage owed. One line per push under the table. A status answer listing a stalled task without pushing it is a failed run of this skill.
 
 ### Starting a task
 
@@ -44,7 +44,7 @@ Model choice per stage subagent: bounded work with clear checks → cheaper capa
 
 ## Stage 1 — Context gathering (context subagent)
 
-The lead spawns a context subagent. It reads the issue completely (body, all comments, linked PRs/issues, labels) plus the Notion design and PRD, and returns ONE context brief: what is asked, current status, prior decisions, acceptance criteria, existing evidence. Later stages work from this brief; they do not re-gather. Never work from the title alone.
+The lead spawns a context subagent. It reads the issue completely (body, all comments, linked PRs/issues, labels) plus the Notion design and PRD, and returns ONE context brief: what is asked, current status, prior decisions, acceptance criteria, existing evidence. Later stages reuse this brief, but refresh changed decisions, ownership, code SHA and blocker/run evidence before acting. Never work from the title alone.
 
 ## Stage 2 — Design (Notion is the home of design + PRD)
 
@@ -64,6 +64,12 @@ No Stage 2 upfront — there is nothing to design yet.
 
 Done right: the lxd-4 ZFS suspension (#5712) — root cause was a design flaw (pool as a sparse file on the host root fs); the durable fix changed the layout in the design/setup, not just the pool.
 
+## When a stage cannot proceed
+
+Before declaring Blocked, record `cause | current SHA/run/failed step | exact operation held | owner | next action | expected artifact`. Separate dependency, permission, access and execution failures from stale claims; an old pre-fix failure is not proof that current code fails. Check an authorized alternative and continue independent substeps. Do not wait for a release tag to run an independent workflow.
+
+On a supervisor unblock comment, acknowledge the next step, resume the permitted stage, and link the resulting artifact. `Unblocked` means reviewed with an actionable comment, not approval or completion. If the step still cannot run, return fresh failure evidence and the smallest decision needed; never repeat the old blocker without checking it. Keep one owner; escalate rather than silently abandoning the handoff. Existing permission, release, review and validation gates still apply.
+
 ## Stage 3 — Implementation (implementation subagent)
 
 The lead spawns an implementation subagent. Brief points at: the issue, the Notion design/PRD, the acceptance criteria. It works in a branch, opens a PR linking the issue, reports the diff summary + its own local test evidence. It does NOT merge.
@@ -79,7 +85,7 @@ The lead spawns an implementation subagent. Brief points at: the issue, the Noti
 
 1. Review clean → CI on the PR head → green → merge. Verify the merge by SHA readback. Post the merge comment. The issue does NOT close here — it closes at Stage 6.
    **Gate order (weekly review, 2026-10-31):** "review is clean" = the verdict comment EXISTS on the PR and the orchestrator has read it back via API (comment id + head SHA it names). A subagent's delivered PASS is not the gate — PR #5782 was merged at 10:59:50Z on a delivered PASS whose verdict comment landed 11:01:53Z. Read the verdict back first, then merge.
-2. **CI globally broken on main** (broken for everyone, not by this PR): do not queue. Fall back in order: full relevant suite locally + merge on local evidence; deploy locally where a route exists; at minimum merge locally-verified work and record the CI bypass + reason on the issue, for re-verification when CI recovers.
+2. **CI globally broken on main** (broken for everyone, not by this PR): do not queue. Fall back in order: full relevant suite locally + merge on local evidence; deploy locally only where a route exists and the action is already authorized (release approval still applies); at minimum merge locally-verified work and record the CI bypass + reason on the issue, for re-verification when CI recovers.
 
 ## Stage 5.5 — Design/PRD sync check (after every merge, Den 2026-11-01)
 
@@ -124,7 +130,7 @@ Stall pattern #3 (weekly review, 2026-10-31): **backlog cron spins during other-
 
 ## Hourly job self-improvement
 
-**Roles.** Each project has ONE hourly cron, the **Supervisor**, running the protocol in **Dev Workflow Supervisor** (`~/workspace/custom-skills/dev-workflow-supervisor/SKILL.md`) — one template over this skill, instantiated per project (`agentpod-hourly`, `vibebrowser-hourly`, `homesteadlink-hourly`, `opencode-hourly`) and differing only in project parameters: Work Log, PRD, Design, Decision Log, repos/pull script, project constraints. The Supervisor scans the Work Log, diagnoses, dispatches, verifies receipts (merge SHA read back, issue closed, deliverable at its recorded path), reflects, and self-edits. It never implements code or runs task stages itself. The **Executor**, running **dev-workflow** (`~/workspace/custom-skills/dev-workflow/SKILL.md`), is the per-task lead subagent the Supervisor dispatches: it owns one task end-to-end (Stages 0–6) and reports its receipt back. A task with no live Executor and no movement >2h is the Supervisor's to re-dispatch; a live Executor that went quiet is steered, never duplicated.
+**Roles.** Each project has ONE hourly cron, the **Supervisor**, running the protocol in **Dev Workflow Supervisor** (`~/workspace/custom-skills/dev-workflow-supervisor/SKILL.md`) — one template over this skill, instantiated per project (`agentpod-hourly`, `vibebrowser-hourly`, `homesteadlink-hourly`, `opencode-hourly`) and differing only in project parameters: Work Log, PRD, Design, Decision Log, repos/pull script, project constraints. The Supervisor scans the Work Log, diagnoses, dispatches, verifies receipts (merge SHA read back, issue closed, deliverable at its recorded path), reflects, and self-edits. It never implements code or runs task stages itself. The **Executor**, running **dev-workflow** (`~/workspace/custom-skills/dev-workflow/SKILL.md`), is the per-task lead subagent the Supervisor dispatches: it owns one task end-to-end (Stages 0–6) and reports its receipt back. A task with no live Executor and no artifact movement >2h requires diagnosis, claim checks and an actionable next stage before re-dispatch; a live Executor that went quiet is steered, never duplicated.
 
 **Self-improvement — the final step of every Supervisor run:**
 
@@ -141,12 +147,13 @@ One Work Log database per project — no workstream lives only in a chat's conte
 - HomeSteadyLink: https://app.notion.com/p/ae5b1c4289224e7a8a8b6ca85b4afb0e (database `ae5b1c42-8922-4e7a-8a8b-6ca85b4afb0e`, data source `collection://8023c83b-bc7d-4aa9-a3b4-b02efa1cf4bf`), child of the "Travel Router - HomeSteadyLink" project page; created 2026-11-01, rows migrated from the "Work Log — BLE provisioning build" page (which keeps the full history); hourly sweep: cron `homesteadlink-hourly`.
 - OpenCode Mobile: https://app.notion.com/p/9146ab2c9725404b8c4ac930de651f4e (database `9146ab2c-9725-404b-8c4a-c930de651f4e`, data source `collection://f18cf22d-a1a5-4a3e-9ccc-65a1f289a1e7`), child of the OpenCode Mobile hub; created 2026-11-01; hourly sweep: cron `opencode-hourly`.
 
-Properties, in order: **Title** · **Last updated** (date with time; default view sorts by it descending, stalest at the bottom) · **Description** (one-two lines: what it is + the exact gate) · **Status** (exactly `In progress` / `Blocked` / `Not started` / `Done` — `Not started` = a pre-created row for known work not yet claimed; the Supervisor starts the top one per run) · **Links** (GitHub issue URL + PR URL) · **Doc** (Notion design/doc URL).
+Properties, in order: **Title** · **Last updated** (date with time; default view sorts by it descending, stalest at the bottom) · **Description** (one-two lines: what it is + the exact gate) · **Status** (exactly `In progress` / `Blocked` / `Unblocked` / `Not started` / `Done` — `Not started` = a pre-created row for known work not yet claimed; the Supervisor starts the top one per run) · **Links** (GitHub issue URL + PR URL) · **Doc** (Notion design/doc URL).
 
 Rules:
 - Row created **when work starts** — the same moment it is claimed/dispatched (Starting a task, step 2).
 - Row updated **at every status change**: claim → design → PR opened → review → merge → validation → block → done. Every update sets **Last updated** to that moment; refresh Description if the gate changed.
+- `Unblocked` = Supervisor reviewed the blocker and posted a concrete next-step comment; it is not permission, resumed execution or Done. Move to In progress after executor acknowledgment and evidence of resumed work.
 - Blocked rows name the exact unblock in Description (whose decision, what input, which host). "Blocked" without the unblock is a stall, not a state.
 - Every board report reconciles GitHub (pull script) against the Work Log: a row whose GitHub state moved is updated in the same turn; a Done row is verified against GitHub before it is repeated as done.
-- **Staleness rule:** an `In progress` row with Last updated **>2h old** is a stall candidate — cross-check the live subagent list; no live owner → dispatch the push in the same turn and update the row with what was dispatched.
+- **Staleness rule:** no artifact movement **>2h** is a stall candidate, even if Last updated changed. Inspect the live owner/session and fresh gate evidence; steer a live owner, or transfer a stopped owner’s claim before re-dispatching actionable work. Follow `dev-workflow-supervisor`; comments and status edits do not reset the progress clock.
 - The hourly per-project Supervisor crons sweep on this rule between board reports; they never replace the in-turn duty to keep rows current.
