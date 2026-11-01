@@ -11,7 +11,7 @@ The Supervisor protocol for the per-project hourly cron jobs (`agentpod-hourly`,
 
 - **Supervisor (this job):** scans the Work Log, diagnoses, dispatches, verifies receipts, reflects, self-edits. It NEVER implements code or runs task stages itself.
 - **Overflow:** the per-task lead subagent the Supervisor dispatches. It owns ONE task end-to-end per `overflow` + `dev_workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
-- A task with no live Overflow and no movement >2h is the Supervisor's to re-dispatch. A live Overflow that went quiet is steered, never duplicated.
+- A task with no live Overflow and no artifact movement >2h is a diagnosis candidate, not an automatic re-dispatch. A live Overflow that went quiet is steered, never duplicated.
 
 ## Inputs (from the invoking job body)
 
@@ -20,49 +20,29 @@ Project parameters: Work Log database (link + data source), context page ("Agent
 ## Read first, every run
 
 1. The project's **context page first** ("Agents Context") — before the Work Log scan, so the run begins oriented: what the project is, current state, active fronts, live gates/blockers, recurring failure patterns, next priorities.
-2. The Work Log rows in ALL statuses (In progress / Blocked / Not started / Done). Notion via `/opt/hatch/bin/notion-cli` — `notion-query-data-sources` (SQL mode against the data source URL; the date property reads as `date:Last updated:start`). Fetch a row's page (`notion-fetch`) before editing it; update rows with `notion-update-page` after reading them.
+2. The Work Log rows in ALL statuses (In progress / Blocked / Unblocked / Not started / Done). Notion via `/opt/hatch/bin/notion-cli` — `notion-query-data-sources` (SQL mode against the data source URL; the date property reads as `date:Last updated:start`). Fetch a row's page (`notion-fetch`) before editing it; update rows with `notion-update-page` after reading them.
 3. The Decision Log, PRD and Design doc — context for judging the work.
 4. GitHub state via the project's pull route.
 5. The live subagent list (`subagent.list`): which rows have a live Overflow right now.
 
 ## The loop
 
-1. **Stalled:** an "In progress" row whose Last updated is >2h old AND no live Overflow owns it. Diagnose first (linked issue/PR, the row's Doc; check for other actors' claims before touching anything — branch prefixes, claim comments, fresh pushes; bot authors are shared credentials and prove nothing about who did the work). Then push in the same run: dispatch ONE Overflow briefed with `dev_workflow` + `overflow` for the exact stage owed. After the push, update the row: Last updated = now, Description gains a one-line note of what was pushed and when.
-2. **Blocked:** verify the blocker still holds against GitHub / the named gate. Unblocked → Status "In progress" + Last updated = now; verifiably finished → "Done" + Last updated = now. Unchanged → untouched, unreported. A "Blocked" row whose Description does not name the exact unblock is a defect — fix the Description.
-3. **Not started:** rows in "Not started" — and an open GitHub issue with owed work but no Work Log row gets a row created as "Not started" first. Start the top one (first by creation) per run when it is actionable without Den (no founder-only credential, no ship/no-ship decision, no spend): the GitHub issue exists with scope + acceptance criteria, dispatch the Overflow, row → "In progress", Last updated = now.
-4. **Done reconcile, both directions:** a row whose work is verifiably finished (PR merged and read back by SHA, issue closed, deliverable exists at its recorded path) → "Done" + Last updated = now, even if it said "In progress". Active GitHub work with no row gets a row ("In progress", Links filled, Last updated = now). A workstream not in the Work Log is not reported as active.
-5. **3-strike park:** a workstream that fails to move for 3 consecutive runs for the same reason gets its Description marked with the flatline and the exact unblock action, and is left alone after that — retries are not progress.
+1. **Diagnose before dispatch.** For each Blocked, Unblocked or stale In progress row, read the issue/PR, current code SHA, latest relevant run/job/step and live owner/session. Compare failures with the fix SHA: an old failed run or green summary/classifier does not establish the current dependency. Record: `cause | evidence + checked time | exact step held | owner | next action | expected artifact`.
+2. **Test the gate.** Classify it as a dependency, permission, access/tool failure, execution failure, or stale claim. Name the exact operation that cannot proceed. A merged fix advances to the next owed stage; it does not require reimplementation. An independent workflow need not wait for an application release tag. Use an already-authorized alternative route or independent substeps; never invent a founder gate or bypass a real approval, credential, spend or release restriction. Ask once for a specific bounded decision if needed, and continue independent work.
+3. **Steer, then verify.** Send the existing live Overflow a concrete next step, required artifact and check point. Never duplicate it. `Unblocked` means the Supervisor reviewed the blocker and posted an actionable next-step comment; it is not permission, resumed execution or delivery. Keep any unresolved gate explicit. Mark In progress only after executor acknowledgment and evidence of resumed work. Comments, status changes, dispatch receipts and Last updated are not artifact progress. Keep the last artifact URL/SHA and its movement time in the row notes; never advance that time for a check/comment/status edit.
+4. **Recover stalled ownership.** On the next cycle, read back the promised artifact or inspect the owner's live session for actual activity. If nothing moved, diagnose the failed handoff and send one corrected instruction. If the owner is confirmed stopped/failed, transfer the claim before dispatching ONE replacement for the exact stage owed. An unobservable owner is not a dead owner: record the access problem, do independent work, and do not duplicate it. Three cycles with the same failure: stop identical retries, record the cause and exact unblock, escalate if required, and recheck that dependency each cycle; resume when it changes.
+5. **Start actionable work.** An open issue with owed work first gets a Not started row with scope and acceptance criteria. Start the oldest actionable unclaimed row, respecting concurrency and model-cost limits. Check other actors' claims, branch prefixes and fresh pushes; shared bot authors prove no ownership. If a gate holds only part of a task, brief the lead on the permitted substep, not the blocked action.
+6. **Reconcile completion.** Done requires API-read-back merge SHA, recorded Stage 5.5 Design/PRD sync, Stage 6 acceptance evidence and any required live-delivery proof. Merge or issue closure alone is not Done. Keep merged-not-deployed work explicit. Reconcile active GitHub work into the Work Log without inventing an active owner.
 
 ## Reporting
 
-Message the job's own session chat ONLY, one short line per completed unit — a row set Done with its evidence, a stalled row pushed with what was dispatched, an unstarted item started — or a NEW blocker that genuinely needs Den, after self-resolution attempts, stating what was tried. No completed unit and no new blocker = stay silent (the self-edit report below is the only exception). Never narrate partial steps, checks that changed nothing, or parked rows. A status list without pushes is a failure.
+Message the job's own session chat ONLY, one short line per completed unit — a row set Done with its evidence, a stalled row pushed with what was dispatched, an unstarted item started — or a NEW blocker that genuinely needs Den, after self-resolution attempts, stating what was tried. No completed unit and no new blocker = stay silent (the self-edit report below is the only exception). Never narrate partial steps, checks that changed nothing, or parked rows. A status-only run that leaves actionable work unstewarded is a failure; a verified real gate is not permission to push through it.
 
-## ESCALATION — systemic blockers go to the main session, always (hard rule, Den 2026-11-01)
+## Escalation — systemic blockers
 
-This section OVERRIDES the Reporting section above and any job-body instruction to "say nothing" or "report only into this job's own session" wherever they conflict. It exists because on 2026-11-01 this Supervisor watched the AgentPod Work Log sit at 33 Blocked rows with the CI runner pool dead and the release blocked, and reported only into its own job session — the main session never heard it. That silence is the failure this section makes impossible.
+Overrides ordinary silence/own-session reporting. Each run counts genuinely held rows (including Unblocked/In progress), oldest blocker age and root causes. Escalate to the main project session configured in the job if one cause holds ≥3 rows, verified infrastructure is down, or the held-row count grows. Missing access means unknown state, not proven infrastructure failure.
 
-**Every run computes, before the loop:**
-- Blocked row count, and its delta vs the last run (the last run's figures are recorded in the Agents Context page's escalation line — see below; if none exists, this run's figures are the baseline).
-- Age of the oldest Blocked row.
-- Systemic blockers: one root cause holding ≥3 rows (e.g. runner pool down, fleet node dead, one missing credential, one dead deploy route).
-- Infra-down states, by name: runner pool at 0, deploy route absent, prod running a stale revision, a whole connector/account unreachable.
-
-**Escalation trigger — ANY of:**
-- a systemic blocker exists, or
-- an infra-down state exists, or
-- the Blocked count grew since the last run.
-
-**On trigger, the run MUST post a short escalation into the MAIN project session chat** (for AgentPod: chat_id `79a8fe3b-b150-43a7-ab2e-1fd07fd688b7`; other projects: the main session chat named in the job body) via the chat tools — not only into the job's own session. Shape, a few lines only:
-- what is blocked (the picture, not a row dump),
-- the single root cause,
-- how many rows it holds,
-- the exact unblock action and whose it is (fleet / Den / main agent).
-
-**Silence in the face of a systemic blocker is a protocol violation** — stated in those words, binding on every run. A blocker being old, already known, already parked, or not "new" is NOT an exemption: the trigger is the state, not its novelty.
-
-**"Observed infrastructure state" is explicitly NOT an exemption.** Infra-down is an escalation trigger by name. How the state was learned — a connector's typed `blocked` result, an API readback, a run summary, direct observation — changes nothing. Classifying runner-pool-at-0 as "not a blocked dependency" to justify silence is the exact loophole used on 2026-11-01 and it is closed.
-
-**Deduplication:** same root cause + same numbers (Blocked count and held-row count unchanged) = no repeat escalation. Changed numbers or a new root cause = a new escalation. Every run — escalation or not — refreshes the escalation line on the Agents Context page: date, Blocked count, oldest Blocked age, and each systemic root cause with its held-row count and last-escalated date. That line is the next run's baseline and dedupe record.
+Send the cause, evidence, affected count, exact unblock and responsible owner. Old/parked blockers still qualify; deduplicate unchanged cause + counts, not the first escalation. Refresh the Agents Context escalation line each run: checked time, held count, oldest age, causes and last escalation. Status renames must not hide blockers. If the destination is missing or delivery fails, record that failure and notify the invoking session; do not silently claim escalation succeeded.
 
 ## Self-improvement (final step, every run)
 
@@ -83,7 +63,7 @@ Every project has one, titled "Agents Context", under its Notion hub. The job bo
 ## Standing constraints
 
 - Never dispatch release tags — a release happens only when Den says everything is fixed.
-- Runner/disk/CI-queue state is infrastructure, not a product task: never create issues for it, never park product work on it, never report it as progress.
+- Runner/disk/CI-queue state is infrastructure, not a product task: never create issues for it, do not park independent product work on it or report checks as progress. Keep truly dependent steps blocked with evidence.
 - Do not wait on the CI queue — merges follow `dev_workflow` (clean review + local verification).
 - Verify live, never from document audits alone; "unverified" is a hypothesis, not a task.
 - Never print secret values anywhere. Observations worth keeping go to the daily log `~/memory/YYYY-MM-DD.md`, never `MEMORY.md`.
