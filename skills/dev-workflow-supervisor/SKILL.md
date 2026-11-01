@@ -17,13 +17,17 @@ The Supervisor protocol for the per-project hourly cron jobs (`agentpod-hourly`,
 
 Project parameters: Work Log database (link + data source), context page ("Agents Context", under the project hub), PRD, Design doc, Decision Log, GitHub board route (pull script or gh helper), delivery chat (the job's own project session — results go nowhere else), project constraints. The **Work Log database is the only state source** — no state files, no chat memory. The context page is the project's compressed orientation, not a state source.
 
+## Runtime capabilities
+
+Before dispatch, map the available tools for spawning task/stage subagents (including nesting limits), listing/addressing/resuming them, completion delivery or waiting, persistent records and scheduler edits. Tool names/paths below (`subagent.list`, `cron.update`, `/opt/hatch/bin/notion-cli`, `~/workspace/…`) are examples from one installation, not portable APIs. Use actual supported equivalents and configured skill paths; if a required capability is absent, record the limitation and keep that action pending. Never claim a message, wake or edit happened without a tool receipt. A skill does not create missing runtime capabilities or grant new permissions.
+
 ## Read first, every run
 
 1. The project's **context page first** ("Agents Context") — before the Work Log scan, so the run begins oriented: what the project is, current state, active fronts, live gates/blockers, recurring failure patterns, next priorities.
-2. The Work Log rows in ALL statuses (In progress / Blocked / Unblocked / Not started / Done). Notion via `/opt/hatch/bin/notion-cli` — `notion-query-data-sources` (SQL mode against the data source URL; the date property reads as `date:Last updated:start`). Fetch a row's page (`notion-fetch`) before editing it; update rows with `notion-update-page` after reading them.
+2. The Work Log rows in ALL statuses (In progress / Blocked / Unblocked / Not started / Done). Use the available Notion connector or CLI. Fetch each row’s current page before editing it; preserve unrelated fields.
 3. The Decision Log, PRD and Design doc — context for judging the work.
 4. GitHub state via the project's pull route.
-5. The live subagent list (`subagent.list`): which rows have a live Overflow right now.
+5. The live subagent list (using the runtime’s supported tool): which rows have a live Overflow right now.
 
 ## Dispatch and resume contract
 
@@ -57,7 +61,7 @@ Send the cause, evidence, affected count, exact unblock and responsible owner. O
 ## Self-improvement (final step, every run)
 
 1. Work FROM the project's Agents Context page: the recurring failure patterns are recorded there. Scan the project's Work Log rows and this job's recent runs for REPEATED failure patterns — the same kind of stall, misdiagnosis, wasted check, or wrong stage recurring across tasks/runs. Find where the agent keeps going wrong across the list, and fix that recurring cause in the job's own instructions. Before any self-edit, re-read the patterns recorded on the context page — a pattern earns a self-edit only when it is recorded there as recurring, not from a single run's impression. New patterns found in this reflection are written to the context page in the same run (in the context-page update that closes the run). One-off incidents are logged, never edited for. Reflection discipline per `~/workspace/custom-skills/dev-reflection/SKILL.md`.
-2. A concrete fix is applied by the run itself: `cron.update` on its own job id with the complete revised body. HARD LIMITS: schedule, delivery chat, owner, enabled state, and the project parameters in the body (Work Log / PRD / Design / Decision Log links) remain byte-identical; only the loop's working instructions change; a self-edit never expands the job's authority (no new permissions, no release actions, no new chats or projects).
+2. If scheduler self-editing is authorized and supported, apply the concrete fix to this job using the available scheduler tool; otherwise record the proposed fix and the missing capability/approval, without claiming it was applied. HARD LIMITS: schedule, delivery chat, owner, enabled state, and the project parameters in the body (Work Log / PRD / Design / Decision Log links) remain byte-identical; only the loop's working instructions change; a self-edit never expands the job's authority (no new permissions, no release actions, no new chats or projects).
 3. Every self-edit is recorded in the same run: a one-line report in the job's own session chat ("self-edit: <what changed> — <why>") even when the run otherwise reports nothing, plus a dated entry with the same content in `~/memory/YYYY-MM-DD.md`. No silent self-modification.
 4. A lesson that applies to all projects is appended to the `dev_workflow` skill as a lessons/reflection entry — never a rewrite of its core protocol.
 
