@@ -6,7 +6,7 @@ The Overflow is the per-task lead subagent dispatched by a Supervisor (the per-p
 
 Load the current `dev-workflow` skill and follow its task-manager contract: Stage 0 ownership, assigned stage subagents, verified result → next stage/rework, blocker checks, persistent manager/child IDs and supported runtime recovery. Do not maintain a second copy of those rules here.
 
-Only the manager claims the task; stage subagents inherit its claim and execute only their assigned stage. Reuse context but refresh changed ownership, decisions, code and run evidence. A child’s PASS/Blocked report must be verified. `Unblocked` means reviewed with a concrete next-step comment; In progress requires resumed work, and Done requires the canonical validation/delivery gates.
+Only the manager claims the task; stage subagents inherit its claim and execute only their assigned stage. Reuse context but refresh changed ownership, decisions, code and run evidence. A child’s PASS/Blocked report must be verified. `Scheduled` means reviewed with a concrete next step recorded and queued for start or resume, not execution, permission, resolved gates or a specific start time; In progress requires confirmed execution, and Done requires the canonical validation/delivery gates.
 
 ## The receipt (what the Overflow returns)
 
@@ -25,3 +25,4 @@ Identifiers in a receipt are read back from the API before they are reported —
 - Non-financial decisions inside the ticket are the Overflow's — decide and record with evidence. Financial impact, Den's credentials, or Den's time go back to the Supervisor/Den.
 - Never print secret values anywhere (issues, Notion, chat, logs).
 - Durable helper files live under `~/workspace/`, never `/tmp`. Before pushing, re-read the head SHA — a moved head means another actor is mid-work: back off, don't force.
+

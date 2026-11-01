@@ -83,7 +83,7 @@ Before declaring Blocked, record `cause | current SHA/run/failed step | exact op
 
 Before declaring a required secret missing, check the configured credential sources (including Bitwarden and its session in Credential Store, where configured), using supported tools; install the official client only if authorized. Never export a vault, expose secrets, or create persistent access to work around a gate.
 
-On a supervisor unblock comment, acknowledge the next step, resume the permitted stage, and link the resulting artifact. `Unblocked` means reviewed with an actionable comment, not approval or completion. If the step still cannot run, return fresh failure evidence and the smallest decision needed; never repeat the old blocker without checking it. Keep one owner; escalate rather than silently abandoning the handoff. Existing permission, release, review and validation gates still apply.
+On a supervisor next-step handoff, acknowledge the guidance, resume the permitted stage, and link the resulting artifact. `Scheduled` means reviewed with a concrete next step recorded and queued for start or resume, not proof of execution, approval, resolved gates or completion; it promises no specific start time. If the step still cannot run, return fresh failure evidence and the smallest decision needed; never repeat the old blocker without checking it. Keep one owner; escalate rather than silently abandoning the handoff. Existing permission, release, review and validation gates still apply.
 
 ## Stage 3 — Implementation (implementation subagent)
 
@@ -162,14 +162,15 @@ One Work Log database per project — no workstream lives only in a chat's conte
 - HomeSteadyLink: https://app.notion.com/p/ae5b1c4289224e7a8a8b6ca85b4afb0e (database `ae5b1c42-8922-4e7a-8a8b-6ca85b4afb0e`, data source `collection://8023c83b-bc7d-4aa9-a3b4-b02efa1cf4bf`), child of the "Travel Router - HomeSteadyLink" project page; created 2026-11-01, rows migrated from the "Work Log — BLE provisioning build" page (which keeps the full history); hourly sweep: cron `homesteadlink-hourly`.
 - OpenCode Mobile: https://app.notion.com/p/9146ab2c9725404b8c4ac930de651f4e (database `9146ab2c-9725-404b-8c4a-c930de651f4e`, data source `collection://f18cf22d-a1a5-4a3e-9ccc-65a1f289a1e7`), child of the OpenCode Mobile hub; created 2026-11-01; hourly sweep: cron `opencode-hourly`.
 
-Properties, in order: **Title** · **Last updated** (date with time; default view sorts by it descending, stalest at the bottom) · **Description** (one-two lines: what it is + the exact gate) · **Status** (exactly `In progress` / `Blocked` / `Unblocked` / `Not started` / `Done` — `Not started` = a pre-created row for known work not yet claimed; the Supervisor fills available task slots from the priority-ordered READY queue) · **Links** (GitHub issue URL + PR URL) · **Doc** (Notion design/doc URL).
+Properties, in order: **Title** · **Last updated** (date with time; default view sorts by it descending, stalest at the bottom) · **Description** (one-two lines: what it is + the exact gate) · **Status** (exactly `In progress` / `Blocked` / `Scheduled` / `Not started` / `Done` — `Not started` = a pre-created row for known work not yet claimed; the Supervisor fills available task slots from the priority-ordered READY queue) · **Links** (GitHub issue URL + PR URL) · **Doc** (Notion design/doc URL).
 
 Rules:
 - Row created **when work starts** — the same moment it is claimed/dispatched (Starting a task, step 2).
 - Row updated **at every status change**: claim → design → PR opened → review → merge → validation → block → done. Every update sets **Last updated** to that moment; refresh Description if the gate changed.
-- `Unblocked` = Supervisor reviewed the blocker and posted a concrete next-step comment; it is not permission, resumed execution or Done. Move to In progress after task-subagent acknowledgment and evidence of resumed work.
+- `Scheduled` = reviewed, concrete next step recorded, queued for start or resume. For Blocked → Scheduled, adequately review the blocker and read back the posted guidance first; keep unresolved gates explicit. The main session sends the handoff through the actual task-subagent tool. Move to In progress only after acknowledgment and evidence that execution started or resumed, not a comment or dispatch receipt.
 - Blocked rows name the exact unblock in Description (whose decision, what input, which host). "Blocked" without the unblock is a stall, not a state.
 - Every board report reconciles GitHub (pull script) against the Work Log: a row whose GitHub state moved is updated in the same turn; a Done row is verified against GitHub before it is repeated as done.
 - **Staleness rule:** no artifact movement **>2h** is a stall candidate, even if Last updated changed. Inspect the live owner/session and fresh gate evidence; steer a live owner, or transfer a stopped owner’s claim before re-dispatching actionable work. Follow `dev-workflow-supervisor`; comments and status edits do not reset the progress clock.
 - The hourly per-project Supervisor crons sweep on this rule between board reports; they never replace the in-turn duty to keep rows current.
+
 
