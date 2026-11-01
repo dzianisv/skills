@@ -37,6 +37,33 @@ Project parameters: Work Log database (link + data source), context page ("Agent
 
 Message the job's own session chat ONLY, one short line per completed unit — a row set Done with its evidence, a stalled row pushed with what was dispatched, an unstarted item started — or a NEW blocker that genuinely needs Den, after self-resolution attempts, stating what was tried. No completed unit and no new blocker = stay silent (the self-edit report below is the only exception). Never narrate partial steps, checks that changed nothing, or parked rows. A status list without pushes is a failure.
 
+## ESCALATION — systemic blockers go to the main session, always (hard rule, Den 2026-11-01)
+
+This section OVERRIDES the Reporting section above and any job-body instruction to "say nothing" or "report only into this job's own session" wherever they conflict. It exists because on 2026-11-01 this Supervisor watched the AgentPod Work Log sit at 33 Blocked rows with the CI runner pool dead and the release blocked, and reported only into its own job session — the main session never heard it. That silence is the failure this section makes impossible.
+
+**Every run computes, before the loop:**
+- Blocked row count, and its delta vs the last run (the last run's figures are recorded in the Agents Context page's escalation line — see below; if none exists, this run's figures are the baseline).
+- Age of the oldest Blocked row.
+- Systemic blockers: one root cause holding ≥3 rows (e.g. runner pool down, fleet node dead, one missing credential, one dead deploy route).
+- Infra-down states, by name: runner pool at 0, deploy route absent, prod running a stale revision, a whole connector/account unreachable.
+
+**Escalation trigger — ANY of:**
+- a systemic blocker exists, or
+- an infra-down state exists, or
+- the Blocked count grew since the last run.
+
+**On trigger, the run MUST post a short escalation into the MAIN project session chat** (for AgentPod: chat_id `79a8fe3b-b150-43a7-ab2e-1fd07fd688b7`; other projects: the main session chat named in the job body) via the chat tools — not only into the job's own session. Shape, a few lines only:
+- what is blocked (the picture, not a row dump),
+- the single root cause,
+- how many rows it holds,
+- the exact unblock action and whose it is (fleet / Den / main agent).
+
+**Silence in the face of a systemic blocker is a protocol violation** — stated in those words, binding on every run. A blocker being old, already known, already parked, or not "new" is NOT an exemption: the trigger is the state, not its novelty.
+
+**"Observed infrastructure state" is explicitly NOT an exemption.** Infra-down is an escalation trigger by name. How the state was learned — a connector's typed `blocked` result, an API readback, a run summary, direct observation — changes nothing. Classifying runner-pool-at-0 as "not a blocked dependency" to justify silence is the exact loophole used on 2026-11-01 and it is closed.
+
+**Deduplication:** same root cause + same numbers (Blocked count and held-row count unchanged) = no repeat escalation. Changed numbers or a new root cause = a new escalation. Every run — escalation or not — refreshes the escalation line on the Agents Context page: date, Blocked count, oldest Blocked age, and each systemic root cause with its held-row count and last-escalated date. That line is the next run's baseline and dedupe record.
+
 ## Self-improvement (final step, every run)
 
 1. Work FROM the project's Agents Context page: the recurring failure patterns are recorded there. Scan the project's Work Log rows and this job's recent runs for REPEATED failure patterns — the same kind of stall, misdiagnosis, wasted check, or wrong stage recurring across tasks/runs. Find where the agent keeps going wrong across the list, and fix that recurring cause in the job's own instructions. Before any self-edit, re-read the patterns recorded on the context page — a pattern earns a self-edit only when it is recorded there as recurring, not from a single run's impression. New patterns found in this reflection are written to the context page in the same run (in the context-page update that closes the run). One-off incidents are logged, never edited for. Reflection discipline per `~/workspace/custom-skills/dev-reflection/SKILL.md`.
