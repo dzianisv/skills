@@ -10,7 +10,7 @@ The Supervisor protocol for the per-project hourly cron jobs (`agentpod-hourly`,
 ## Roles
 
 - **Supervisor (this job):** scans the Work Log, diagnoses, dispatches, verifies receipts, reflects, self-edits. It NEVER implements code or runs task stages itself.
-- **Overflow:** the per-task lead subagent the Supervisor dispatches. It owns ONE task end-to-end per `overflow` + `dev_workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
+- **Overflow (task manager):** the per-task lead subagent the Supervisor dispatches. It owns ONE task end-to-end per `overflow` + `dev_workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
 - A task with no live Overflow and no artifact movement >2h is a diagnosis candidate, not an automatic re-dispatch. A live Overflow that went quiet is steered, never duplicated.
 
 ## Inputs (from the invoking job body)
@@ -24,6 +24,16 @@ Project parameters: Work Log database (link + data source), context page ("Agent
 3. The Decision Log, PRD and Design doc — context for judging the work.
 4. GitHub state via the project's pull route.
 5. The live subagent list (`subagent.list`): which rows have a live Overflow right now.
+
+## Dispatch and resume contract
+
+The Supervisor starts or resumes ONE task-manager subagent per task with `dev-workflow` + `overflow`; that manager runs the stages and spawns stage subagents. Never dispatch stage work directly from this job.
+
+Send through the runtime's actual subagent message/resume tool, addressed to the owning manager/session—not just a recap in the user chat. Use only tools the runtime exposes (including Muse); do not invent API names. Message:
+`task ID + record link | current stage | verified SHA/artifact/run | next action | acceptance check + expected artifact | permissions/gates | report-back destination`.
+An accepted dispatch proves handoff only. Read back actual stage activity/results on the next check.
+
+Resume a completed/stopped manager if supported and ownership remains valid. Otherwise confirm its ownership is inactive or cleared before starting a replacement; it reloads the persistent task record and resumes the owed stage. Never duplicate a quiet manager. Before dispatch, re-read the row and claim; overlapping cron runs must not both claim it. Use the runtime's claim/lock mechanism if available; if ownership cannot be established safely, leave dispatch pending.
 
 ## The loop
 
