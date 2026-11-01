@@ -22,7 +22,8 @@
         "take-ownership-meta-agent",
         "no-github-backlog",
         "no-pr-backlog",
-        "dev-workflow"
+        "dev-workflow",
+        "dev-workflow-supervisor"
       ]
     },
     {
@@ -64,13 +65,6 @@
       "description": "Turn raw work into build-in-public posts: reels, threads and captions with verified numbers.",
       "skills": [
         "build-in-public-reel"
-      ]
-    },
-    {
-      "title": "AgentPod Operations",
-      "description": "Spawn and configure AgentPod tenants through the Admin API and the tenant chat API.",
-      "skills": [
-        "agentpod-tenant-ops"
       ]
     }
   ]
