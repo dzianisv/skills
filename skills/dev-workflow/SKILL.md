@@ -30,6 +30,14 @@ Order: (1) GitHub issue exists, with scope + acceptance criteria; (2) Work Log r
 
 Every stage brief carries: the goal, the issue, the Notion design/PRD links, prior decisions, the acceptance criteria, the permissions granted, a stopping condition. Every handoff returns: the result, the evidence, unresolved issues, the recommended next step — never chat memory alone.
 
+### Keep the stage chain running
+
+The lead is the task manager, not a stage worker. It spawns separate subagents for substantive stage work; the manager retains claims, handoffs and gate/merge verification, and remains responsible after each subagent reports. Use the runtime's supported completion callback/message or wait mechanism so results return to the manager; do not end the manager turn and assume cron or the user will restart the chain.
+
+On every stage result: read back its artifact and acceptance evidence, update the persistent task record, then start the next allowed stage immediately or send failures back to the responsible stage subagent. A child saying PASS or Blocked is input to verify, not a terminal verdict. For Blocked, check the exact dependency and permitted alternatives, continue independent substeps, or hand back a real blocker with evidence and owner.
+
+Before yielding, persist manager ID, current stage, stage-subagent IDs and artifact links in the task record. On resume or manager replacement, inspect those children: adopt/steer existing work if supported, or confirm it stopped before replacing it. Reload the task record, current ownership and fresh artifacts; never restart finished stages from chat memory. Address instructions to the actual stage subagent through available runtime tools. If delivery fails or no continuation mechanism exists, persist the exact next action and report that limitation to the Supervisor; never imply the chain is running.
+
 Model choice per stage subagent: bounded work with clear checks → cheaper capable model; ambiguous architecture or hard debugging → stronger model. The reviewer is always a different agent from the implementer.
 
 ---
