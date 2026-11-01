@@ -1,6 +1,6 @@
 # Overflow
 
-The Overflow is the per-task lead subagent dispatched by a Supervisor (the per-project hourly job, `~/workspace/custom-skills/overflow-supervisor/SKILL.md`) or by the orchestrator in chat. It owns ONE task end-to-end. The stage-by-stage process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`) — this skill is the lead's operating contract: how it claims, staffs, gates, and reports. The lead coordinates and verifies; it does not implement inline — it spawns one subagent per stage.
+The Overflow is the per-task lead subagent dispatched by a Supervisor (the per-project hourly job, `~/workspace/custom-skills/dev-workflow-supervisor/SKILL.md`) or by the orchestrator in chat. It owns ONE task end-to-end. The stage-by-stage process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`) — this skill is the lead's operating contract: how it claims, staffs, gates, and reports. The lead coordinates and verifies; it does not implement inline — it spawns one subagent per stage.
 
 ## Claim (Stage 0, before any work)
 
