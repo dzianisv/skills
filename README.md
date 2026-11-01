@@ -59,6 +59,8 @@ Autonomous agents for project management, task ownership, and backlog draining.
 | [`take-ownership-meta-agent`](skills/take-ownership-meta-agent) | Evaluate and improve the `take-ownership` skill from its REAL recent runs. | `npx -y skills add dzianisv/skills -s take-ownership-meta-agent -g` |
 | [`no-github-backlog`](skills/no-github-backlog) | Drain a GitHub issue backlog autonomously. | `npx -y skills add dzianisv/skills -s no-github-backlog -g` |
 | [`no-pr-backlog`](skills/no-pr-backlog) | Drain a GitHub pull-request backlog autonomously. | `npx -y skills add dzianisv/skills -s no-pr-backlog -g` |
+| [`dev-workflow`](skills/dev-workflow) | Run a development task end to end through claims, design, implementation, review, merge and live validation, delegating stage work to subagents. | `npx -y skills add dzianisv/skills -s dev-workflow -g` |
+| [`dev-workflow-supervisor`](skills/dev-workflow-supervisor) | Use when an hourly project check must find stalled tasks, check live subagent ownership, dispatch actionable work, and verify completion. | `npx -y skills add dzianisv/skills -s dev-workflow-supervisor -g` |
 
 ### Skill Engineering
 
@@ -77,7 +79,6 @@ CLI tools, secret management, messaging, and deploy helpers.
 
 | Skill | What it does | Install |
 |-------|--------------|---------|
-| [`agent-memory`](skills/agent-memory) | Use when starting any task (retrieve relevant context) or finishing any task (persist discoveries). | `npx -y skills add dzianisv/skills -s agent-memory -g` |
 | [`bitwarden-cli`](skills/bitwarden-cli) | Use when storing, retrieving, listing, or organizing secrets in Bitwarden using the bw CLI. | `npx -y skills add dzianisv/skills -s bitwarden-cli -g` |
 | [`claude-sessions`](skills/claude-sessions) | Find a past Claude Code session on this machine by project or topic, then summarize what was done in it. | `npx -y skills add dzianisv/skills -s claude-sessions -g` |
 | [`claude-max`](skills/claude-max) | Configure and activate the Claude Max subscription proxy so the agent runs on Claude Opus 4 at flat-rate cost instead of per-token Azure billing. | `npx -y skills add dzianisv/skills -s claude-max -g` |
@@ -104,6 +105,7 @@ Turn raw work into build-in-public posts: reels, threads and captions with verif
 | Skill | What it does | Install |
 |-------|--------------|---------|
 | [`build-in-public-reel`](skills/build-in-public-reel) | Create viral build-in-public videos for a founder: turn a short raw clip (about 10s) plus a one-line work story into a vertical Reel with the story burned in as timed text cards, an X thread, and an Instagram caption, with every number verified live before it is used. | `npx -y skills add dzianisv/skills -s build-in-public-reel -g` |
+| [`naste-slaste-style`](skills/naste-slaste-style) | Turn one real personal or business story into a Russian-language Instagram Reel or carousel in the style of @naste_slaste: a blunt, confessional founder monologue with a short poster hook, night/flash visuals, and a specific question to the audience. | `npx -y skills add dzianisv/skills -s naste-slaste-style -g` |
 
 ### Fundraising
 
@@ -113,14 +115,6 @@ Founder materials for raising capital: pitch decks and investor narratives.
 |-------|--------------|---------|
 | [`yc-pitch-deck`](skills/yc-pitch-deck) | Build a short, no-fluff seed pitch deck. | `npx -y skills add dzianisv/skills -s yc-pitch-deck -g` |
 
-### AgentPod Operations
-
-Spawn and configure AgentPod tenants through the Admin API and the tenant chat API.
-
-| Skill | What it does | Install |
-|-------|--------------|---------|
-| [`agentpod-tenant-ops`](skills/agentpod-tenant-ops) | Spawn and configure an AgentPod tenant end to end: provision it through the Admin API, then set the agent's standing instructions and recurring jobs through the tenant's own Hermes chat API. | `npx -y skills add dzianisv/skills -s agentpod-tenant-ops -g` |
-
 ### Other
 
 | Skill | What it does | Install |
@@ -128,6 +122,7 @@ Spawn and configure AgentPod tenants through the Admin API and the tenant chat A
 | [`github-copilot-sessions`](skills/github-copilot-sessions) | Find a past GitHub Copilot CLI agent session on this machine by project or topic via BM25 search, then summarize what was done. | `npx -y skills add dzianisv/skills -s github-copilot-sessions -g` |
 | [`google-workspace-cli`](skills/google-workspace-cli) | Use the preinstalled gws CLI for Google Drive, Gmail, and Calendar workflows, including customer-assisted OAuth login and multi-account control. | `npx -y skills add dzianisv/skills -s google-workspace-cli -g` |
 | [`opencode`](skills/opencode) | Control a remote or local OpenCode server via opencode-cli (or its REST API directly). | `npx -y skills add dzianisv/skills -s opencode -g` |
+| [`overflow`](skills/overflow) |  | `npx -y skills add dzianisv/skills -s overflow -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
 | [`stocks-advisor-fast`](skills/stocks-advisor-fast) |  | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
 
