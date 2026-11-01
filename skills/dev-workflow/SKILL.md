@@ -4,7 +4,7 @@ Den's standing process for ANY development task (feature, fix, infra code), dict
 
 **Goal (Den, 2026-10-31):** bring the product to a public release that can ship without fear — infra proven ready, every offered feature proven working live, never by audit alone. The release tag remains Den's word; proven readiness is the agent's job.
 
-**Compliance is mandatory.** First action on any dev ticket: open this skill, run Stage 0. Every subagent brief names this skill and its stage. Work outside the pipeline is a process violation — stop, say so, restart inside it. The backlog cron's dev work follows these stages too.
+**Compliance is mandatory.** The task manager opens this skill and runs Stage 0. Stage subagents inherit the manager’s claim, read their assigned stage, and execute only that stage; they never claim the task again, restart the whole workflow, or dispatch another task manager. Every brief names the manager, this skill and the assigned stage. Work outside the pipeline is a process violation — stop and return to the manager. The backlog cron's dev work follows these stages too.
 
 ---
 
@@ -26,7 +26,7 @@ It lists open AgentPod issues with their PRs, open AgentPod PRs with no issue, o
 
 ### Starting a task
 
-Order: (1) GitHub issue exists, with scope + acceptance criteria; (2) Work Log row created — no row, no start; (3) ONE lead subagent dispatched to own the task end-to-end. The lead's first action is the Stage 0 claim; it runs Stages 1–6 by spawning a separate subagent per stage — it coordinates and verifies, it does not implement inline. The orchestrator never implements dev work inline and never lets a claimed task sit ownerless; it monitors leads via the Work Log and GitHub readbacks and intervenes on stalls.
+Order: (1) GitHub issue exists, with scope + acceptance criteria; (2) Work Log row created — no row, no start; (3) ONE lead subagent dispatched to own the task end-to-end. The lead's first action is the Stage 0 claim; it runs Stages 1–6 by delegating substantive stage work and retaining ownership/gate verification — it coordinates and verifies, it does not implement inline. The orchestrator never implements dev work inline and never lets a claimed task sit ownerless; it monitors leads via the Work Log and GitHub readbacks and intervenes on stalls.
 
 Every stage brief carries: the goal, the issue, the Notion design/PRD links, prior decisions, the acceptance criteria, the permissions granted, a stopping condition. Every handoff returns: the result, the evidence, unresolved issues, the recommended next step — never chat memory alone.
 
@@ -42,7 +42,7 @@ Model choice per stage subagent: bounded work with clear checks → cheaper capa
 
 ---
 
-## Stage 0 — Claim (before any work)
+## Stage 0 — Claim (task manager only, before stage work)
 
 1. The task exists as a GitHub issue (create if missing, with scope + acceptance criteria).
 2. Check nobody else is working it: issue comments, open PRs, commits from the last 48h. Parallel actors are real (Den's local agent, the fleet). **Another active claim → stand down, withdraw any claim you posted, report, pick different work.** Never race another actor on the same ticket.
@@ -143,7 +143,7 @@ Stall pattern #3 (weekly review, 2026-10-31): **backlog cron spins during other-
 **Self-improvement — the final step of every Supervisor run:**
 
 1. Scan the project's Work Log rows and the job's recent runs for REPEATED failure patterns — the same kind of stall, misdiagnosis, wasted check, or wrong stage recurring across tasks/runs. Find where the agent keeps going wrong across the list, and fix that recurring cause in the job's own instructions. One-off incidents are logged, never edited for.
-2. A concrete fix is applied by the run itself: `cron.update` on its own job id with the complete revised body. Hard limits: schedule, delivery chat, owner, enabled state, and the verified project parameters (Work Log / PRD / Design / Decision Log links) remain byte-identical; only the loop's working instructions change; a self-edit never expands the job's authority (no new permissions, release actions, chats, or projects).
+2. If scheduler self-editing is authorized and supported, apply the concrete fix to this job through its actual scheduler tool (for example `cron.update` where available); otherwise record the proposed fix and missing capability/approval, without claiming it was applied. Hard limits: schedule, delivery chat, owner, enabled state, and the verified project parameters (Work Log / PRD / Design / Decision Log links) remain byte-identical; only the loop's working instructions change; a self-edit never expands the job's authority (no new permissions, release actions, chats, or projects).
 3. Every self-edit is recorded in the same run: one line in the job's own session chat ("self-edit: <what changed> — <why>"), even when the run otherwise reports nothing, plus a dated entry with the same content in the daily log (`~/memory/YYYY-MM-DD.md`). No silent self-modification.
 4. A lesson that applies to all projects is appended to this skill as a lessons/reflection entry (see "Improving the process") — never as a rewrite of the core protocol.
 
