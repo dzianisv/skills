@@ -5,12 +5,17 @@ description: "Use when an hourly project check must find stalled tasks, check li
 
 # Dev Workflow Supervisor
 
-The Supervisor protocol for the per-project hourly cron jobs (`agentpod-hourly`, `vibebrowser-hourly`, `homesteadlink-hourly`, `opencode-hourly`). The shared core process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`); the task subagent also follows `overflow` (`~/workspace/custom-skills/overflow/SKILL.md`). This skill is generic — every project-specific value (links, repos, constraints) comes from the job body that invokes it.
+The Supervisor protocol for the per-project hourly cron jobs (`agentpod-hourly`, `vibebrowser-hourly`, `homesteadlink-hourly`, `opencode-hourly`). The shared core process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`); the task subagent follows that skill directly (`overflow` is only a legacy compatibility alias, not a required dependency). This skill is generic — every project-specific value (links, repos, constraints) comes from the job body that invokes it.
+
+## Skill source and updates
+
+The canonical source for `dev-workflow` and `dev-workflow-supervisor` is https://github.com/dzianisv/skills. Project and runtime copies are mirrors, not independent sources. Reconcile local-only lessons into the canonical source before refreshing either copy; never overwrite canonical changes from an older local file. Refresh both skills from the same reviewed commit, record that commit, and verify their bytes. A repository update is not proof that Muse loaded it: verify the runtime paths and the scheduled job's source separately.
+
 
 ## Roles
 
 - **Main session running the Supervisor (this job):** scans the Work Log, diagnoses, dispatches, verifies receipts, reflects, self-edits. It NEVER implements code or runs task stages itself.
-- **Task subagent:** the single subagent the Supervisor dispatches. It owns ONE task end-to-end per `overflow` + `dev_workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
+- **Task subagent:** the single subagent the Supervisor dispatches. It owns ONE task end-to-end per `dev-workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
 - **Stage subagent:** runs only its assigned stage under the task subagent’s claim; it does not reclaim the task or restart the workflow.
 - An incomplete task with no live task subagent is a diagnosis candidate on every run; do not wait two hours to recover a dropped chain. A live task subagent that went quiet is steered, never duplicated.
 
@@ -32,7 +37,7 @@ Before dispatch, map the available tools for spawning task/stage subagents (incl
 
 ## Dispatch and resume contract
 
-The Supervisor starts or resumes ONE task subagent per task with `dev-workflow` + `overflow`; that task subagent runs the stages and spawns stage subagents. Never dispatch stage work directly from this job.
+The Supervisor starts or resumes ONE task subagent per task with `dev-workflow`; that task subagent runs the stages and spawns stage subagents. Never dispatch stage work directly from this job.
 
 Send through the runtime's actual subagent message/resume tool, addressed to the owning task subagent/session—not just a recap in the user chat. Use only tools the runtime exposes (including Muse); do not invent API names. Message:
 `task ID + record link | current stage | verified SHA/artifact/run | next action | acceptance check + expected artifact | permissions/gates | report-back destination`.
@@ -93,5 +98,6 @@ Every project has one, titled "Agents Context", under its Notion hub. The job bo
 - Do not wait on the CI queue — merges follow `dev_workflow` (clean review + local verification).
 - Verify live, never from document audits alone; "unverified" is a hypothesis, not a task.
 - Never print secret values anywhere. Observations worth keeping go to the daily log `~/memory/YYYY-MM-DD.md`, never `MEMORY.md`.
+
 
 
