@@ -67,6 +67,10 @@ A blocker is work to manage, not a reason to stop managing the product. Before p
 4. If the repair requires permission, credentials, spending or unavailable hardware, record the precise operation, decision owner and resume condition; request only the needed approval. Do not weaken checks, change a contract merely to make a test green, or treat queued/skipped jobs as passes. Continue independent ready work.
 5. Read back the repair's exact-commit test/CI result and required delivery evidence. Then resume every affected parent at its owed stage and verify its acceptance check; only verified completion can close the repair or its dependents. If the fix did not remove the gate, continue diagnosis rather than declaring it resolved.
 
+### Failed canary or CI: stop release, continue repair
+
+Keep release blocked, not the repair. If evidence suggests a transient failure, allow one justified, authorized diagnostic rerun on the same SHA; record the reason. A green rerun does not erase the first failure: verify the full required checks and assess flake risk. The same failure again, or an already reproducible defect, goes to the existing root-cause repair task: actually resume/dispatch its owner within the three-task limit, diagnose and fix the cause, review the change, then run regression and all required checks on the new SHA. A failure report or planned fix is not the endpoint. No infinite reruns, skipped assertions, CI bypass or blind timeout increases. If permission/resources truly block repair, name that gate and continue other ready work.
+
 ## The loop
 
 1. **Diagnose before dispatch.** For each Blocked, Scheduled or incomplete In progress row, read the issue/PR, current code SHA, latest relevant run/job/step and live owner/session. Compare failures with the fix SHA: an old failed run or green summary/classifier does not establish the current dependency. Record: `cause | evidence + checked time | exact step held | owner | next action | expected artifact`.
