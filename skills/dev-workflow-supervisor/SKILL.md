@@ -30,7 +30,7 @@ Before dispatch, map the available tools for spawning task/stage subagents (incl
 ## Read first, every run
 
 1. The project's **context page first** ("Agents Context") — before the Work Log scan, so the run begins oriented: what the project is, current state, active fronts, live gates/blockers, recurring failure patterns, next priorities.
-2. The Work Log rows in ALL statuses (In progress / Blocked / Scheduled / Not started / Done). Use the available Notion connector or CLI. Fetch each row’s current page before editing it; preserve unrelated fields.
+2. The Work Log rows in ALL statuses (In progress / Blocked / Scheduled / Not started / Done), including new or revised Product Owner guidance. Use the available Notion connector or CLI. Fetch each row’s current page before editing it; preserve unrelated fields. Record which guidance revision/comment was read and acknowledged in the private task notes, without refreshing the execution timestamp or claiming it was executed. Check the guidance against current evidence and permissions before acting.
 3. The Decision Log, PRD and Design doc — context for judging the work.
 4. GitHub state via the project's pull route.
 5. The live subagent list (using the runtime’s supported tool): which rows have a live task subagent right now.
@@ -78,6 +78,14 @@ A blocker is work to manage, not a reason to stop managing the product. Before p
 7. **Reconcile completion.** Done requires API-read-back merge SHA, recorded Stage 5.5 Design/PRD sync, Stage 6 acceptance evidence and any required live-delivery proof. Merge or issue closure alone is not Done. Keep merged-not-deployed work explicit. Reconcile active GitHub work into the Work Log without inventing an active owner.
 
 Before ending a run, ensure each active incomplete task has a live responsible task subagent or a confirmed continuation action. For a stopped owner, use the recovery contract above; for a real wait or missing capability, record the exact gate and resume condition. A summary alone does not keep the chain running.
+
+## Dedupe notifications, not recovery
+
+An unchanged task count is never a reason to skip recovery. Before deciding "nothing new", consume unread Product Owner guidance and compare each held task's candidate SHA, run/attempt, failure cause, owner acknowledgment and latest artifact movement with the previous check. A changed failure or failed handoff requires diagnosis even when the row count and status are unchanged.
+
+For an incomplete task with no active owner or a failed run, reuse the existing root-cause repair and apply the claim/resume and three-slot rules; never create a duplicate issue or assume an unobservable owner is dead. If work is already running, steer only when needed and check its promised artifact rather than dispatching again. With a genuine permission gate, record the precise approval and pick other ready work. Repeated identical failures use the bounded recovery rule above, not repeated spawn/message loops.
+
+Suppress duplicate notifications when appropriate, but do not use notification deduplication to suppress permitted execution or recovery. A read acknowledgment, reminder or unchanged count is not progress; record actual action receipts, evidence or the exact gate before ending the run.
 
 ## Reporting
 
