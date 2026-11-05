@@ -26,8 +26,8 @@ bws --version    # bws 2.1.0
 Add to the repo's `package.json` (works without `pnpm install`, because it uses `npx -y tsx`):
 
 ```json
-"secrets": "npx -y tsx $HOME/workspace/skills/skills/secretsmctl/scripts/secretsmctl.ts",
-"secrets:import": "npx -y tsx $HOME/workspace/skills/skills/secretsmctl/scripts/secretsmctl-import.ts --manifest scripts/secretsmctl-projects.json"
+"secrets": "npx -y tsx $HOME/.agents/skills/secretsmctl/scripts/secretsmctl.ts",
+"secrets:import": "npx -y tsx $HOME/.agents/skills/secretsmctl/scripts/secretsmctl-import.ts --manifest scripts/secretsmctl-projects.json"
 ```
 
 Or put it on PATH once:
