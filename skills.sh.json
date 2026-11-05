@@ -50,7 +50,8 @@
         "vercel-lfs",
         "git-worktree",
         "mermaid2excalidraw",
-        "macro-panel"
+        "macro-panel",
+        "secretsmctl"
       ]
     },
     {
