@@ -83,6 +83,14 @@ Keep release blocked, not the repair. If evidence suggests a transient failure, 
 
 Before ending a run, ensure each active incomplete task has a live responsible task subagent or a confirmed continuation action. For a stopped owner, use the recovery contract above; for a real wait or missing capability, record the exact gate and resume condition. A summary alone does not keep the chain running.
 
+### Run-end continuation check
+
+For every active incomplete task, record a concise continuation receipt in its Work Log row: verified owner/runtime state and checked time; last artifact and movement time; next executable step; and either current execution evidence, an actual resume/dispatch receipt with acknowledgment state, or the exact external gate and resume condition. An accepted handoff without execution evidence remains pending, not In progress. Link existing evidence instead of duplicating unchanged notes; review-only receipts do not advance Last updated.
+
+If the owner is inaccessible, use the supported coordination tool to ask the owning coordinator to verify or recover that owner, naming the task, last artifact and owed next step. Record the handoff receipt and whether it was acknowledged. If no coordinator or supported route is available, report that precise capability gap to the invoking session and keep the recovery pending. Do not repeatedly carry “owner unobservable” as if it were continued execution, and do not replace the owner until inactivity or handover is verified.
+
+Before ending, reconcile the READY queue: identify work admitted and actually started, work waiting for capacity, genuine external gates and unresolved ownership. Execute admitted authorized steps; if none can run, record the evidence for that conclusion and the concrete recovery or resume condition. A board scan, context update or preserved owner name alone does not satisfy this check.
+
 ## Dedupe notifications, not recovery
 
 An unchanged task count is never a reason to skip recovery. Before deciding "nothing new", consume unread Product Owner guidance and compare each held task's candidate SHA, run/attempt, failure cause, owner acknowledgment and latest artifact movement with the previous check. A changed failure or failed handoff requires diagnosis even when the row count and status are unchanged.
