@@ -27,7 +27,7 @@ A run succeeds by keeping permitted work executing, not by completing a scan. Ap
 ## Roles
 
 - **Main session running the Supervisor (this job):** scans the Work Log, diagnoses, dispatches, verifies receipts, reflects, self-edits. It NEVER implements code or runs task stages itself.
-- **Task subagent:** the single subagent the Supervisor dispatches. It owns ONE task end-to-end per `dev-workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back.
+- **Task subagent:** the single subagent the Supervisor dispatches. It owns ONE task end-to-end per `dev-workflow` (Stage 0 claim → design → implementation → review loop → merge → Stage 6 validation) and reports its receipt back. The dispatch brief names the task's design lane (dev-workflow Stage 2, Den 2026-11-07): **feature** = full design + architecture review; **bug fix** = light design, no separate verification loop; **simple / alert fix** = no design stage in most cases — never brief a long architecture review for a simple fix.
 - **Stage subagent:** runs only its assigned stage under the task subagent’s claim; it does not reclaim the task or restart the workflow.
 - An incomplete task with no live task subagent is a diagnosis candidate on every run; do not wait two hours to recover a dropped chain. A live task subagent that went quiet is steered, never duplicated.
 
