@@ -178,6 +178,10 @@ If the owner is inaccessible, use the supported coordination tool to ask the own
 
 Before ending, reconcile the board: identify work started this run, Open rows and their on-row reasons, Blocked rows and their one reason each. Execute admitted authorized steps; if none can run, record the evidence for that conclusion and the concrete recovery or resume condition. A board scan, context update or preserved owner name alone does not satisfy this check.
 
+### Continuity handoff to the main session (Den, 2026-11-07)
+
+A run is a snapshot; the project's main session is the continuous owner between runs. The run's report into the main session therefore hands off every live or pending task thread as ACTIONABLE CHECKPOINTS, not status: for each — the task, its lead's identity and verified state, the next expected artifact or verdict, and the exact action the main session takes when it lands (steer on stall under the kill-and-restart test, read back a Stage 4 verdict and merge on PASS, dispatch the owed next stage). The main session adopts those checkpoints as its own work and finishes chains between sweeps instead of waiting for the next run. A handoff that reports status without checkpoints the main session can act on is incomplete — the same failure as a tidy board with waiting tasks.
+
 ## Dedupe notifications, not recovery
 
 An unchanged task count is never a reason to skip recovery. Before deciding "nothing new", consume unread Product Owner guidance and compare each held task's candidate SHA, run/attempt, failure cause, owner acknowledgment and latest artifact movement with the previous check. A changed failure or failed handoff requires diagnosis even when the row count and status are unchanged.
