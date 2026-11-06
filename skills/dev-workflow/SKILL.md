@@ -7,7 +7,7 @@ description: "Run a development task end to end through claims, design, implemen
 
 Den's standing process for ANY development task (feature, fix, infra code), dictated 2026-10-31. The main session running the Supervisor owns the board. Each task is run end-to-end by ONE task subagent, which spawns its own stage subagents. This skill is the whole dev process: board layer + per-task pipeline. (`dev_tasks` was consolidated into `dev_workflow` 2026-10-31; the pull script keeps its path under `dev-tasks/scripts/`.)
 
-**Goal (Den, 2026-10-31):** bring the product to a public release that can ship without fear — infra proven ready, every offered feature proven working live, never by audit alone. The release tag remains Den's word; proven readiness is the agent's job.
+**Goal (Den, 2026-10-31):** bring the product to a public release that can ship without fear — infra proven ready, every offered feature proven working live, never by audit alone. The release tag is the product owner's decision on live-verified readiness; proven readiness is the agent's job.
 
 **Compliance is mandatory.** The task subagent opens this skill and runs Stage 0. Stage subagents inherit the task subagent’s claim, read their assigned stage, and execute only that stage; they never claim the task again, restart the whole workflow, or dispatch another task subagent. Every brief names the task subagent, this skill and the assigned stage. Work outside the pipeline is a process violation — stop and return to the task subagent. The backlog cron's dev work follows these stages too.
 
@@ -125,7 +125,7 @@ A merged fix can silently make the Notion Design or PRD wrong. Before Stage 6 cl
 
 Immediately after the merge, the task subagent spawns a validation subagent — never the implementer. It checks the merged result on main: the changed flow works end to end in a real environment (real product flow or live service, per the testing rule), and nothing around it broke (adjacent flows). Validation must also re-run the acceptance criteria against relevant account/tier/state variants absent from the committed test fixtures (lesson 2026-11-01, #2154: the committed AC-6 fixture was a free-tier account; the paid-tier retry class carried a live bug — Play-gate misclassification after subscription cancel — that two review rounds and the committed suite all missed and Stage 6 caught). Evidence goes on the issue + the Work Log row. Failure reopens the relevant stage; the task is not done. **The issue closes and the Work Log row goes Done ONLY when validation passes AND the Stage 5.5 Design/PRD sync outcome is recorded on the issue.**
 
-A merge is not a deploy: production changes only when Den cuts a release tag. When the work deploys, the same validation repeats against live production (real flow, live endpoint, the tenant's actual reply) before the work is reported done. Until then the merge comment classifies the residual as deploy-proof (stall pattern #2) and the work is reported merged-not-deployed, never done.
+A merge is not a deploy: production changes only when the product owner cuts a release tag on live-verified readiness. When the work deploys, the same validation repeats against live production (real flow, live endpoint, the tenant's actual reply) before the work is reported done. Until then the merge comment classifies the residual as deploy-proof (stall pattern #2) and the work is reported merged-not-deployed, never done.
 
 ## Standing rules
 
