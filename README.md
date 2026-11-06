@@ -1,14 +1,8 @@
 # skills
 
-Reusable agent skills for [Claude Code](https://claude.com/claude-code),
-[OpenCode](https://opencode.ai), [Codex](https://github.com/openai/codex), and
-any other Anthropic/OpenAI-compatible agent runtime that consumes the
-[Agent Skill](https://agentskills.io/specification) spec.
+Reusable agent skills for [Claude Code](https://claude.com/claude-code), [OpenCode](https://opencode.ai), [Codex](https://github.com/openai/codex), and any other Anthropic/OpenAI-compatible agent runtime that consumes the [Agent Skill](https://agentskills.io/specification) spec.
 
-Each skill is a single directory under `skills/` containing a `SKILL.md` (and
-optional scripts/references). Skills are platform-agnostic — they describe a
-workflow or technique with a `name` + `description` frontmatter that tells the
-agent when to load it.
+Each skill is a single directory under `skills/` containing a `SKILL.md` (and optional scripts/references). Skills are platform-agnostic — they describe a workflow or technique with a `name` + `description` frontmatter that tells the agent when to load it.
 
 ## Quickstart
 
@@ -26,11 +20,9 @@ npx -y skills add dzianisv/skills -s <skill-name> -g
 npx -y skills add dzianisv/skills -s my-browser -g
 ```
 
-The `-s` flag preselects the skill; without it the CLI prompts you to pick one.
-`-g` installs globally for your runtime; drop it (or use `-p`) to install into the current project.
+The `-s` flag preselects the skill; without it the CLI prompts you to pick one. `-g` installs globally for your runtime; drop it (or use `-p`) to install into the current project.
 
-After install, the agent autoloads a skill when its description/triggers match
-your request, or you can invoke it explicitly (e.g. `/my-browser`, `/own`).
+After install, the agent autoloads a skill when its description/triggers match your request, or you can invoke it explicitly (e.g. `/my-browser`, `/own`).
 
 ## Skills in this repo
 
@@ -89,6 +81,7 @@ CLI tools, secret management, messaging, and deploy helpers.
 | [`git-worktree`](skills/git-worktree) | Create a git worktree for isolated branch work by symlinking node_modules and .env files from the main repo — no reinstall. | `npx -y skills add dzianisv/skills -s git-worktree -g` |
 | [`mermaid2excalidraw`](skills/mermaid2excalidraw) | Convert Mermaid diagrams (sequenceDiagram, flowchart, graph) into native Excalidraw elements (rectangles, arrows, text) and merge them into an existing `.excalidraw` file. | `npx -y skills add dzianisv/skills -s mermaid2excalidraw -g` |
 | [`macro-panel`](skills/macro-panel) | Convene the macro-economist panel — run a market, asset, or portfolio question through multiple thinker-lenses at once and surface their AGREEMENT and DISAGREEMENT instead of one view. | `npx -y skills add dzianisv/skills -s macro-panel -g` |
+| [`secretsmctl`](skills/secretsmctl) | Fetch one Bitwarden Secrets Manager secret on demand for an agent, scoped to its own project, and copy password-manager items into SM projects. Use when an agent needs an API key, token, DSN or password at runtime. | `npx -y skills add dzianisv/skills -s secretsmctl -g` |
 
 ### Mobile Development
 
@@ -119,10 +112,10 @@ Founder materials for raising capital: pitch decks and investor narratives.
 
 | Skill | What it does | Install |
 |-------|--------------|---------|
-| [`github-copilot-sessions`](skills/github-copilot-sessions) | Find a past GitHub Copilot CLI agent session on this machine by project or topic via BM25 search, then summarize what was done. | `npx -y skills add dzianisv/skills -s github-copilot-sessions -g` |
+| [`github-copilot-sessions`](skills/github-copilot-sessions) | Find a past GitHub Copilot CLI agent session on this machine by project or topic via BM25 search, then summarize what was done in it. | `npx -y skills add dzianisv/skills -s github-copilot-sessions -g` |
 | [`google-workspace-cli`](skills/google-workspace-cli) | Use the preinstalled gws CLI for Google Drive, Gmail, and Calendar workflows, including customer-assisted OAuth login and multi-account control. | `npx -y skills add dzianisv/skills -s google-workspace-cli -g` |
 | [`opencode`](skills/opencode) | Control a remote or local OpenCode server via opencode-cli (or its REST API directly). | `npx -y skills add dzianisv/skills -s opencode -g` |
-| [`overflow`](skills/overflow) |  | `npx -y skills add dzianisv/skills -s overflow -g` |
+| [`overflow`](skills/overflow) | Per-task lead subagent contract for dev_workflow: owns one task end-to-end (claim, staffing, gates, reporting); the stage process itself lives in dev_workflow. Legacy compatibility alias under the Dev Workflow Supervisor. | `npx -y skills add dzianisv/skills -s overflow -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
 | [`stocks-advisor-fast`](skills/stocks-advisor-fast) |  | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
 
@@ -130,24 +123,15 @@ Founder materials for raising capital: pitch decks and investor narratives.
 
 ## How `claude-sessions` works
 
-Claude Code stores every session as a JSONL transcript under
-`~/.claude/projects/<dashified-cwd>/<sessionId>.jsonl` (the directory name is the
-project's working directory with `/` and `.` replaced by `-`). These files grow
-to **tens of MB**, so reading them directly blows up an agent's context.
+Claude Code stores every session as a JSONL transcript under `~/.claude/projects/<dashified-cwd>/<sessionId>.jsonl` (the directory name is the project's working directory with `/` and `.` replaced by `-`). These files grow to **tens of MB**, so reading them directly blows up an agent's context.
 
 This skill avoids that in three steps:
 
-1. **Rank cheaply.** `scripts/rank_sessions.py` makes a single streaming pass
-   over each transcript, scoring it by keyword hits in its title / last prompt /
-   first message plus a whole-file hit count, and prints the top candidates as
-   JSON. It handles sibling project dirs (`…-OpenClawBot`, `…-OpenClawBot-2`) and
-   supports `--project`, `--days`, and `--limit`.
-2. **Deep-read with subagents.** The agent dispatches one subagent per top
-   candidate, in parallel — each greps within its assigned file and reads only
-   the surrounding lines, then reports whether it matches and a short summary.
-   The large transcripts stay out of the main context.
-3. **Present the best match** with its summary, `session_id`, path, and date
-   (resume it with `claude --resume <session_id>`).
+1. **Rank cheaply.** `scripts/rank_sessions.py` makes a single streaming pass over each transcript, scoring it by keyword hits in its title / last prompt / first message plus a whole-file hit count, and prints the top candidates as JSON. It handles sibling project dirs (`…-OpenClawBot`, `…-OpenClawBot-2`) and supports `--project`, `--days`, and `--limit`.
+
+2. **Deep-read with subagents.** The agent dispatches one subagent per top candidate, in parallel — each greps within its assigned file and reads only the surrounding lines, then reports whether it matches and a short summary. The large transcripts stay out of the main context.
+
+3. **Present the best match** with its summary, `session_id`, path, and date (resume it with `claude --resume <session_id>`).
 
 Try the ranker directly:
 
@@ -156,8 +140,7 @@ python3 ~/.claude/skills/claude-sessions/scripts/rank_sessions.py \
   --project ~/workspace/OpenClawBot "merge gate" enforce testing
 ```
 
-Or just ask your agent: *"Find the session where I worked on PR merge-gate
-enforcement testing in ~/workspace/OpenClawBot and summarize it."*
+Or just ask your agent: *"Find the session where I worked on PR merge-gate enforcement testing in ~/workspace/OpenClawBot and summarize it."*
 
 ## Install
 
@@ -177,13 +160,11 @@ npx -y skills add dzianisv/skills -s chrome-use -g
 
 `-g` installs globally. Drop it (or use `-p`) to install into the current project only.
 
-After install the agent autoloads a skill when its description/triggers match your request,
-or invoke it explicitly (e.g. `/chrome-use`, `/own`).
+After install the agent autoloads a skill when its description/triggers match your request, or invoke it explicitly (e.g. `/chrome-use`, `/own`).
 
 ## Spec
 
-These skills follow the [agentskills.io](https://agentskills.io/specification)
-spec. Frontmatter:
+These skills follow the [agentskills.io](https://agentskills.io/specification) spec. Frontmatter:
 
 ```yaml
 ---
@@ -196,10 +177,10 @@ description: Use when <triggering conditions and symptoms>
 
 PRs welcome. New skills should:
 
-- Have a clear `description` field that starts with **"Use when…"** and
-  describes triggering conditions, not the workflow itself.
-- Be platform-neutral where possible. If a skill is tied to a specific
-  runtime (Claude Code vs. OpenCode), say so in the body.
+- Have a clear `description` field that starts with **"Use when…"** and describes triggering conditions, not the workflow itself.
+
+- Be platform-neutral where possible. If a skill is tied to a specific runtime (Claude Code vs. OpenCode), say so in the body.
+
 - Avoid hard-coded personal paths, account names, IPs, or secrets.
 
 ## License
