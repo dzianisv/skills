@@ -67,6 +67,11 @@ The task subagent spawns a context subagent. It reads the issue completely (body
 
 ## Stage 2 — Design (Notion is the home of design + PRD)
 
+**Design depth by task type (Den, 2026-11-07 — simple fixes do not get a long architecture review):**
+- **Feature** (new behavior or surface, or any change to a contract/invariant): the full Stage 2 below — design in Notion + independent design/architecture review; no implementation before PASS.
+- **Bug fix:** light design — root cause + the design gap recorded (investigation track, step 2), with a short amendment to the design doc where one exists. NO separate design-verification loop — unless the fix changes a contract, invariant, or cross-service behavior, in which case it moves to the feature lane for design.
+- **Simple fix / alert fix** (root cause known, change confined to one component, no contract/invariant change): NO design stage in most cases — root cause + the intended change in one short issue comment, then straight to implementation. Stage 4 review and Stage 6 validation still apply in full. If the work turns out not to be confined, the task subagent escalates it to the bug-fix or feature lane and says so on the issue.
+
 1. Find the task's design + PRD in Notion. Read them.
 2. **Design defined?** → spawn a design/architecture review subagent: it reviews the design's architecture against the ticket and PRD — complete? consistent? acceptance criteria defined? Gaps go back to the design, not into implementation guesses.
 3. **Design missing?** → spawn a design subagent: it writes the design (approach, scope boundaries, acceptance criteria) into the Notion page, per the `dev_docs` skill (`~/workspace/custom-skills/dev-docs/SKILL.md`): 30-second read, concrete nouns and numbers. Then step 2 runs on it.
@@ -77,7 +82,7 @@ The task subagent spawns a context subagent. It reads the issue completely (body
 No Stage 2 upfront — there is nothing to design yet.
 
 1. Investigate to a root cause, with evidence. Separate verified from unverified.
-2. **Bug found → the fix does not start until the design is repaired:** (a) find the design gap that allowed the wrong implementation (no design at all = the gap; say so); (b) update the design doc in Notion; (c) fix through the normal stages, against the UPDATED design; the review checks the fix against the design change that motivated it. After the fix merges, the Stage 5.5 Design/PRD sync check still runs — the repair covered the gap, the sync check covers everything else the fix changed.
+2. **Bug found → the fix does not start until the design gap is recorded:** (a) find the design gap that allowed the wrong implementation (no design at all = the gap; say so); (b) record it at the depth of the task's Stage 2 lane — a Notion design-doc update for feature-lane work; an issue comment suffices for a simple/alert fix (no Notion round-trip); (c) fix through the normal stages, against the recorded gap; the review checks the fix against the design change that motivated it. After the fix merges, the Stage 5.5 Design/PRD sync check still runs — the repair covered the gap, the sync check covers everything else the fix changed.
 3. No bug (works as designed, external cause) → record the verdict on the issue. If the investigation exposed a design weakness, step 2 applies to it.
 4. **A verdict never dangles (weekly review, 2026-10-31):** every gap or follow-up named in a verdict leaves with a concrete artifact before the session ends — a filed follow-up issue (linked), a fix PR, or an explicit park naming the owner/gate. "Recorded for scheduling" is a dropped stage (it happened twice in one day: #5770's promised G1 ticket never filed; #5766's unwired dedup sat as prose while the alert re-paged hourly).
 
