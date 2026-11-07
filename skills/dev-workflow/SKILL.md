@@ -24,7 +24,7 @@ Den's standing process for ANY development task (feature, fix, infra code), dict
 - [ ] Stage 4: review per `claude-code-review` (rule 1a); loop until clean; sweep re-run = zero unfixed hits; test-count delta recorded, no growth.
 - [ ] Stage 5: verdict comment read back via API before merge; merge verified by SHA readback; CI ladder respected.
 - [ ] Stage 5.5: Design/PRD sync checked after the merge; outcome recorded on the issue either way.
-- [ ] Stage 6: validation subagent (never the implementer) proves the merged result live; evidence labeled "Stage 6"; only then issue closes + row Done.
+- [ ] Stage 6 (critical bugs + incidents ONLY): validation subagent (never the implementer) proves the merged result live; evidence labeled "Stage 6"; only then issue closes + row Done. All other work closes at Stage 5 + 5.5 — merge to main, move forward.
 
 ## Board
 
@@ -98,7 +98,7 @@ Rules:
 
 - **Feature** (new behavior or surface, or any change to a contract/invariant): the full Stage 2 below — design in Notion + independent design/architecture review; no implementation before PASS.
 - **Bug fix:** light design — root cause + the design gap recorded (investigation track, step 2), with a short amendment to the design doc where one exists. NO separate design-verification loop — unless the fix changes a contract, invariant, or cross-service behavior, in which case it moves to the feature lane for design.
-- **Simple fix / alert fix** (root cause known, change confined to one component, no contract/invariant change): NO design stage in most cases — root cause + the intended change in one short issue comment, then straight to implementation. Stage 4 review and Stage 6 validation still apply in full. If the work turns out not to be confined, the task subagent escalates it to the bug-fix or feature lane and says so on the issue.
+- **Simple fix / alert fix** (root cause known, change confined to one component, no contract/invariant change): NO design stage in most cases — root cause + the intended change in one short issue comment, then straight to implementation. Stage 4 review still applies in full; Stage 6 validation applies in full only when the fix is a critical bug or an incident (see Stage 6). If the work turns out not to be confined, the task subagent escalates it to the bug-fix or feature lane and says so on the issue.
 
 1. Find the task's design + PRD in Notion. Read them.
 2. **Design defined?** → spawn a design/architecture review subagent: it reviews the design's architecture against the ticket and PRD — complete? consistent? acceptance criteria defined? Gaps go back to the design, not into implementation guesses.
@@ -147,14 +147,14 @@ The task subagent spawns an implementation subagent. Brief points at: the issue,
 
 ## Stage 5 — Merge (task subagent)
 
-1. Review clean → CI on the PR head → green → merge. Verify the merge by SHA readback. Post the merge comment. The issue does NOT close here — it closes at Stage 6.
+1. Review clean → CI on the PR head → green → merge. Verify the merge by SHA readback. Post the merge comment. For standard lanes (features, routine fixes, CI/tooling) the issue closes here, once the Stage 5.5 sync outcome is recorded; for critical bugs and incidents it closes at Stage 6.
    **Gate order (weekly review, 2026-10-31):** "review is clean" = the verdict comment EXISTS on the PR and the task subagent has read it back via API (comment id + head SHA it names). A subagent's delivered PASS is not the gate — read the verdict back first, then merge. (Annex A-K7.)
 2. **Merge without the PR (Den, 2026-11-07).** The PR is the review vehicle, not the merge path. The gate is the Stage 4 verdict: posted on the PR and read back. If the merge call itself cannot run (API rate limit, outage), do not wait for it: land the same change straight on main through the Git Database / Contents API (one commit, base = current main, tree = the reviewed head's tree). Verify by readback that the landed tree equals the reviewed tree. Record on the issue: "landed direct, PR #N superseded", the commit SHA, and the verdict comment ID. Close the PR with that record when writes allow. A rate limit on one endpoint is never a reason to hold a reviewed change.
 3. **CI infrastructure unavailable / checks failed:** diagnose and repair the infrastructure while continuing independent work. A check that ran and failed blocks the merge — UNLESS a triage recorded on the PR proves, with run IDs, that the identical failure occurs on main or is fleet-caused AND could not have been caused by this change; an untriaged failure, or one the change could have caused, is never bypassed. Checks that never ran (CI globally unavailable) may use the local-evidence ladder: run the full relevant suite on the exact SHA, merge on local evidence, and record the bypass + reason on the issue for re-verification when CI recovers — only when the current project rules and user explicitly authorize that exact path, preserving review and merge gates. Queue delays alone grant no exception. Otherwise keep the merge held while repairing.
 
 ## Stage 5.5 — Design/PRD sync check (after every merge, Den 2026-11-01)
 
-A merged fix can silently make the Notion Design or PRD wrong. Before Stage 6 closes the task, the task subagent checks both, every time:
+A merged fix can silently make the Notion Design or PRD wrong. After every merge, before the task closes, the task subagent checks both, every time:
 
 1. **Design:** does the merged change alter anything the task's Design doc (or a standing design page — Testing & Release Process, Autoscaling, DESIGN) describes — behavior, contracts, invariants, alert/verdict semantics, workflow rules, file/test inventory? Yes → update the doc in the same task (per `dev_docs`: concrete nouns/numbers), read it back, link the update on the issue.
 2. **PRD:** does the merged change alter anything the PRD promises — product behavior, user-visible flows, pricing/entitlement mechanics, supported surfaces? Yes → update the PRD the same way. (Internal CI/tooling fixes almost never touch the PRD — but the check is still run and recorded, not assumed.)
@@ -163,11 +163,13 @@ A merged fix can silently make the Notion Design or PRD wrong. Before Stage 6 cl
 
    *Tooling note (2026-11-01):* Notion `update_content` replacements match the page's markdown, not the fetched rendering — anchor on plain-text phrases; a backticked/code-spanned old_str can no-match even when the rendered text looks identical. Verify every sync edit by re-fetch before recording it. (Annex A-K20.)
 
-## Stage 6 — Post-merge validation (validation subagent)
+## Stage 6 — Post-merge validation (critical bugs + incidents only; validation subagent)
 
-Immediately after the merge, the task subagent spawns a validation subagent — never the implementer. It checks the merged result on main: the changed flow works end to end in a real environment (real product flow or live service, per the testing rule), and nothing around it broke (adjacent flows). Validation must also re-run the acceptance criteria against relevant account/tier/state variants absent from the committed test fixtures — fixtures encode the happy class only (lesson 2026-11-01, #2154; Annex A-K13). Evidence goes on the issue + the Work Log row, in a comment explicitly labeled **"Stage 6"** (audit 2026-11-05; Annex A-K14). The closing comment also repeats the test-count delta line. Failure reopens the relevant stage; the task is not done. **The issue closes and the Work Log row goes Done ONLY when validation passes AND the Stage 5.5 Design/PRD sync outcome is recorded on the issue. Never close on the merge comment alone.**
+**Gate scope (Den, 2026-11-08): Stage 6 is a closing gate ONLY for critical bugs and incidents** — production broken or degraded, user-facing outage, data loss/corruption, security, payment-impacting. For everything else (features, routine bug fixes, CI/tooling, docs) the task closes at merge: merge SHA read back + Stage 5.5 sync outcome recorded = Done, issue closed, row Done — merge to main, move forward; never wait on post-merge validation or publish. Validation of merged standard-lane work may still run afterwards (validation subagent, a sweep, or the release task); anything it finds opens a NEW bug task — it never holds the closed task open.
 
-**Deploy is not part of this workflow (Den, 2026-11-07 — the deploy step is removed from the protocol).** A task ends at Stage 6: merge SHA read back + Stage 5.5 sync recorded + Stage 6 validation passed on the merged result = Done, issue closed, row Done. Whether and when merged work ships to production is the product owner's separate release act, outside any task's lifecycle; it never keeps a task open and is never a residual class. Release-level live checks belong to the release task itself, not to the work tasks whose merges it ships.
+For critical/incident tasks, immediately after the merge the task subagent spawns a validation subagent — never the implementer. It checks the merged result on main: the changed flow works end to end in a real environment (real product flow or live service, per the testing rule), and nothing around it broke (adjacent flows). Validation must also re-run the acceptance criteria against relevant account/tier/state variants absent from the committed test fixtures — fixtures encode the happy class only (lesson 2026-11-01, #2154; Annex A-K13). Evidence goes on the issue + the Work Log row, in a comment explicitly labeled **"Stage 6"** (audit 2026-11-05; Annex A-K14). The closing comment also repeats the test-count delta line. Failure reopens the relevant stage; the task is not done. **For critical/incident tasks, the issue closes and the Work Log row goes Done ONLY when validation passes AND the Stage 5.5 Design/PRD sync outcome is recorded on the issue.**
+
+**Deploy is not part of this workflow (Den, 2026-11-07 — the deploy step is removed from the protocol).** A task ends at merge (standard lanes) or at Stage 6 (critical bugs + incidents): merge SHA read back + Stage 5.5 sync recorded (+ Stage 6 validation passed, critical/incident lanes only) = Done, issue closed, row Done. Whether and when merged work ships to production is the product owner's separate release act, outside any task's lifecycle; it never keeps a task open and is never a residual class. Release-level live checks belong to the release task itself, not to the work tasks whose merges it ships.
 
 ## Standing rules
 
@@ -226,7 +228,7 @@ Properties, in order: **Title** · **Last updated** (date with time; default vie
 
 Rules:
 
-- A row goes **Done only per Stage 6** (validation PASS + Stage 5.5 sync recorded on the issue) — never on a merge alone. (Evidence: Annex A-K15.)
+- A row goes **Done** on merge SHA read back + Stage 5.5 sync recorded on the issue; critical bugs and incidents additionally require a Stage 6 PASS. (Den, 2026-11-08 — supersedes the Stage-6-for-every-task rule of 2026-11-02; evidence: Annex A-K15.)
 - Row created **when work starts** — the same moment it is claimed/dispatched (Starting a task, step 2).
 - Update the row at each execution milestone: claim acknowledged → design → PR opened → review → merge → validation → execution block → done. Set **Last updated** to the actual evidenced execution/progress time, including verified artifact movement discovered later, not the time of the scan. Refresh Description when the gate changes. Review-only guidance, schema edits, ownership backfills and Blocked → Open relabeling must not advance Last updated; date those observations in the comment instead. Keep artifact URL/SHA and movement time in notes; do not invent a date for unknown progress.
 - `Open` = not being worked now; the row text carries the concrete next step and what starts it. A Blocked row whose reason has cleared is worked the same run (see `dev-workflow-supervisor`), not merely relabeled; keep unresolved reasons explicit. The main session sends the handoff through the actual task-subagent tool. Move to In progress only after acknowledgment and evidence that execution started or resumed, not a comment or dispatch receipt.
