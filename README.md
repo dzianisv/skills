@@ -52,7 +52,7 @@ Autonomous agents for project management, task ownership, and backlog draining.
 | [`no-github-backlog`](skills/no-github-backlog) | Drain a GitHub issue backlog autonomously. | `npx -y skills add dzianisv/skills -s no-github-backlog -g` |
 | [`no-pr-backlog`](skills/no-pr-backlog) | Drain a GitHub pull-request backlog autonomously. | `npx -y skills add dzianisv/skills -s no-pr-backlog -g` |
 | [`dev-workflow`](skills/dev-workflow) | Run a development task end to end through claims, design, implementation, review, merge and live validation, delegating stage work to subagents. | `npx -y skills add dzianisv/skills -s dev-workflow -g` |
-| [`dev-workflow-supervisor`](skills/dev-workflow-supervisor) | Use when an hourly project check must find stalled tasks, check live subagent ownership, dispatch actionable work, and verify completion. | `npx -y skills add dzianisv/skills -s dev-workflow-supervisor -g` |
+| [`dev-workflow-supervisor`](skills/dev-workflow-supervisor) | Hourly project check: find stuck tasks, make sure each task has a live subagent, fix blockers yourself, verify what finished. | `npx -y skills add dzianisv/skills -s dev-workflow-supervisor -g` |
 
 ### Skill Engineering
 
@@ -81,7 +81,7 @@ CLI tools, secret management, messaging, and deploy helpers.
 | [`git-worktree`](skills/git-worktree) | Create a git worktree for isolated branch work by symlinking node_modules and .env files from the main repo — no reinstall. | `npx -y skills add dzianisv/skills -s git-worktree -g` |
 | [`mermaid2excalidraw`](skills/mermaid2excalidraw) | Convert Mermaid diagrams (sequenceDiagram, flowchart, graph) into native Excalidraw elements (rectangles, arrows, text) and merge them into an existing `.excalidraw` file. | `npx -y skills add dzianisv/skills -s mermaid2excalidraw -g` |
 | [`macro-panel`](skills/macro-panel) | Convene the macro-economist panel — run a market, asset, or portfolio question through multiple thinker-lenses at once and surface their AGREEMENT and DISAGREEMENT instead of one view. | `npx -y skills add dzianisv/skills -s macro-panel -g` |
-| [`secretsmctl`](skills/secretsmctl) | Fetch one Bitwarden Secrets Manager secret on demand for an agent, scoped to its own project, and copy password-manager items into SM projects. Use when an agent needs an API key, token, DSN or password at runtime. | `npx -y skills add dzianisv/skills -s secretsmctl -g` |
+| [`secretsmctl`](skills/secretsmctl) | Fetch one Bitwarden Secrets Manager secret on demand for an agent, scoped to its own project, and copy password-manager items into SM projects. | `npx -y skills add dzianisv/skills -s secretsmctl -g` |
 
 ### Mobile Development
 
@@ -112,10 +112,11 @@ Founder materials for raising capital: pitch decks and investor narratives.
 
 | Skill | What it does | Install |
 |-------|--------------|---------|
-| [`github-copilot-sessions`](skills/github-copilot-sessions) | Find a past GitHub Copilot CLI agent session on this machine by project or topic via BM25 search, then summarize what was done in it. | `npx -y skills add dzianisv/skills -s github-copilot-sessions -g` |
+| [`blogpost`](skills/blogpost) | Write or edit blog posts in the user's preferred style: short, technical, software-engineer voice, understandable to non-experts, value-first, with light SEO and subtle promotion of the relevant product or service. | `npx -y skills add dzianisv/skills -s blogpost -g` |
+| [`github-copilot-sessions`](skills/github-copilot-sessions) | Find a past GitHub Copilot CLI agent session on this machine by project or topic via BM25 search, then summarize what was done. | `npx -y skills add dzianisv/skills -s github-copilot-sessions -g` |
 | [`google-workspace-cli`](skills/google-workspace-cli) | Use the preinstalled gws CLI for Google Drive, Gmail, and Calendar workflows, including customer-assisted OAuth login and multi-account control. | `npx -y skills add dzianisv/skills -s google-workspace-cli -g` |
 | [`opencode`](skills/opencode) | Control a remote or local OpenCode server via opencode-cli (or its REST API directly). | `npx -y skills add dzianisv/skills -s opencode -g` |
-| [`overflow`](skills/overflow) | Per-task lead subagent contract for dev_workflow: owns one task end-to-end (claim, staffing, gates, reporting); the stage process itself lives in dev_workflow. Legacy compatibility alias under the Dev Workflow Supervisor. | `npx -y skills add dzianisv/skills -s overflow -g` |
+| [`overflow`](skills/overflow) |  | `npx -y skills add dzianisv/skills -s overflow -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
 | [`stocks-advisor-fast`](skills/stocks-advisor-fast) |  | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
 
