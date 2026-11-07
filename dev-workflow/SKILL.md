@@ -111,6 +111,7 @@ The task subagent spawns an implementation subagent. Brief points at: the issue,
 ## Stage 4 — Review loop (review subagent)
 
 1. The task subagent spawns a review subagent. It first reads the Notion design/PRD + acceptance criteria, then reviews the PR against them: diff actually read, evidence claims checked, criteria tested one by one.
+1a. **Review method = `claude-code-review` (Den, 2026-11-07):** Stage 4 reviews run the installed skill at `~/workspace/custom-skills/claude-code-review/SKILL.md` (Anthropic's Claude Code code-review method, source anthropics/claude-plugins-official). Parallel compliance + bug agents, high-signal-only flagging, an independent validation pass per finding — only validated findings may FAIL a PR; everything else is a filed note, not a blocker.
 2. Findings → implementation subagent fixes → re-review. **Loop until clean.** No "good enough" exits.
 3. Anomaly rule (task subagent watches): two rounds bouncing with substantive findings = structural problem (bad design, wrong scope, misunderstood ticket). Stop, diagnose, fix the design or the brief, restart.
 4. Evidence runs in a REAL git checkout, never a tarball tree (lesson 2026-10-31, PR #5757: a tarball silently fails ~39 git-dependent tests). Suite can't complete (hangs, tooling gaps) → bounded head-vs-base comparisons on identical trees; report the hang itself.
