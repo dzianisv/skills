@@ -19,6 +19,7 @@ description: "Use when an hourly project check must find stalled tasks, check li
    - Goal-fit — default close: keep only goal-critical (name the failure mechanism) or live execution, keep-reason on the row; close with dated reason + record pointer; never delete.
    - Done = merge SHA + Stage 5.5 + Stage 6 read back; merged-PR sweep every run.
 5. **Report, four blocks only: Blocked (+ reflect why I did not resolve each) / Blockers resolved / In Progress now / Open left.**
+   - Every task named to the owner = its Work Log **title** + one plain line: what it resolves. Issue/PR numbers are links only, never the identifier — a report the owner cannot understand from titles alone is a failed report.
    - Blocked line: name + reason + (repair: live — owner / or class: a|b|c).
    - In Progress now: name + live subagent (session verified this run); listed without one = run failure. Open left: name + why it stays open.
    - Nothing else; no change = silence (self-edit line excepted).
