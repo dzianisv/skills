@@ -18,7 +18,7 @@ description: "Hourly project check: find stuck tasks, make sure each task has a 
    - Stalled (no activity + no new artifact since last sweep): verify, close, one replacement at the current stage, in the same sweep.
 4. **Count slots. If In Progress is under 3 and a workable Open or Blocked row exists, start its subagent and move it to In Progress.**
    - Goal-fit. The default is close: keep a row only if the goal fails without it (say how, in one line) or work is live on it now. The keep-reason goes on the row. Close with a dated reason + a link to its record. Never delete a row.
-   - Done means merge SHA, Stage 5.5, and Stage 6 all read back. Sweep merged PRs every run.
+   - Done means merge SHA + Stage 5.5 read back; Stage 6 additionally read back for critical bugs and incidents only (Den, 2026-11-08). Sweep merged PRs every run.
 5. **Report, four blocks only: Blocked (+ reflect why I did not resolve each) / Blockers resolved / In Progress now / Open left.**
    - Every task named to the owner = its Work Log **title** + one plain line: what it resolves. Issue/PR numbers are links only, never the identifier. A report the owner cannot understand from titles alone is a failed report.
    - Blocked line: name + reason + (repair running, name its owner; or owner class a, b, or c).
