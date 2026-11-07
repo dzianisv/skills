@@ -29,7 +29,7 @@ It lists open AgentPod issues with their PRs, open AgentPod PRs with no issue, o
 
 ### On Den's status request — table, reflection, push
 
-0. **Trigger (Den, 2026-11-07 — after repeated violations):** ANY question from Den about counts or state — tasks, subagents, board, PRs, "how many", "what's running" — is a status request under this section, never a chat answer. Before replying: run the fresh pull + `subagent.list` filtered to THIS session's chat_id, and answer only from that output. Every count in the reply names its source and time. If a source is unavailable (e.g. Notion quota), the reply says "unverified", gives the last verified value and its age — a number from context or memory is never presented as current.
+0. **Trigger:** owned by `dev-workflow-supervisor` (**Reporting**) — the main session answers Den's count/state questions in its Supervisor capacity, under that skill. This section supplies the mechanics once that trigger fires.
 
 1. **Table** from the fresh pull (verify rows the script can't classify against GitHub directly). Columns: PR/задача (link; issue link if no PR yet) | что делает (one plain line) | статус — only: **В работе** · **В ревью (субагент)** (a Stage 4 review is running; Den never reviews code) · **Готов к мерджу** · **Ждёт CI / раннер** · **Ждёт Дена: <что именно>** · **Ждёт флот** · **Открыто**.
 2. **Stall reflection** per row: *my stall* = a stage finished, the next never started (PR without review, clean review without merge, verdict without a fix agent) — name it plainly. *Den's gate* (money, sign-in, decision) or *external gate* (fleet, CI, third party) must be verified against the exact step and current evidence; it exempts only dependent work, not the whole task. Name the gate's unblock in one phrase.
