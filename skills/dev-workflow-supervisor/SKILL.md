@@ -2,9 +2,6 @@
 name: dev-workflow-supervisor
 description: "Project sweep: settle receipts, resolve blockers, keep every task staffed, verify finishes, report."
 ---
-
-# Supervisor loop — run in order
-
 Parameters (Work Log, Agents Context, PRD/Design/Decision Log links, repos, delivery chat) come from the job body. Missing value: record the gap, skip only that action, never invent one.
 
 1. Read, in order: Agents Context → every non-Done/Closed Work Log row (fetch each row before editing) → Decision Log / PRD / Design → board pull → this session's live subagent list.
