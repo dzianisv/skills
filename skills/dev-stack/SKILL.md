@@ -10,7 +10,14 @@ description: how to build the {android, webapp, ios, backend} application by AI 
 - cloudflare: [Cloudflare CDN (Pages)](https://developers.cloudflare.com/pages/), [Cloudflare Workers (Functions)](https://developers.cloudflare.com/workers/), [Cloudflare D1 (SQL)](https://developers.cloudflare.com/d1/), [Cloudflare KV (NoSQL)](https://developers.cloudflare.com/kv/) — skill: https://skills.sh/firecrawl/skills/cloudflare-deploy
 - firebase: [Firebase Hosting](https://firebase.google.com/docs/hosting), [Firebase Authentication](https://firebase.google.com/docs/auth), [Cloud Functions for Firebase](https://firebase.google.com/docs/functions), [Cloud Firestore](https://firebase.google.com/docs/firestore) — skill: https://skills.sh/firebase/agent-skills/developing-genkit-dart
 - webapp: Next.js (App Router) + React + TypeScript + Tailwind CSS + shadcn/ui (https://ui.shadcn.com) — deploy to Vercel/Cloudflare Pages/Netlify
-- to build the android app for most cases it is enough to login on Google Ai Studio https://aistudio.google.com/welcome and start the android app project https://developer.android.com/blog/posts/build-native-android-apps-in-google-ai-studio. The google ai studio has build-in emulator and the build workers, so we shouldnt' setup ci and dev environment for android app. 
+- to build the android app for most cases use Google AI Studio (free, prompt-based, no local setup): https://aistudio.google.com/welcome — start a project at https://ai.dev/apps?features=build_android_app. It generates Kotlin + Jetpack Compose native Android apps from a single prompt, with an embedded Android Emulator in the browser for preview/iteration. No SDK install needed. Workflow:
+  1. Open https://ai.dev/apps?features=build_android_app and describe the app in a prompt (native Android, Kotlin + Jetpack Compose; can target phone, Pixel Watch, Pixel Fold, etc.).
+  2. Iterate using the embedded Android Emulator in the browser; preview and interact with the app as it builds.
+  3. Publish for testing: with a Google Play developer account, publish directly from AI Studio to an internal testing track (AI Studio auto-creates the app record, packages the bundle, uploads to Google Play Console).
+  4. Hand off when needed: export the project to Android Studio via ZIP download or direct GitHub export for advanced tooling, more device types, or team dev; leverage Gemini in Android Studio or Antigravity (Android CLI) for further development.
+  - Supported: personal utilities/simple social apps, hardware-enabled experiences (Camera, GPS/Location, Accelerometer, Bluetooth), AI-powered experiences (Gemini API integrations).
+  - Coming soon: managing Google Play test tracks, Firebase integrations (Firestore, Auth, App Check).
+  - Because AI Studio provides built-in emulator and cloud build workers, no local CI/dev environment is needed for initial Android development. Only set up CI/GitHub Actions Android build+release when the project is handed off to Android Studio/local dev. 
 
 4. setup ci to build an {app,container} and cache the build
    - in case of the docker image publish on github registry
