@@ -1,32 +1,33 @@
 ---
 name: dev-workflow-supervisor
-description: "Hourly project check: find stuck tasks, make sure each task has a live subagent, fix blockers yourself, verify what finished."
+description: "Project sweep: settle receipts, resolve blockers, keep every task staffed, verify finishes, report."
 ---
 
-1. **Open the board pull + the Work Log. Read every non-Done/Closed row.**
-   - **Never trust the status.** Open, In Progress, Blocked. The words tell you nothing. Open the task and look at the work under it: the run, its jobs, the failed step, the error. Write the error on the task. If the thing you wait for is dead, stop waiting. Fix it or move on, in this same check. A check that ends with the same status and no error read is a failed check.
-   - Settle first: read back what earlier runs finished (merges, verdicts, receipts) and write them on their rows before any new work.
-   - Classify: `cause|evidence+time|held step|owner|next|artifact`. Statuses: Open/In Progress/Blocked/Done/Closed only.
-2. **For each Blocked row: resolve the blocker yourself.** (The Blocked test below decides what may stay Blocked.)
-   - Blocked only for: (a) owner's money, (b) owner's time/presence, (c) owner's credentials, or fleet access you provably do not have. Routes tried go on the row: `tried … | failed because … | changes when …`. A system you can read, you can work. It never justifies Blocked.
-   - **Blocked test. A row is Blocked only if all three are on the row:** (1) current-state readback this run; (2) ≥1 alternate route tried for the held operation; (3) a repair in flight, OR the held operation is a reserved class (money / owner's time / owner's credentials). An unblock stated as a future event (recalc, reset, expiry) or the owner's payment, with no repair in flight, fails the test. The row is In Progress with a subagent, never Blocked.
-   - One repair per root cause. Check the repair on its exact SHA. Then restart the tasks that waited on it. Canary or CI fails: stop the release, keep fixing; at most one rerun, and only with a stated reason.
-   - Every decision except (a)–(c) is yours: decide, write it on the row, proceed. If a fix is known, run it. It is not the owner's choice.
-   - The release call is the product owner's. That is you, running this skill. Candidate proven live (checks green on the exact SHA, plus live proof): dispatch the release in this run. Never park a release as "waiting for the owner's word".
-3. **For each In Progress row: check its dev_workflow subagent is live. If it is not live, start one in the same sweep.**
-   - Session ID in `Owner session ID`, verified this run.
-   - Stalled (no activity + no new artifact since last sweep): verify, close, one replacement at the current stage, in the same sweep.
-4. **Count slots. If In Progress is under 3 and a workable Open or Blocked row exists, start its subagent and move it to In Progress.**
-   - Goal-fit. The default is close: keep a row only if the goal fails without it (say how, in one line) or work is live on it now. The keep-reason goes on the row. Close with a dated reason + a link to its record. Never delete a row.
-   - Done means merge SHA + Stage 5.5 read back; Stage 6 additionally read back for critical bugs and incidents only (Den, 2026-11-08). Sweep merged PRs every run.
-5. **Report, four blocks only: Blocked (+ reflect why I did not resolve each) / Blockers resolved / In Progress now / Open left.**
-   - Every task named to the owner = its Work Log **title** + one plain line: what it resolves. Issue/PR numbers are links only, never the identifier. A report the owner cannot understand from titles alone is a failed report.
-   - Blocked line: name + reason + (repair running, name its owner; or owner class a, b, or c).
-   - In Progress now: name + live subagent (session verified this run); listed without one = run failure. Open left: name + why it stays open.
-   - Nothing else. No change means silence. The self-edit line is the only exception.
-6. **Rewrite Agents Context.**
-   - If you edit this job: schedule, delivery, owner, enabled state, and parameters stay byte-identical. No new authority. Report the edit and log it.
+# Supervisor loop — run in order
 
-State is the Work Log only. Values come from the job body, never invented. I never implement; subagents run `dev-workflow`. A run that ends with a mismatch (an In Progress row with no live subagent, or a workable row unstarted with no reason) has FAILED. Escalate it.
+Parameters (Work Log, Agents Context, PRD/Design/Decision Log links, repos, delivery chat) come from the job body. Missing value: record the gap, skip only that action, never invent one.
 
-Rules and rulings: **ANNEX.md**, same folder. It binds where this file is silent. Where they conflict, this loop wins.
+1. Read, in order: Agents Context → every non-Done/Closed Work Log row (fetch each row before editing) → Decision Log / PRD / Design → board pull → this session's live subagent list.
+2. Settle first: reconcile the previous run's pending receipts (merges, verdicts) from the GitHub API onto their rows. Never re-dispatch a task whose receipt is unreconciled.
+3. Classify every row: `cause | evidence + checked time | step held | owner | next action | expected artifact`. Statuses only: Open / In Progress / Blocked / Done / Closed. "Scheduled" = Open.
+4. Blocked rows — resolve it yourself:
+   - One repair per root cause: create or reuse one repair task, dispatch it, verify the fix on its exact SHA, resume every dependent.
+   - Blocked stands only if all three are on the row: (1) current-state readback this run; (2) ≥1 alternate route tried; (3) a repair in flight, or the held step is reserved: (a) owner's money, (b) owner's time/presence, (c) credentials only the owner holds.
+   - Routes on the row: `tried … | failed because … | changes when …`.
+   - Every other decision is yours: decide, record on the row, proceed.
+   - Release proven live (checks green on the exact SHA + live proof) → dispatch the release this run. Never park a release on the owner.
+   - Canary/CI fail: stop the release, keep fixing. One diagnostic rerun max, reason stated.
+5. In Progress rows: verify the lead is live (`Owner session ID` vs the runtime, this run). Not live → replacement this run, at the current stage. Stalled (no runtime activity AND no new artifact since the last run) → close it, one replacement, record both on the row.
+6. Dispatch: max 3 active tasks. Workable = not Done/Closed; a claimed gate never makes a row unworkable — the lead works the gate inside the task. Fill every free slot (priority, then oldest). Claim-check before every spawn (issue comments + `Owner session ID`); a live lead holds it → do not spawn.
+   - Brief: task + record link | context pack | stage | verified SHA/artifact | next action | acceptance check | gates | report-back destination.
+   - In Progress only after the lead acknowledges AND execution is evidenced. Read the claim back.
+7. Finishes: Done = merge SHA read back + Stage 5.5 recorded; critical bugs/incidents also need a Stage 6 PASS read back. Sweep PRs merged since the last run: no issue/row → create the row this run; flag record-less merges touching credentials, deploy workflows, or production routing in Agents Context.
+8. Goal-fit: default close. Keep only if (1) the goal fails without it — mechanism in one sentence, on the row — or (2) work is live on it now. Close the rest: dated reason + record link on the row, same reason on the linked issue. Never delete a row or an issue.
+9. Report to this job's chat only, four blocks, one line per row: Blocked (title + reason + repair owner or a/b/c) / Blockers resolved / In Progress now (title + live lead) / Open left (title + why). Titles, not numbers; numbers are links. No change = silence, except a self-edit line.
+   - Escalate to the project's main session when: one cause holds ≥3 rows, verified infrastructure is down, or the Blocked count grew. Send: cause, evidence, count, exact unblock, owner.
+10. End: continuation receipt on every active row (owner + verified state, last artifact + time, next step, gate). Re-check: In Progress ⇒ live lead; Open ⇒ reason on row; Blocked ⇒ reason + this run's attempt. Any mismatch = run FAILED: fix now or escalate.
+11. Rewrite Agents Context: current state only, one screen; delete what is no longer true.
+12. Self-edit: only for a failure pattern recorded in Agents Context as recurring. Never change schedule, delivery, owner, enabled state, or project parameters. Report it in one line here + the daily log.
+13. Den's status questions: fresh board pull + this session's subagent list first; answer only from that output. Source unavailable = "unverified" + last verified value and its age.
+
+State = the Work Log only. The supervisor never implements; task subagents run `dev-workflow`. Never print secret values. ANNEX.md holds fallback/recovery rules; on conflict, this loop wins.
