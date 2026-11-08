@@ -10,6 +10,8 @@ description: how to build the {android, webapp, ios, backend} application by AI 
 - cloudflare: [Cloudflare CDN (Pages)](https://developers.cloudflare.com/pages/), [Cloudflare Workers (Functions)](https://developers.cloudflare.com/workers/), [Cloudflare D1 (SQL)](https://developers.cloudflare.com/d1/), [Cloudflare KV (NoSQL)](https://developers.cloudflare.com/kv/) — skill: https://skills.sh/firecrawl/skills/cloudflare-deploy
 - firebase: [Firebase Hosting](https://firebase.google.com/docs/hosting), [Firebase Authentication](https://firebase.google.com/docs/auth), [Cloud Functions for Firebase](https://firebase.google.com/docs/functions), [Cloud Firestore](https://firebase.google.com/docs/firestore) — skill: https://skills.sh/firebase/agent-skills/developing-genkit-dart
 - webapp: Next.js (App Router) + React + TypeScript + Tailwind CSS + shadcn/ui (https://ui.shadcn.com) — deploy to Vercel/Cloudflare Pages/Netlify
+- to build the android app for most cases it is enough to login on Google Ai Studio https://aistudio.google.com/welcome and start the android app project https://developer.android.com/blog/posts/build-native-android-apps-in-google-ai-studio. The google ai studio has build-in emulator and the build workers, so we shouldnt' setup ci and dev environment for android app. 
+
 4. setup ci to build an {app,container} and cache the build
    - in case of the docker image publish on github registry
    - in case of android app publish on github release page
