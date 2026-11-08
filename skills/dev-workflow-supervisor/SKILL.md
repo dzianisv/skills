@@ -9,7 +9,7 @@ Parameters (Work Log, Agents Context, PRD/Design/Decision Log links, repos, deli
 
 1. Read, in order: Agents Context → every non-Done/Closed Work Log row (fetch each row before editing) → Decision Log / PRD / Design → board pull → this session's live subagent list.
 2. Settle first: reconcile the previous run's pending receipts (merges, verdicts) from the GitHub API onto their rows. Never re-dispatch a task whose receipt is unreconciled.
-3. Classify every row: `cause | evidence + checked time | step held | owner | next action | expected artifact`. Statuses only: Open / In Progress / Blocked / Done / Closed. "Scheduled" = Open.
+3. Classify every row: `cause | evidence + checked time | step held | owner | next action | expected artifact`. Statuses only: Open / In Progress / Blocked / Done / Closed. "Scheduled" = Open. Every classification is proven fresh this run — a label carried from a previous run ("post-release", "gated", "no scope") is not evidence.
 4. Blocked rows — resolve it yourself:
    - One repair per root cause: create or reuse one repair task, dispatch it, verify the fix on its exact SHA, resume every dependent.
    - Blocked stands only if all three are on the row: (1) current-state readback this run; (2) ≥1 alternate route tried; (3) a repair in flight, or the held step is reserved: (a) owner's money, (b) owner's time/presence, (c) credentials only the owner holds.
@@ -23,6 +23,7 @@ Parameters (Work Log, Agents Context, PRD/Design/Decision Log links, repos, deli
    - In Progress only after the lead acknowledges AND execution is evidenced. Read the claim back.
 7. Finishes: Done = merge SHA read back + Stage 5.5 recorded; critical bugs/incidents also need a Stage 6 PASS read back. Sweep PRs merged since the last run: no issue/row → create the row this run; flag record-less merges touching credentials, deploy workflows, or production routing in Agents Context.
 8. Goal-fit: default close. Keep only if (1) the goal fails without it — mechanism in one sentence, on the row — or (2) work is live on it now. Close the rest: dated reason + record link on the row, same reason on the linked issue. Never delete a row or an issue.
+   - No row ends the run as "Open with an exemption label". Post-release, record-only, and no-scope rows are closed. A row gated on another row: dispatch its independent part, or close it. The only exemption is a program/umbrella row named in the job body.
 9. Report to this job's chat only, four blocks, one line per row: Blocked (title + reason + repair owner or a/b/c) / Blockers resolved / In Progress now (title + live lead) / Open left (title + why). Titles, not numbers; numbers are links. No change = silence, except a self-edit line.
    - Escalate to the project's main session when: one cause holds ≥3 rows, verified infrastructure is down, or the Blocked count grew. Send: cause, evidence, count, exact unblock, owner.
 10. End: continuation receipt on every active row (owner + verified state, last artifact + time, next step, gate). Re-check: In Progress ⇒ live lead; Open ⇒ reason on row; Blocked ⇒ reason + this run's attempt. Any mismatch = run FAILED: fix now or escalate.
