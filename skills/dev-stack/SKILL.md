@@ -100,3 +100,16 @@ jobs:
       - check out layout
       - check out that functionality works end to end
 
+# Plannign and execution
+
+Follow this rules for better planning and context engineering
+
+1. Review codebase first to get the idea
+2. Think about the implementation design as system designer
+3. Draw the system design and components diagram in mermaid
+4. Draw the user flow diagram
+5. Now when yo uunderstand the system and how it iterract, think on impmenetation plan
+6. Put implementation plan and diagram on github issue 
+7. If split work if could be done in parallel. 
+8. Start subagetns of model of your choice that fits the best every task to complete
+9. Review subagents work. Commit. Push. Deliver.
