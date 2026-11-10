@@ -37,9 +37,12 @@ Union, deduplicated, of the four sources' top holdings + recent buys. Keep the u
 
 ## Daily stats — one row per stock
 
-`Ticker | Price (close, date) | 52-wk high | -$ down from high | -% down from high | $ wipe-out`
+`Ticker | Price (close, date) | 52-wk high (date) | -$ down from high | -% down from high | $ wipe-out | Days below high | Days of growth wiped out`
 
-Wipe-out = (52-wk high − price) × shares outstanding. Show it in $B, labelled estimate. Example, 9 Nov 2026 close: NVDA $178.67, high $243.37, -$64.70, -26.6%. GOOG $286.01, high $408.61, -$122.60, -30.0%.
+- $ wipe-out = (52-wk high − price) × shares outstanding. Show it in $B, labelled estimate.
+- Days below high = calendar days from the 52-wk high date to today.
+- Days of growth wiped out = calendar days back from today to the last close at or below today's price. That is the lookback: the price has given back every gain since that date. Find it from daily candles, don't guess it. Show the date too, e.g. `255d (last at this level 27 Feb 2026)`.
+- Example, 9 Nov 2026 close: NVDA $178.67, high $243.37 on 6 Oct 2026, -$64.70, -26.6%, 34d below high, 255d of growth wiped out (last close at/below this level 27 Feb 2026, $177.19). GOOG $286.01, high $408.61, -$122.60, -30.0%. Do NOT use "490d" for NVDA unless daily candles prove it — 490d does not match the verified lookback above, and the watchlist page's earlier "34d" was days below high, not days of growth wiped out. If the user means a different definition, ask in one line and record it here.
 
 Verify price from one live source (Finnhub via search, or the exchange page) with the date. Never reuse yesterday's price as today's.
 
