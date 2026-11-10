@@ -56,6 +56,6 @@ Flag a BUY when at least three of these hold: forward PEG < 1 on GAAP earnings, 
 
 Warn TRIM when any of these hold: position >10% of the portfolio (or combined correlated names >15%), forward PEG > 2, earnings / guidance cut or RPO growth falling for a second quarter, two or more smart-money sources exiting in the latest filing, or the thesis breaks (the "what would change my mind" trigger fires). Say plainly: trim how much, to what %, and why — or hold, with the reason.
 
-## Output
+## Output — short, TLDR first
 
-A watchlist page (web artifact) with: ranking (Lynch-cheap first), daily stats table, pile diagram per investor, bear case per name, earnings calendar, and a sources box with the URLs above. Short reply in chat: top 3 buys, top trim warning, one line per investor on what changed since yesterday. No buy recommendation as a guarantee. Never place an order.
+No long description and no disclaimer at the beginning. Start the page with a short TLDR: what to buy if there is a strong opportunity, or what to sell if there is a strong signal — one line per call, reason in one line. Then the pile chart. Then a roadmap / timeline: when each investor bought, what stock, how much as % of their portfolio — one row per buy, in date order, investor + stock + amount + % of portfolio. Then the daily stats table, ranking (Lynch-cheap first), bear case per name, earnings calendar, and a sources box with the URLs above. Short reply in chat: top 3 buys, top trim warning, one line per investor on what changed since yesterday. No buy recommendation as a guarantee. Never place an order.
