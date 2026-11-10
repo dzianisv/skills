@@ -20,6 +20,7 @@ description: how to build the {android, webapp, ios, backend} application by AI 
   - Because AI Studio provides built-in emulator and cloud build workers, no local CI/dev environment is needed for initial Android development. Only set up CI/GitHub Actions Android build+release when the project is handed off to Android Studio/local dev.
 
 ### Android recommendations (learned building Convert264, Nov 2026 — dzianisv/h264-converter, v0.1.0–v0.1.3)
+Android build detail lives in the app-builder skill — see skills/app-builder/SKILL.md.
 - AI Studio emulator often never connects in a cloud/headless browser (stuck on "Connecting to device..." for 40+ min across sessions). After one fresh reload + ~10 min, stop waiting and move to the ZIP export below.
 - GitHub export from AI Studio: if the AI Studio GitHub App is already installed for the account, the link flow loops to GitHub app-settings instead of back to AI Studio's callback — no repo is created. Do NOT uninstall/reinstall the app. Use Export → Download as .zip, then `gh repo create` + git push from the CLI.
 - AI Studio offers no APK download — its Install button is USB-only. The APK comes from CI after handoff.
