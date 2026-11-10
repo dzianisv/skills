@@ -15,7 +15,11 @@ Never put the user's net worth, portfolio total, holding $ amounts, holding %, s
 
 ## Daily run
 
-Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest regular-session closes for every watchlist stock, recompute the daily stats ($ down from 52-wk high, % down, $ wipe-out, days below high, days of growth wiped out), check for new filings (13F, PTR, OGE) and new earnings / guidance, re-rank the TLDR buys / trims, and update the watchlist page in place. Send the user a short TLDR in chat only if something changed since yesterday — a new buy / trim signal, a level crossed, a filing, or an earnings result. If nothing changed, say nothing. Never place an order.
+Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest regular-session closes for every watchlist stock, recompute the daily stats ($ down from 52-wk high, % down, $ wipe-out, days below high, days of growth wiped out), check for new filings (13F, PTR, OGE) and new earnings / guidance, check Polymarket earnings bets (see below), re-rank the TLDR buys / trims, and update the watchlist page in place. Send the user a short TLDR in chat only if something changed since yesterday — a new buy / trim signal, a level crossed, a filing, an earnings result, or a Polymarket odds move of 5+ points. If nothing changed, say nothing. Never place an order.
+
+## Polymarket — earnings bets
+
+Check Polymarket every daily run for each watchlist stock with an earnings date ahead. Record, with date and volume: "Will [ticker] beat quarterly earnings?" Yes %, gross-margin bracket if there is one, "What will [ticker] hit in [month]?" leading outcome, and any CEO / leadership market (e.g. Jensen Huang resignation/removal by Dec 31). Polymarket is a prediction market, not options and not a forecast — odds are crowd consensus, volumes are often small, odds spike and retreat. State the volume and the date with every odds number. Use it as a warning / sentiment check against the Lynch call: e.g. beat-earnings 94% but below-$184 in November 89% means traders expect a beat with no price recovery. Notify on a 5+ point move, a date change, or a new market. Never bet on Polymarket for the user, never place a trade there.
 
 ## Sources — start here, don't guess URLs
 
