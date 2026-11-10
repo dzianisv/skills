@@ -7,7 +7,11 @@ description: Build and update a daily watchlist of stocks bought by Trump, Pelos
 
 Purpose: discover good buy opportunities, and warn when it makes sense to trim. That is the whole point — tracking is not the goal, the buy / trim call is.
 
-Build a watchlist from the union of what four smart-money sources buy. Analyse each name Lynch-style. Show one pile diagram per investor. Update daily.
+Build a watchlist from the union of what four smart-money sources buy. Analyse each name Lynch-style. Show one pile diagram per investor. Run daily.
+
+## Daily run
+
+Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest regular-session closes for every watchlist stock, recompute the daily stats ($ down from 52-wk high, % down, $ wipe-out, days below high, days of growth wiped out), check for new filings (13F, PTR, OGE) and new earnings / guidance, re-rank the TLDR buys / trims, and update the watchlist page in place. Send the user a short TLDR in chat only if something changed since yesterday — a new buy / trim signal, a level crossed, a filing, or an earnings result. If nothing changed, say nothing. Never place an order.
 
 ## Sources — start here, don't guess URLs
 
