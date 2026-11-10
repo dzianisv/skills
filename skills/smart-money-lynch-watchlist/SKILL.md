@@ -1,9 +1,11 @@
 ---
 name: smart-money-lynch-watchlist
-description: Build and update a daily watchlist of stocks bought by Trump, Pelosi, Berkshire Hathaway and Bridgewater, analysed Peter Lynch style, with drawdown stats and a pile diagram per investor. Use when asked to "track smart money", "what are Trump / Pelosi / Buffett buying", "Lynch watchlist", or "show me the pile diagram".
+description: Build and update a daily watchlist of stocks bought by Trump, Pelosi, Berkshire Hathaway and Bridgewater, analysed Peter Lynch style, to discover good buy opportunities and warn when it makes sense to trim. Use when asked to "track smart money", "what are Trump / Pelosi / Buffett buying", "Lynch watchlist", "is this a good buy now", "should I trim", or "show me the pile diagram".
 ---
 
 # Smart Money + Lynch Watchlist
+
+Purpose: discover good buy opportunities, and warn when it makes sense to trim. That is the whole point — tracking is not the goal, the buy / trim call is.
 
 Build a watchlist from the union of what four smart-money sources buy. Analyse each name Lynch-style. Show one pile diagram per investor. Update daily.
 
@@ -45,6 +47,12 @@ Verify price from one live source (Finnhub via search, or the exchange page) wit
 
 One stacked bar per investor, summing to 100% of that investor's disclosed portfolio. Segments sized by holding, labelled stock + $ + %. Show $0 / 0% as a dashed marker, not a segment. Berkshire: exact 13F %. Pelosi / Trump: estimate from filing-range midpoints and say so — their filings publish no portfolio total. Put the three piles side by side.
 
+## Buy / trim — the call
+
+Flag a BUY when at least three of these hold: forward PEG < 1 on GAAP earnings, price down >25% from 52-wk high while earnings / guidance still hold (multiple compression, not an earnings break), two or more smart-money sources adding in the latest filing, and you can tell the two-minute story. Rank buys Lynch-cheap first.
+
+Warn TRIM when any of these hold: position >10% of the portfolio (or combined correlated names >15%), forward PEG > 2, earnings / guidance cut or RPO growth falling for a second quarter, two or more smart-money sources exiting in the latest filing, or the thesis breaks (the "what would change my mind" trigger fires). Say plainly: trim how much, to what %, and why — or hold, with the reason.
+
 ## Output
 
-A watchlist page (web artifact) with: ranking (Lynch-cheap first), daily stats table, pile diagram per investor, bear case per name, earnings calendar, and a sources box with the URLs above. Short reply in chat: top 3 buys, top bear case, one line per investor on what changed since yesterday. No buy recommendation as a guarantee. Never place an order.
+A watchlist page (web artifact) with: ranking (Lynch-cheap first), daily stats table, pile diagram per investor, bear case per name, earnings calendar, and a sources box with the URLs above. Short reply in chat: top 3 buys, top trim warning, one line per investor on what changed since yesterday. No buy recommendation as a guarantee. Never place an order.
