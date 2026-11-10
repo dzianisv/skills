@@ -97,6 +97,14 @@ Every daily run, report this for VOO (S&P 500) and QQQ (Nasdaq-100), with the da
 - **Drawdown entry levels (compute at run time from the 52-wk high, never hard-code prices):** -15% = good entry, -20% = great, -25%+ = generational. State the $ level for each: high × 0.85 / 0.80 / 0.75. E.g. from VOO $718 high: $610 / $575 / $539; from QQQ $763 high: $648 / $610 / $572 (Nov 2026 highs, recompute each run).
 - **Verdict line per index:** one line — "VOO: FPE 17.7x, PEG ~X, -4.5% from high — fair-good valuation, price not at a historic entry yet" — so the user can see valuation vs price separately. A cheap FPE with a small drawdown = buy in tranches; a cheap FPE + -15% drawdown = buy the index, not a stock pick.
 
+## Buy trigger checklist — all three layers, not one (Nov 11, 2026)
+
+A BUY needs all three layers. Cheap on PEG alone, with momentum still down, is WAIT, not BUY.
+1. **Fundamentals — Lynch / FPE / PEG:** PEG <1 on GAAP, forward P/E cheap vs its own history, earnings / guidance still holding (multiple compression, not an earnings break), 2-minute story tellable.
+2. **Momentum — buy when it turns up:** MACD crosses above its signal line, histogram turning up, MACD crossing above zero = stronger; price crosses above its 50-day SMA (cleanest uptrend flip); ADX >25 confirms a real trend (below 20 = no trend, MACD whipsaws); relative strength vs S&P 500 turning positive over 1–3 months; the up-move on rising volume, not a low-volume bounce; 12-1 month momentum turning positive. Do NOT buy while MACD is still falling and price is below the 50-day, even if PEG is cheap — that is NVDA and GOOG on Nov 9, 2026: HOLD, not BUY.
+3. **Confirmation — smart money / flow:** whales buying calls for a recovery (not puts), filings with no exit (or someone adding), no new earnings break / guidance cut.
+- One line: cheap on PEG + earnings hold + MACD turning up + price back above the 50-day = BUY. Cheap on PEG alone, MACD down, price below the 50-day = WAIT.
+
 ## Market drop vs single-stock drop (Nov 11, 2026)
 
 - **Market down 15%+ (VOO / QQQ): buy the market, not a stock pick.** A broad -15% is usually multiple compression / fear, not one company's earnings breaking. Buying VOO / QQQ spreads risk across 500 / 100 names — no need to be right on any one story. Recommendation on a market drop is BUY VOO / QQQ (in tranches, see below), not a single stock.
