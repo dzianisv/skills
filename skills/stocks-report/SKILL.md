@@ -13,6 +13,10 @@ Build a watchlist from the union of what four smart-money sources buy. Analyse e
 
 Never put the user's net worth, portfolio total, holding $ amounts, holding %, share counts, or cost basis in this file. No user-specific numbers at all — not even as examples. The user's own numbers live only in private memory and in the private report, never in this repo. Sizing is always expressed as % of the user's portfolio, with the $ / share math done at run time from the user's private data, never written into the skill.
 
+## Use the current price
+
+Always use the CURRENT price — the price the user just stated in chat, or the latest live price pulled in this run. Never use a stale close (e.g. the Nov 9, 2026 close) as today's price. If the user says "current price is $167", that is the price for the calculation, the % down, and the days-wiped-out lookback — use $167, not $178.67.
+
 ## Daily run
 
 Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest regular-session closes for every watchlist stock, recompute the daily stats ($ down from 52-wk high, % down, $ wipe-out, days below high, days of growth wiped out), check for new filings (13F, PTR, OGE) and new earnings / guidance, check Polymarket earnings bets (see below), follow the `whale-options-flow` skill for options flow, and follow the `tradingview-news` skill for news — then re-rank the TLDR buys / trims, and update the watchlist page in place. Send the user a short TLDR in chat only if something changed since yesterday — a new buy / trim signal, a level crossed, a filing, an earnings result, a Polymarket odds move of 5+ points, or a whale flow change that moves a sell level. If nothing changed, say nothing. Never place an order.

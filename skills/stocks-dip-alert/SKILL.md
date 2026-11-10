@@ -11,6 +11,10 @@ Daily check, after the US close, for a correction in the watchlist. Notify only 
 
 VOO, QQQ, GOOG, PLTR, AVGO, NVDA, META, MSFT, AMZN, COIN, ASML, BRK.B, TSLA.
 
+## Use the current price
+
+Always use the CURRENT price — the price the user just stated in chat, or the latest live price pulled in this run. Never use a stale close (e.g. the Nov 9, 2026 close) as today's price. If the user says "current price is $167", that is the price for the calculation, the % down, and the days-wiped-out lookback — use $167, not $178.67.
+
 ## Daily run
 
 Run every morning, ~08:48 WITA (Asia/Makassar), after the US close.
