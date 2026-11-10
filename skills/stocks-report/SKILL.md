@@ -84,6 +84,15 @@ Flag a BUY when at least three of these hold: forward PEG < 1 on GAAP earnings, 
 
 Warn TRIM / SELL when any of these hold: position >10% of the portfolio (or combined correlated names >15%), forward PEG > 2, earnings / guidance cut or RPO growth falling for a second quarter, two or more smart-money sources exiting in the latest filing, or the thesis breaks (the "what would change my mind" trigger fires). Say plainly: trim how much, to what %, and why — or hold, with the reason.
 
+## Index entry check — VOO / QQQ: is this a good time to buy? (Nov 11, 2026)
+
+Every daily run, report this for VOO (S&P 500) and QQQ (Nasdaq-100), with the date and source:
+- **Forward P/E (FPE)** vs history, and **PEG** = forward P/E ÷ forward EPS growth (12-mo consensus).
+- **S&P 500 / VOO:** FPE ≤17x = cheap / good entry; 17–19x = fair, buy in tranches; >20–22x = expensive, wait / small tranche only. PEG <1 = cheap, 1–1.5 = fair, >2 = expensive. History: 10-yr avg FPE 19.1x, 25-yr avg 16.4x, 5-yr avg 19.8x; 2022 trough ~15x, 2008 low 8.6x. Nov 5–9, 2026: FPE 17.7–18.0x — lowest since Nov 2023, already fair-good on valuation.
+- **Nasdaq-100 / QQQ:** FPE ≤19–20x = cheap / good entry; 20–23x = fair, buy in tranches; >25x = expensive. PEG <1 = cheap, 1–1.5 = fair, >2 = expensive. History: 10-yr avg ~23x, 5-yr avg ~24.5–24.7x; 2022 dip below 19x, record low 11.2x Aug 2011. Nov 9, 2026: FPE 19.0–21.6x (source-dependent) — fair-good on valuation.
+- **Drawdown entry levels (compute at run time from the 52-wk high, never hard-code prices):** -15% = good entry, -20% = great, -25%+ = generational. State the $ level for each: high × 0.85 / 0.80 / 0.75. E.g. from VOO $718 high: $610 / $575 / $539; from QQQ $763 high: $648 / $610 / $572 (Nov 2026 highs, recompute each run).
+- **Verdict line per index:** one line — "VOO: FPE 17.7x, PEG ~X, -4.5% from high — fair-good valuation, price not at a historic entry yet" — so the user can see valuation vs price separately. A cheap FPE with a small drawdown = buy in tranches; a cheap FPE + -15% drawdown = buy the index, not a stock pick.
+
 ## Market drop vs single-stock drop (Nov 11, 2026)
 
 - **Market down 15%+ (VOO / QQQ): buy the market, not a stock pick.** A broad -15% is usually multiple compression / fear, not one company's earnings breaking. Buying VOO / QQQ spreads risk across 500 / 100 names — no need to be right on any one story. Recommendation on a market drop is BUY VOO / QQQ (in tranches, see below), not a single stock.

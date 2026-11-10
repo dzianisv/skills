@@ -44,6 +44,14 @@ Corrections (verified Nov 11, 2026): NVDA days wiped out is 471d at the $178.67 
 
 Levels: -10% is a correction, -20% is a bear market, -25 to -35% is a deep bear market — often, but not always, with a recession (2022 was -25% with no recession declared). The reason matters more than the number.
 
+## Index entry check — VOO / QQQ: is this a good time to buy? (Nov 11, 2026)
+
+Every run, for VOO and QQQ, report forward P/E (FPE) and PEG = FPE ÷ forward EPS growth, with date and source:
+- **S&P 500 / VOO:** FPE ≤17x = cheap / good entry; 17–19x = fair, buy in tranches; >20–22x = expensive. PEG <1 = cheap, 1–1.5 = fair, >2 = expensive. History: 10-yr avg 19.1x, 25-yr avg 16.4x; 2022 trough ~15x, 2008 low 8.6x. Nov 5–9, 2026: 17.7–18.0x.
+- **Nasdaq-100 / QQQ:** FPE ≤19–20x = cheap / good entry; 20–23x = fair, buy in tranches; >25x = expensive. PEG <1 = cheap, 1–1.5 = fair, >2 = expensive. History: 10-yr avg ~23x, 5-yr avg ~24.5–24.7x; 2022 dip below 19x. Nov 9, 2026: 19.0–21.6x.
+- **Drawdown entry levels (compute at run time from the 52-wk high):** -15% = good, -20% = great, -25%+ = generational. State the $ level: high × 0.85 / 0.80 / 0.75.
+- Include the verdict line in the VOO / QQQ row (or, if below 15%, in the below-15% note): FPE, PEG, % down, and whether valuation and price both say buy. Valuation cheap + drawdown small = tranche in; valuation cheap + -15% drawdown = buy the index.
+
 ## Market drop vs single-stock drop (Nov 11, 2026)
 
 - **Market down 15%+ (VOO / QQQ): buy the market, not a stock pick.** A broad -15% is usually multiple compression / fear, not one company's earnings breaking. Recommendation is BUY VOO / QQQ (in tranches: 1/3 now, 1/3 lower, 1/3 only if deeper), not a single stock.
