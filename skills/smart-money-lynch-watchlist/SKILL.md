@@ -70,7 +70,7 @@ The point is to catch a sell signal early, the way smart money exiting shows up 
 
 ## Strong buy — always with sizing
 
-Every STRONG BUY must come with how much to add, and why. No buy call without sizing.
+Every TLDR call must come with position-sizing reasoning, not just STRONG BUYs. Each call: target % of the user's portfolio, $ amount, shares at current price, current holding, and WHY that size — new position vs already large, correlation with GOOG/NVDA/TSM, beta, earnings date ahead, smart-money confirmation. One or two lines. No call without sizing reasoning.
 - Target % of the user's portfolio (e.g. 2%), $ amount, and share count at the current price. Show the user's current holding in $ and % for context.
 - Why that size: Lynch cheapness (PEG, multiple compression), smart-money confirmation (who is adding, % of their book), and risk (beta, correlation with GOOG/NVDA/TSM, earnings date ahead).
 - Tranche plan: how much now, how much after the next catalyst (e.g. NVDA earnings Nov 17, the stock's own earnings), and at what price level to accelerate or stop. Never propose buying the full size in one go before a known catalyst.
