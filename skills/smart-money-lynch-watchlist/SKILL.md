@@ -56,14 +56,15 @@ One stacked bar per investor, summing to 100% of that investor's disclosed portf
 
 ## Buy / trim — the call
 
-Flag a BUY when at least three of these hold: forward PEG < 1 on GAAP earnings, price down >25% from 52-wk high while earnings / guidance still hold (multiple compression, not an earnings break), two or more smart-money sources adding in the latest filing, and you can tell the two-minute story. Rank buys Lynch-cheap first.
+Flag a BUY when at least three of these hold: forward PEG < 1 on GAAP earnings, price down >25% from 52-wk high while earnings / guidance still hold (multiple compression, not an earnings break), smart-money sources adding in the latest filing, and you can tell the two-minute story. Do NOT require 2+ smart-money sources — one source adding, or none, can still be a buy if your own research confirms it. Do your own research all the time; smart money is a signal, not a gate. Rank buys Lynch-cheap first.
 
 Warn TRIM / SELL when any of these hold: position >10% of the portfolio (or combined correlated names >15%), forward PEG > 2, earnings / guidance cut or RPO growth falling for a second quarter, two or more smart-money sources exiting in the latest filing, or the thesis breaks (the "what would change my mind" trigger fires). Say plainly: trim how much, to what %, and why — or hold, with the reason.
 
 ## Sell signals — early, like smart money, never after the fall
 
 The point is to catch a sell signal early, the way smart money exiting shows up in filings — before the stock has already fallen 50%. Never call SELL just because a stock has already fallen a lot. A big fall with earnings still growing is multiple compression, not a sell signal — selling then locks in the loss at the bottom. Example that was wrong: Marvell -53% from its high, revenue +37%, FY27 guided ~$12B — calling SELL there was too late. The correct call was HOLD, don't add, sell only into a bounce toward $200+ if you want out.
-- A SELL / TRIM signal needs a forward reason: smart money exiting (2+ sources, latest filing), earnings / guidance cut, thesis break, or PEG > 2 while price is still near its high.
+- A SELL / TRIM signal needs a forward reason: smart money exiting, earnings / guidance cut, thesis break, or PEG > 2 while price is still near its high. Do NOT limit this to 2+ smart-money sources — one source exiting, or no smart-money exit at all, can still be a sell if your own research finds the reason. Do your own research all the time; smart money is a signal, not a gate.
+- If a stock falls, research WHY it fell before calling anything — earnings, guidance, a deal, a downgrade, a customer loss, a filing, sector news. Never report a fall with no reason, and never call SELL on the fall alone.
 - If the fall already happened and earnings still hold, say HOLD, don't add — name the bounce level where selling would make sense instead.
 - Always state when the signal fired: filing date, earnings date, or exit date — so the user can see whether it is early or already too late.
 
