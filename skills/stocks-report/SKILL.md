@@ -51,7 +51,7 @@ Rules: a filing is a trade, not a current holding. Amounts are ranges. Options a
 
 ## Universe
 
-Union, deduplicated, of the four sources' top holdings + recent buys. Keep the user's own holdings in the list for comparison (tickers come from the user's private data at run time, never listed here). Drop a name only when all four sources have exited it.
+Union, deduplicated, of the four sources' top holdings + recent buys, PLUS QQQ (added Nov 11, 2026): watch the QQQ ETF itself, and its top 10–15 holdings by weight (re-pull weights each run — they change). QQQ names are mostly the same companies from the other side: buyers (MSFT, AAPL, AMZN, GOOG, META, TSLA), sellers (NVDA, AVGO, PLTR), and both (GOOG, META, MSFT — they buy AI chips and sell AI / cloud). Note the buyer / seller / both split per name. Keep the user's own holdings in the list for comparison (tickers come from the user's private data at run time, never listed here). Drop a name only when all four sources have exited it and it has left the QQQ top 15.
 
 ## Lynch test — for each stock, one short block
 
