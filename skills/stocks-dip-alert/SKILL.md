@@ -44,6 +44,12 @@ Corrections (verified Nov 11, 2026): NVDA days wiped out is 471d at the $178.67 
 
 Levels: -10% is a correction, -20% is a bear market, -25 to -35% is a deep bear market — often, but not always, with a recession (2022 was -25% with no recession declared). The reason matters more than the number.
 
+## Market drop vs single-stock drop (Nov 11, 2026)
+
+- **Market down 15%+ (VOO / QQQ): buy the market, not a stock pick.** A broad -15% is usually multiple compression / fear, not one company's earnings breaking. Recommendation is BUY VOO / QQQ (in tranches: 1/3 now, 1/3 lower, 1/3 only if deeper), not a single stock.
+- **One stock down 20–30% while the market is fine: that's a stock-pick moment.** Check why it fell first. If earnings / guidance still hold, it's Lynch-cheap — buy that individual stock. If earnings broke, don't buy it just because it's down.
+- Apply this in the Recommendation column: a dropped VOO / QQQ row recommends the index; a dropped single stock row recommends that stock (or DON'T ADD / HOLD if its earnings broke).
+
 If no ticker dropped to a level, say nothing. Never place an order.
 
 ## Privacy — this skill lives in a PUBLIC repo

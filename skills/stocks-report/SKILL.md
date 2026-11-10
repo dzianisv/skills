@@ -84,6 +84,12 @@ Flag a BUY when at least three of these hold: forward PEG < 1 on GAAP earnings, 
 
 Warn TRIM / SELL when any of these hold: position >10% of the portfolio (or combined correlated names >15%), forward PEG > 2, earnings / guidance cut or RPO growth falling for a second quarter, two or more smart-money sources exiting in the latest filing, or the thesis breaks (the "what would change my mind" trigger fires). Say plainly: trim how much, to what %, and why — or hold, with the reason.
 
+## Market drop vs single-stock drop (Nov 11, 2026)
+
+- **Market down 15%+ (VOO / QQQ): buy the market, not a stock pick.** A broad -15% is usually multiple compression / fear, not one company's earnings breaking. Buying VOO / QQQ spreads risk across 500 / 100 names — no need to be right on any one story. Recommendation on a market drop is BUY VOO / QQQ (in tranches, see below), not a single stock.
+- **One stock down 20–30% while the market is fine: that's a stock-pick moment.** Check why it fell first. If earnings / guidance still hold, it's Lynch-cheap — buy that individual stock. If earnings broke, don't buy it just because it's down.
+- **Caveat — tranche a market buy if earnings are breaking across the board / a recession is the reason:** 1/3 now, 1/3 lower, 1/3 only if it goes deeper (-20%, then -25%). Never buy the full market size in one go into a broad earnings break.
+
 ## Sell signals — early, like smart money, never after the fall
 
 The point is to catch a sell signal early, the way smart money exiting shows up in filings — before the stock has already fallen 50%. Never call SELL just because a stock has already fallen a lot. A big fall with earnings still growing is multiple compression, not a sell signal — selling then locks in the loss at the bottom. Example that was wrong: Marvell -53% from its high, revenue +37%, FY27 guided ~$12B — calling SELL there was too late. The correct call was HOLD, don't add, sell only into a bounce toward $200+ if you want out. Marvell stays HOLD in the TLDR until a forward reason changes it.
