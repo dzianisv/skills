@@ -63,7 +63,10 @@ Union, deduplicated, of the four sources' top holdings + recent buys, PLUS QQQ (
 
 ## Daily stats — one row per stock
 
-`Ticker | Price (close, date) | 52-wk high (date) | -$ down from high | -% down from high | $ wipe-out | Days below high | Days of growth wiped out`
+`Ticker | Price (close, date) | 52-wk high (date) | -$ down from high | -% down from high | $ wipe-out | Days below high | Days of growth wiped out | Forward P/E | PEG`
+
+- **Print the FPE / PEG table every run** — one row per watchlist stock (including VOO, QQQ, and the QQQ top 10–15), with columns: Ticker | Forward P/E (date, source) | Forward EPS growth % | PEG (= FPE ÷ growth, GAAP first, say so if non-GAAP) | Verdict (Cheap <1 / Fair 1–1.5 / Expensive >2). Never omit a stock because its PEG is ugly — show it. For VOO / QQQ, use the index FPE / PEG (see Index entry check). For single stocks, use the stock's own FPE / PEG.
+- $ wipe-out = (52-wk high − price) × shares outstanding. Show it in $B, labelled estimate.
 
 - $ wipe-out = (52-wk high − price) × shares outstanding. Show it in $B, labelled estimate.
 - Days below high = calendar days from the 52-wk high date to today.

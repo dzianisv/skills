@@ -31,6 +31,8 @@ Show ONLY the tickers that dropped to a level — one row per dropped ticker, no
 
 `Ticker, -% down, -days of growth wiped out, reasoning, Recommendation`
 
+**Print the FPE / PEG table every run** — one table, one row per watchlist stock (VOO, QQQ, and all 13 watchlist tickers), with columns: Ticker | Forward P/E (date, source) | Forward EPS growth % | PEG (= FPE ÷ growth, GAAP first, say so if non-GAAP) | Verdict (Cheap <1 / Fair 1–1.5 / Expensive >2). Show it even for tickers that did not drop — the FPE / PEG table is not limited to dropped rows. For VOO / QQQ, use the index FPE / PEG (see Index entry check).
+
 Reasoning is one line on why it fell — earnings, guidance, NVDA / hyperscaler news — follow the `tradingview-news` skill, name the source and date.
 
 Recommendation is one word (BUY / HOLD / TRIM / SELL / DON'T ADD) + one line, built from the `stocks-report` skill — all three views, in that order:
