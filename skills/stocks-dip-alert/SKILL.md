@@ -33,7 +33,7 @@ Show ONLY the tickers that dropped to a level — one row per dropped ticker, no
 
 **Print the FPE / PEG table every run** — one table, one row per watchlist stock (VOO, QQQ, and all 13 watchlist tickers), with columns: Ticker | Forward P/E (date, source) | Forward EPS growth % | PEG (= FPE ÷ growth, GAAP first, say so if non-GAAP) | Verdict (Cheap <1 / Fair 1–1.5 / Expensive >2). Show it even for tickers that did not drop — the FPE / PEG table is not limited to dropped rows. For VOO / QQQ, use the index FPE / PEG (see Index entry check).
 
-**MACD trend + RSI every run (Nov 11, 2026):** print MACD and RSI (14) per watchlist stock, with date and source. MACD: above its signal line / histogram rising = uptrend, below / falling = downtrend — state the MACD value and whether it is above or below zero. RSI: <30 = oversold, 30–70 = neutral, >70 = overbought. Columns: MACD | MACD trend (Up / Down) | RSI (14) | RSI state (Oversold / Neutral / Overbought). RSI oversold alone is not a buy — combine with the Lynch call: earnings hold = bounce candidate, earnings break = can stay oversold.
+**MACD up/down trend momentum every run (Nov 11, 2026):** print MACD per watchlist stock, with date and source. MACD above its signal line / histogram rising = uptrend, below / falling = downtrend — state the MACD value and whether it is above or below zero. Columns: MACD | MACD trend (Up / Down). No RSI — excluded by the user Nov 11, 2026. MACD is momentum only, not a buy signal on its own — combine with the Lynch call.
 
 Reasoning is one line on why it fell — earnings, guidance, NVDA / hyperscaler news — follow the `tradingview-news` skill, name the source and date.
 
