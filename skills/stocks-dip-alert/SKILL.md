@@ -25,9 +25,18 @@ Each run:
 
 Show ONLY the tickers that dropped to a level — one row per dropped ticker, no rows for tickers that did not drop.
 
-`Ticker, -% down, -days of growth wiped out, reasoning`
+`Ticker, -% down, -days of growth wiped out, reasoning, Recommendation`
 
 Reasoning is one line on why it fell — earnings, guidance, NVDA / hyperscaler news — follow the `tradingview-news` skill, name the source and date.
+
+Recommendation is one word (BUY / HOLD / TRIM / SELL / DON'T ADD) + one line, built from the `stocks-report` skill — all three views, in that order:
+1. **Lynch** — multiple compression (earnings up, price down = buy) or earnings break (earnings down = don't buy)? GAAP PEG, 2-minute story still hold?
+2. **Whale flow** — follow the `whale-options-flow` skill: are whales buying calls for a recovery, or buying puts / hedging? That sets the ceiling / floor.
+3. **Filings — 13F / PTR / OGE** — 13F is institutional only (Berkshire, Bridgewater); Congress files PTR, Trump files OGE 278-T. Are they adding, holding, or exiting? Filing exit + fall = trim early. Filing add + fall = buy signal.
+
+Examples: `NVDA, -26.6%, -216d, Huang probe, HOLD — Lynch: earnings still hold, wait for Nov 17; Whales: Feb $195 calls; Filings: no exit yet` — `GOOG, -29.3%, -3d, capex rout, HOLD / TRIM into strength — Lynch: PEG 0.92 but FCF negative; Whales: 96% puts; Filings: Berkshire still holds 12.6%` — `COIN, -58.1%, -3d, Q3 miss, DON'T ADD — Lynch: earnings breaking, avoid`.
+
+Corrections (verified Nov 11, 2026): NVDA days wiped out is 216d (last close at/below $178.67 on 7 Apr 2026, $178.10), NOT 255d. GOOG is -29.3% from its own high $404.47, NOT -30.0% from GOOGL's $408.61.
 
 Levels: -10% is a correction, -20% is a bear market, -25 to -35% is a deep bear market — often, but not always, with a recession (2022 was -25% with no recession declared). The reason matters more than the number.
 
