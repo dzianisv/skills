@@ -15,7 +15,17 @@ Never put the user's net worth, portfolio total, holding $ amounts, holding %, s
 
 ## Daily run
 
-Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest regular-session closes for every watchlist stock, recompute the daily stats ($ down from 52-wk high, % down, $ wipe-out, days below high, days of growth wiped out), check for new filings (13F, PTR, OGE) and new earnings / guidance, check Polymarket earnings bets (see below), re-rank the TLDR buys / trims, and update the watchlist page in place. Send the user a short TLDR in chat only if something changed since yesterday — a new buy / trim signal, a level crossed, a filing, an earnings result, or a Polymarket odds move of 5+ points. If nothing changed, say nothing. Never place an order.
+Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest regular-session closes for every watchlist stock, recompute the daily stats ($ down from 52-wk high, % down, $ wipe-out, days below high, days of growth wiped out), check for new filings (13F, PTR, OGE) and new earnings / guidance, check Polymarket earnings bets (see below), follow the `whale-options-flow` skill for options flow, and follow the `tradingview-news` skill for news — then re-rank the TLDR buys / trims, and update the watchlist page in place. Send the user a short TLDR in chat only if something changed since yesterday — a new buy / trim signal, a level crossed, a filing, an earnings result, a Polymarket odds move of 5+ points, or a whale flow change that moves a sell level. If nothing changed, say nothing. Never place an order.
+
+## Daily report — what it must contain
+
+Every daily report carries all four views, in this order, with sources named for every number:
+1. **Peter Lynch view** — per stock: 2-minute story, class, GAAP PEG, earnings vs price, bear case, what would change my mind. See Lynch test below.
+2. **Whale options flow** — follow the `whale-options-flow` skill: total call/put premium yesterday and today, biggest 3–5 trades (strike, expiry, premium, breakeven), call wall / put wall / max pain, most active strikes. Then one line per stock: what price whales expect — the ceiling they are buying calls for, the floor they are buying puts for — and whether that confirms or contradicts the user's sell limit.
+3. **Smart money filings — 13F and Congress** — new 13F (Berkshire, Bridgewater, Thiel, etc., 45 days after quarter-end), new House PTR / Senate filings (30–45 days lag, ranges not exact amounts), new OGE 278-T for Trump. For each new filing: who, what stock, buy/sell, amount range, date filed, date traded, % of their portfolio (exact for 13F, midpoint estimate for PTR/OGE — say so). A filing is a trade, not a current holding. Never state $0 from a summary alone.
+4. **Market / expert price view** — Polymarket earnings bets (see below) + analyst targets where they changed: consensus target, range, and any upgrade/downgrade yesterday, with source and date. This is what the market expects the price to be — not a forecast, not a guarantee.
+
+Sources box at the end of the report lists every source used that day, with URLs and dates — 13F / PTR / OGE filings, SpotGamma / OptionsBell / SquawkFlow for options, TradingView / Benzinga / Bloomberg for news, Polymarket with volume.
 
 ## Polymarket — earnings bets
 
