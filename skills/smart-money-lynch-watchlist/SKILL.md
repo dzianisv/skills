@@ -9,6 +9,10 @@ Purpose: discover good buy opportunities, and warn when it makes sense to trim. 
 
 Build a watchlist from the union of what four smart-money sources buy. Analyse each name Lynch-style. Show one pile diagram per investor. Run daily.
 
+## Privacy — this skill lives in a PUBLIC repo
+
+Never put the user's net worth, portfolio total, holding $ amounts, holding %, share counts, or cost basis in this file. No user-specific numbers at all — not even as examples. The user's own numbers live only in private memory and in the private report, never in this repo. Sizing is always expressed as % of the user's portfolio, with the $ / share math done at run time from the user's private data, never written into the skill.
+
 ## Daily run
 
 Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest regular-session closes for every watchlist stock, recompute the daily stats ($ down from 52-wk high, % down, $ wipe-out, days below high, days of growth wiped out), check for new filings (13F, PTR, OGE) and new earnings / guidance, re-rank the TLDR buys / trims, and update the watchlist page in place. Send the user a short TLDR in chat only if something changed since yesterday — a new buy / trim signal, a level crossed, a filing, or an earnings result. If nothing changed, say nothing. Never place an order.
@@ -29,7 +33,7 @@ Rules: a filing is a trade, not a current holding. Amounts are ranges. Options a
 
 ## Universe
 
-Union, deduplicated, of the four sources' top holdings + recent buys. Keep the user's own holdings (GOOG, NVDA, ADBE, TSM) in the list for comparison. Drop a name only when all four sources have exited it.
+Union, deduplicated, of the four sources' top holdings + recent buys. Keep the user's own holdings in the list for comparison (tickers come from the user's private data at run time, never listed here). Drop a name only when all four sources have exited it.
 
 ## Lynch test — for each stock, one short block
 
@@ -72,11 +76,11 @@ The point is to catch a sell signal early, the way smart money exiting shows up 
 
 ## Strong buy — always with sizing
 
-Every TLDR call must come with position-sizing reasoning, not just STRONG BUYs. Each call: target % of the user's portfolio, $ amount, shares at current price, current holding, and WHY that size — new position vs already large, correlation with GOOG/NVDA/TSM, beta, earnings date ahead, smart-money confirmation. One or two lines. No call without sizing reasoning.
+Every TLDR call must come with position-sizing reasoning, not just STRONG BUYs. Each call: target % of the user's portfolio, $ amount, shares at current price, current holding, and WHY that size — new position vs already large, correlation with the user's other holdings, beta, earnings date ahead, smart-money confirmation. One or two lines. No call without sizing reasoning.
 - Target % of the user's portfolio (e.g. 2%), $ amount, and share count at the current price. Show the user's current holding in $ and % for context.
-- Why that size: Lynch cheapness (PEG, multiple compression), smart-money confirmation (who is adding, % of their book), and risk (beta, correlation with GOOG/NVDA/TSM, earnings date ahead).
+- Why that size: Lynch cheapness (PEG, multiple compression), smart-money confirmation (who is adding, % of their book), and risk (beta, correlation with the user's other holdings, earnings date ahead).
 - Tranche plan: how much now, how much after the next catalyst (e.g. NVDA earnings Nov 17, the stock's own earnings), and at what price level to accelerate or stop. Never propose buying the full size in one go before a known catalyst.
 
 ## Output — short, TLDR first
 
-No long description and no disclaimer at the beginning. Start the page with a short TLDR: what to buy if there is a strong opportunity, or what to sell if there is a strong signal — one line per call, with two short comments per call: (1) Lynch view — class, PEG, earnings vs price, multiple compression or earnings break; (2) Smart money view — who bought / sold / held, when, how much as % of their portfolio. One line each. Do NOT include the user's own portfolio % in the TLDR — no "9.8% of your portfolio" there; the user's position belongs in the watchlist / pile sections, not the TLDR. Then the pile chart (with avg cost basis, see Pile diagram). Then a roadmap / timeline: when each investor bought, what stock, how much as % of their portfolio, and avg cost basis — one row per buy, in date order, investor + stock + amount + % of portfolio + avg cost basis (n/d where unverifiable). Then the daily stats table, ranking (Lynch-cheap first), bear case per name, earnings calendar, and a sources box with the URLs above. Short reply in chat: top 3 buys, top trim warning, one line per investor on what changed since yesterday. No buy recommendation as a guarantee. Never place an order.
+No long description and no disclaimer at the beginning. Start the page with a short TLDR: what to buy if there is a strong opportunity, or what to sell if there is a strong signal — one line per call, with two short comments per call: (1) Lynch view — class, PEG, earnings vs price, multiple compression or earnings break; (2) Smart money view — who bought / sold / held, when, how much as % of their portfolio. One line each. Do NOT include the user's own portfolio % in the TLDR; the user's position belongs in the watchlist / pile sections, not the TLDR. Then the pile chart (with avg cost basis, see Pile diagram). Then a roadmap / timeline: when each investor bought, what stock, how much as % of their portfolio, and avg cost basis — one row per buy, in date order, investor + stock + amount + % of portfolio + avg cost basis (n/d where unverifiable). Then the daily stats table, ranking (Lynch-cheap first), bear case per name, earnings calendar, and a sources box with the URLs above. Short reply in chat: top 3 buys, top trim warning, one line per investor on what changed since yesterday. No buy recommendation as a guarantee. Never place an order.
