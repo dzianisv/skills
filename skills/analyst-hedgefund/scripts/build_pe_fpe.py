@@ -1,5 +1,5 @@
 """Trailing P/E and forward P/E per quarter — Nvidia, Intel and peers.
-One chart per the hedge-analyst skill: the Lynch valuation visual (is the
+One chart per the analyst-hedgefund skill: the Lynch valuation visual (is the
 multiple compressing or expanding?). Two panels: trailing P/E (quarter-end
 close / TTM GAAP diluted EPS) and forward P/E (price / next fiscal year
 expected EPS, GuruFocus).

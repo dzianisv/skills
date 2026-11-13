@@ -1,5 +1,5 @@
 """Circular earnings diagram — Nvidia pays, the customer buys back.
-One chart per the hedge-analyst skill: the quantified cash-vs-reported-earnings
+One chart per the analyst-hedgefund skill: the quantified cash-vs-reported-earnings
 view. Built from the v2 script (goal files), same filed numbers.
 
 Inputs: none (filed constants, H1 FY27) — reprice/rebuild when a new 10-Q lands.

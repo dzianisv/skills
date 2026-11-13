@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capex vs hardware sales — hedge-analyst deep dive, where the AI money goes.
+"""Capex vs hardware sales — analyst-hedgefund deep dive, where the AI money goes.
 Tool: matplotlib (Python). One chart, one script — see SKILL.md "Scripts".
 Writes the PNG preview (argv 1, default ~/workspace/your_files/capex-vs-hardware.png).
 Two stacked-bar panels, Q1 2025 - Q3 2026, USD B (filed company reports):

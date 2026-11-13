@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quarterly revenue chart — hedge-analyst deep dive.
+"""Quarterly revenue chart — analyst-hedgefund deep dive.
 Tool: matplotlib (Python). One chart, one script — see SKILL.md "Scripts".
 Reads the run's summary JSON (argv 1, default /tmp/growth6_summary.json):
   per ticker: q_rev_b (newest-first, 5 quarters), price.

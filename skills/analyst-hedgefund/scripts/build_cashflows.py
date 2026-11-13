@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cash flows and borrowing chart — hedge-analyst deep dive.
+"""Cash flows and borrowing chart — analyst-hedgefund deep dive.
 Tool: matplotlib (Python). One chart, one script — see SKILL.md "Scripts".
 Reads the run's summary JSON (argv 1, default /tmp/growth6_summary.json):
   per ticker: ocf_ttm_b, fcf_ttm_b, net_cash_incl_b (incl. securities / ST investments).

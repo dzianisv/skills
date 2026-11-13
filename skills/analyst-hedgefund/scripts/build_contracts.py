@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contracts and customers chart — hedge-analyst deep dive.
+"""Contracts and customers chart — analyst-hedgefund deep dive.
 Tool: matplotlib (Python). One chart, one script — see SKILL.md "Scripts".
 Writes the PNG preview (argv 1, default ~/workspace/your_files/growth6-contracts.png).
 Data are FILED constants (they change only when a new 10-Q / 10-K / earnings release lands) —

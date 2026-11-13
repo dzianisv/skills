@@ -1,5 +1,5 @@
 """Where the Money Flows — Nvidia, four panels, as an HTML page.
-One chart per the hedge-analyst skill: the flagship-holding explainer that
+One chart per the analyst-hedgefund skill: the flagship-holding explainer that
 answers "where does the money go, and what does the price pay for?" in one
 page. Panels: (1) hyperscaler capex -> AI chip revenue -> Nvidia's share;
 (2) Nvidia's quarter in pieces (filed Q2 FY27); (3) the order book — why RPO

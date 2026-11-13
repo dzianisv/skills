@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collar payoff chart — hedge-analyst deep dive, hedge layer.
+"""Collar payoff chart — analyst-hedgefund deep dive, hedge layer.
 Tool: matplotlib (Python). One chart, one script — see SKILL.md "Scripts".
 Writes the PNG preview (argv 1, default ~/workspace/your_files/nvda-collar-payoff.png).
 Numbers below are the WORKED EXAMPLE from the skill (NVDA, Nov 2026, spot 158.50):

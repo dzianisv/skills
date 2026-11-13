@@ -1,5 +1,5 @@
 """Retrospective — was it the right bet? Indexed price + quarterly revenue.
-One chart per the hedge-analyst skill, on demand: when Den asks for a
+One chart per the analyst-hedgefund skill, on demand: when Den asks for a
 retrospective ("was investing in X the right bet?"), compare two or more
 stocks over the same period. Panel 1: daily closes indexed to 100 at the
 start date — the lines show who won the period. Panel 2: quarterly revenue
