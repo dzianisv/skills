@@ -36,7 +36,8 @@ G = json.load(open(g_path))
 C = json.load(open(c_path))
 S = json.load(open(s_path))
 F = json.load(open(f_path))
-ORDER = ['NVDA', 'AMD', 'AVGO', 'TSM', 'MRVL', 'PLTR']
+ORDER = [t for t in ['NVDA', 'AVGO', 'AMD', 'PLTR', 'GOOG', 'TSM', 'MRVL']
+         if t in S]
 plt.rcParams.update({'font.size': 10})
 
 SHORT_FUND = {'BlackRock': 'BlackRock', 'Vanguard Capital': 'Vanguard', 'Vanguard Portfolio': 'Vanguard',
@@ -114,8 +115,12 @@ for ax, t in zip(axes.flat, ORDER):
                     ha=f4_ha, fontsize=9, arrowprops=dict(arrowstyle='->', color='#de2d26', lw=0.8))
     # PTR congress trades (fill a missing close from the closes series when available)
     ptr = [r for r in F['ptr'] if r['ticker'] == t]
-    ptr_plot, ptr_skip = [], 0
+    ptr_plot, ptr_skip, ptr_excl = [], 0, 0
     for r in ptr:
+        if r.get('exclude_from_plot'):
+            # e.g. a donor-advised-fund contribution filed as a sale, not a trade
+            ptr_excl += 1
+            continue
         close = r.get('close_on_trade_date')
         if close is None:
             close = close_by_date.get(r['trade_date'])
@@ -160,7 +165,8 @@ for ax, t in zip(axes.flat, ORDER):
     ax.set_title(f"{t} — close {close_now:.2f} — {o['n_sales']} insider sales, "
                  f"{o['sales_total_m']:.1f}M USD, avg {wavg_txt} vs close", fontsize=11)
     ax.text(0.01, 0.02,
-            f"Congress: {n_buy} buys / {n_sell} sells ({len(ptr_plot)} plotted, {ptr_skip} w/o close)\n"
+            f"Congress: {n_buy} buys / {n_sell} sells ({len(ptr_plot)} plotted, {ptr_skip} w/o close"
+            + (f", {ptr_excl} non-trade" if ptr_excl else "") + ")\n"
             f"Top 5 funds {top5:.1f}% (Q2 2026), top {short_fund(top1['fund'])} {top1['pct_out']:.1f}%",
             transform=ax.transAxes, fontsize=8.5, verticalalignment='bottom',
             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='none'))
@@ -178,6 +184,9 @@ handles = [
     plt.Line2D([], [], color='#111111', linestyle='--', label='Nov 12 close'),
 ]
 fig.legend(handles=handles, loc='lower center', ncol=3, fontsize=10, frameon=False)
+# Hide any unused panel when the run has fewer tickers than the 3x2 grid.
+for ax in axes.flat[len(ORDER):]:
+    ax.set_visible(False)
 fig.tight_layout(rect=[0, 0.03, 1, 0.96])
 fig.savefig(out_path, dpi=150)
 print('wrote', out_path)

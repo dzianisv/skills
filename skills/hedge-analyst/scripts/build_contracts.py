@@ -6,11 +6,11 @@ Data are FILED constants (they change only when a new 10-Q / 10-K / earnings rel
 update the dicts below at run time from the filings, never from memory:
   RPO: NVDA 3.2 (10-Q Q2 FY27 — NOT the order book, POs convert in weeks),
        AVGO 179.2 (10-Q Aug 2, 2026), PLTR 4.9 (Q3 2026 release),
-       AMD / TSM / MRVL file none (AMD's 14 GW are frameworks, not backlog).
+       GOOG 567.7 (10-Q Q3 2026 — company-wide revenue backlog, Cloud 560.8),
+       AMD files none (AMD's 14 GW are frameworks, not backlog).
   Largest customer % of revenue: NVDA 16 (Customer A, H1 FY27, unnamed),
-       AMD <10 (no customer >= 10%, FY2025), AVGO 50 (one distributor, Q3 FY26),
-       TSM 19 (Nvidia, FY2025 20-F attribution), MRVL 45 (Distributor A),
-       PLTR 16 (top 3, FY2025 10-K).
+       AVGO 50 (one distributor, Q3 FY26), PLTR 16 (top 3, FY2025 10-K),
+       AMD <10 (no customer >= 10%, FY2025), GOOG <10 (none >= 10%, FY2025 10-K).
 No dollar signs in matplotlib text (mathtext mangles $) — use USD wording."""
 import sys
 import matplotlib
@@ -19,13 +19,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 out_path = sys.argv[1] if len(sys.argv) > 1 else '/home/hatch/workspace/your_files/growth6-contracts.png'
-ORDER = ['NVDA', 'AMD', 'AVGO', 'TSM', 'MRVL', 'PLTR']
-RPO = {'NVDA': 3.2, 'AMD': 0, 'AVGO': 179.2, 'TSM': 0, 'MRVL': 0, 'PLTR': 4.9}
-CUST = {'NVDA': 16, 'AMD': 10, 'AVGO': 50, 'TSM': 19, 'MRVL': 45, 'PLTR': 16}
+# ORDER: the tickers in this run (the RPO/CUST dicts below carry this run's
+# filed figures — update them at run time from the filings, never from memory).
+ORDER = ['NVDA', 'AVGO', 'AMD', 'PLTR', 'GOOG']
+RPO = {'NVDA': 3.2, 'AVGO': 179.2, 'AMD': 0, 'PLTR': 4.9, 'GOOG': 567.7}
+CUST = {'NVDA': 16, 'AVGO': 50, 'AMD': 10, 'PLTR': 16, 'GOOG': 10}
 plt.rcParams.update({'font.size': 11})
 
 fig, (c1, c2) = plt.subplots(1, 2, figsize=(15, 5.2))
-x = np.arange(6)
+x = np.arange(len(ORDER))
 c1.bar(x, [RPO[t] for t in ORDER], 0.6, color='#2c7fb8')
 c1.set_xticks(x); c1.set_xticklabels(ORDER)
 c1.set_title('Remaining performance obligations, USD B (filed)')
@@ -38,7 +40,7 @@ c2.set_xticks(x); c2.set_xticklabels(ORDER)
 c2.set_title('Largest customer, % of revenue')
 c2.set_ylabel('%'); c2.grid(alpha=0.3, axis='y')
 for i, t in enumerate(ORDER):
-    lab = '<10' if t == 'AMD' else f'{CUST[t]}%'
+    lab = '<10' if t in ('AMD', 'GOOG') else f'{CUST[t]}%'
     c2.text(i, CUST[t] + 1.5, lab, ha='center', fontsize=9)
 fig.suptitle('Growth deep dive — contracts and customers (filed figures only)', fontsize=13)
 fig.tight_layout(rect=[0, 0, 1, 0.94])
