@@ -35,7 +35,20 @@ Use up to 3 slides for a section only when the evidence genuinely needs more roo
 - No claims about trials, credits, pricing, or partnerships unless verified and dated. Old snapshots are labelled "not current" with their date.
 - Speaker notes carry the full slide text, so the deck is searchable and copyable.
 
-## Verification checklist — run before delivery
+## Kalshi rules — structure lessons from the Kalshi Series A deck (2020, 18 slides)
+
+Kalshi raised $1B at $40B (Series G, Oct 29, 2026) on a deck that was plain, mechanism-first, and honest about a choppy path. Apply these on top of the 10-slide spine; a section may take an extra slide when the evidence needs the room.
+
+- Title is one clause, category in it. Kalshi: "Trade on event outcomes." No comma, no second clause.
+- A bold thesis is presented as the bet, with the honest caveat on the same slide. Never as proven certainty.
+- Moat is a dated timeline, not a bullet list: "The road wasn't easy." Scar tissue with dates — what was hard, when it happened, what it built.
+- Barriers are framed as strengthening with time, not as a static moat.
+- Name the flywheel as its own slide. Draw the loop; name it in the heading.
+- Add an execution-proof slide: "N companies in one" — what had to be built from scratch to make the product real.
+- Add a forecast slide labelled as the bet: one number, one date, one mechanism. The number forces the mechanism conversation. Never invent the number — if the founder hasn't set it, the slide says so.
+- The "imagine a world" vision slide closes the deck, after the numbers — never before them.
+- Precedent lineage: each past wave unlocked a category; the company is the next step. One slide.
+- Polish doesn't matter; mechanism slides do. A plain deck with a timeline, a flywheel, and a labelled forecast beats a pretty one without them.
 
 - [ ] Every slide answers its one investor question in under 20 seconds?
 - [ ] Every number dated and sourced? Any invented number removed?
