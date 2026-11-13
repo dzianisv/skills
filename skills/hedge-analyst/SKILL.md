@@ -1,0 +1,102 @@
+---
+name: hedge-analyst
+description: Lynch-first stock analysis with a timing and hedging layer. Peter Lynch metrics decide WHAT to buy (and can veto any buy); momentum, options flow and dip levels decide only WHEN to enter; collars bound the downside so a position does not go far underwater. Use when asked to "analyse this stock the Lynch way", "when should I buy", "how do I hedge this", "find an entry that will not go underwater", or "is this a good buy now".
+---
+
+# Hedge Analyst
+
+Purpose: buy good businesses cheap, enter at a point that does not go far underwater, and hedge when the risk is real. Two layers, in this order:
+
+1. **Lynch layer — decides WHAT.** The business, the valuation, the story. This layer can say NO, and no timing signal can overrule it.
+2. **Timing + hedge layer — decides WHEN and HOW.** Entry point and downside protection only. It never turns a bad business into a buy.
+
+## When to run — deep dive, not a daily routine
+
+This skill is too deep for a daily run over a whole watchlist — real P/E, cash-flow statements, debt, insiders, institutional ownership, and live option chains per stock is a day's work, not a morning check. Run it:
+- On demand — Den asks for a stock (or a few).
+- On trigger — a buy or trim decision is pending, earnings / guidance changed, the story broke, or insiders are buying / selling in a cluster.
+- Weekly at most for the top holdings — never daily for the full watchlist.
+The daily report uses the short form (price, forward P/E / PEG, momentum / trend, verdict line) and pulls in this skill's verdict only for stocks that had a deep dive.
+
+## Privacy — this skill lives in a PUBLIC repo
+
+Never put the user's net worth, portfolio total, holding $ amounts, holding %, share counts, or cost basis in this file. No user-specific numbers at all — not even as examples. Sizing is always expressed as % of the user's portfolio, with the $ / share math done at run time from the user's private data, never written into the skill. Never place an order.
+
+## Layer 1 — Lynch: the decision layer
+
+Why these metrics: every Lynch metric carries its research reference — see the "Research references" section in the `smart-money-signals` skill. When Den asks "why do you think so?", answer with that reference, not with a feeling.
+
+For each stock, one short block. Every item must be answered before any buy call:
+
+- **One-sentence story:** what it sells, who pays, why it wins. If you cannot tell it in one sentence, do not buy it.
+- **Class:** Slow Grower / Stalwart / Fast Grower / Cyclical / Turnaround / Asset Play. The class decides what PEG is fair: Fast Grower — PEG < 1 cheap, up to ~1.5 only if growth is accelerating and consistent; Stalwart — PEG < 1 cheap, and the dividend must be real; Slow Grower — PEG < 1 and a real dividend, otherwise do not buy; Cyclical — PEG is unreliable, use P/E at the cycle trough and price-to-book instead; Turnaround — no PEG until earnings return; Asset Play — PEG does not apply, use asset value.
+- **PEG:** forward P/E ÷ forward EPS growth, GAAP EPS first. PEG < 1 = cheap, 1–1.5 = fair, > 2 = expensive. If only non-GAAP is published, say so and name the distortion (SBC, warrant charges, amortisation).
+- **Earnings growth + consistency:** 5-year track record — is growth steady or lumpy? Earnings up while price fell = multiple compression (buyable). Earnings breaking = not buyable at any chart level.
+- **Cash vs reported earnings:** real P/E. Strip paper gains (equity-securities gains), one-offs, and circular deals (revenue funded by the company's own cash, guarantees, backstops). Cash P/E = price ÷ operating cash flow per share, annualised. If real P/E is far above reported P/E, say so — the reported number is flattering the stock.
+- **Debt and cash:** total cash vs total debt, per holding — not just the one you already know. A fast grower with more debt than cash is a red flag. Note buybacks: are they buying back shares (good) or issuing them (bad)?
+- **Free cash flow:** per holding, not just the flagship name. FCF growth vs earnings growth — if earnings grow and FCF does not, ask why.
+- **Company insider buying / selling:** Lynch's No.1 signal. Insiders sell for many reasons; they buy for one. Track the company's own officers and directors, not politicians — politicians are smart money, insiders are the business. Heavy insider selling while you are buying is a warning. Follow the `smart-money-signals` skill for the sources, the price rules and the warning definition.
+- **Institutional ownership / crowding:** how much is owned by institutions, is it rising or falling, is the name crowded? A hot stock in a hot industry with everyone already in is Lynch's most dangerous category.
+- **Story still true?** What would change my mind — next earnings date + trigger. A broken story (CEO gone, guidance cut, key customer lost) is a sell-on-facts trigger, never a sell on headlines.
+
+**Veto rule:** if the Lynch layer says NO — thesis broken, earnings breaking, PEG > 2 with no growth story, or the story cannot be told in one sentence — the answer is NO BUY, whatever the chart or the options flow says. Timing can delay a good buy; it can never rescue a bad one.
+
+## Layer 2 — Timing: the entry layer
+
+Timing answers only "when" and "at what price". It uses the same inputs as the daily report, but only as entry tools:
+
+- **Dip levels:** -15% = good entry, -20% = great, -25%+ = generational, measured from the 52-week high. Compute the $ level at run time (high × 0.85 / 0.80 / 0.75), never hard-code prices.
+- **Momentum and trend:** compute MACD internally, never print the numbers. Show Momentum (Rising / Falling / Flat + Strong / Weak) and Trend (Uptrend / Downtrend / Sideways + price vs 50-day %). Do NOT buy while momentum is Falling and price is below the 50-day, even if PEG is cheap — that is WAIT, not BUY. The buy trigger is momentum turning up + price back above the 50-day.
+- **Options flow** (follow the `whale-options-flow` skill): straddle breakevens for the next expiry, call wall / put wall / max pain. Use it to find the floor the market is pricing (put wall) and the ceiling (call wall) — entry near the put wall, exit near the call wall. Direction cannot be read from volume alone.
+- **Polymarket / sentiment:** crowd odds only, with volume and date. A warning check against the Lynch call, never a buy reason.
+
+**One line:** cheap on PEG + earnings hold + momentum turning up + price back above the 50-day = BUY. Cheap on PEG alone, momentum down, price below the 50-day = WAIT.
+
+## Layer 2 — Hedge: do not go underwater much
+
+Hedging bounds the loss. It does not promise no loss — say that plainly every time.
+
+- **When to hedge:** Lynch case good, but timing is uncertain — earnings ahead, a leadership change, a legal overhang, or the position is already large. If the Lynch case is bad, do not hedge a bad position — sell it instead.
+- **The collar (default):** buy a put below the price, sell a call above it, same expiry (3–4 months out is the usual shape). Per-share math: floor = put strike − net collar cost; max loss from the current price = price − floor.
+- **Worked example (market data, Nov 2026):** at $162 spot, Jan 15 2027 $150 put / $185 call cost $2.62/sh net — floor $147.38/sh, max loss ~9% from $162. A $140 put / $185 call was a $0.66/sh CREDIT — floor $140.66/sh and you get paid to hold it. Reprice at run time from the live chain; never reuse these numbers.
+- **Cost vs cap:** a collar costs premium or caps upside — state both. If the hedge costs more than ~5% of the position, offer the cheaper shape first (lower put strike, further-out call). If it is still above ~5% and timing is uncertain, the call is WAIT — do not buy unhedged into uncertain timing.
+- **Underwater tolerance:** the target is max loss from entry of about 10% — entry near a dip level or put wall plus the collar floor sets it. If the floor cannot be held near 10% at a reasonable cost, say the true max loss plainly and let that decide BUY vs WAIT.
+- **Entry + hedge together:** the cleanest "do not go underwater" setup is entry near a dip level or put wall AND a collar under it. The dip level limits how far it can fall before you are in; the collar limits how far it can fall after you are in.
+
+## Data routes
+
+- **Live prices and chains:** yfinance (`pip install --break-system-packages yfinance` — the VM wipes it on replacement, reinstall before each use; `fast_info.last_price` can return None mid-session, fall back to `history(period="1d", interval="1m")` last intraday close).
+- **Forward P/E history:** GuruFocus quarterly forward P/E series (`gurufocus.com/term/forward-pe-ratio/<TICKER>`) — next-fiscal-year EPS basis, same convention for every company.
+- **Filings:** SEC EDGAR — 10-K / 10-Q for revenue, cash flow, commitments, guarantees, customer concentration (Customer A/B/C %); 8-K for CEO / leadership changes. Form 4, PTR and 13F: follow the `smart-money-signals` skill.
+- **Debt, cash, FCF:** yfinance `balance_sheet` (total cash, total debt) and `cashflow` (operating cash flow, free cash flow) — or the same lines from the latest 10-Q. Flag debt > cash for a fast grower.
+- **Company insiders:** yfinance `insider_transactions` — officers and directors only, last 6 months. Sources, forms and price rules: follow the `smart-money-signals` skill. Cluster buying is a strong signal; cluster selling while you are buying is a warning.
+- **Smart-money sources, signal weights and warning rules:** follow the `smart-money-signals` skill — the canonical copy. The bullets here are the technical routes (which yfinance call), not the sources.
+- **Institutional ownership:** yfinance `major_holders` / `institutional_holders` — % held by institutions, top holders, and whether it is rising or falling.
+- **Holdings and sizing:** the user's private holdings sheet, read at run time. Tickers come from private data, never listed here.
+- **Charts — Google Sheet, not PNGs (Nov 13, 2026 — user: PNG diagrams are low quality):** put the data in the Google Sheet (the analysis sheet for the holding), one tab per analysis, with the data table and a native chart on that tab. The sheet tab is the canonical deliverable — the numbers live there and the chart is drawn from them, so it stays crisp and checkable. A PNG in chat is only a preview of the sheet tab, never the only diagram. Never ship a PNG-only analysis.
+- **Insider timeline chart (Nov 13, 2026 — user: the report is missing who sold at what price):** every deep dive draws the Form 4 timeline — one panel per stock: daily close line (6 months), Form 4 sales as red dots sized by value, buys as green dots, dashed line at the latest close, largest sale annotated (insider, price, value). It is the reading view of the Insiders tab: dots above the dashed line = sold before the fall, below it = sold before the run. Build it from yfinance `insider_transactions` (open-market only, last 6 months) + daily closes; the full transaction table lives in the sheet's Insiders tab. Deliver the PNG in chat as a preview; the sheet tab is canonical.
+
+## Output — per holding
+
+One Google Sheet tab per analysis first — data table plus native chart on the tab — then per holding, short:
+
+**Summary table first (Nov 13, 2026 — user: the report missed it):** at the top of the report and as the first tab of the sheet analysis, one row per metric, one column per stock: price, trailing P/E, forward P/E, PEG, YoY stock growth, earnings growth (revenue and net income, latest quarter), 52-week low, 52-week high, drop from 52-week high. Every metric that decides a buy or a wait must be visible here before any verdict — never scatter them through the analysis.
+
+**Numbers in the report (Nov 13, 2026 — user: include numbers in the report):** every verdict and every section below carries its numbers — no bare words. A BUY / WAIT / HOLD / TRIM line without its price, PEG, forward P/E, and entry price is not delivered. Every number carries its source and its date (price date, filing date, chain date and time). The numbers in the verdicts are the same numbers as in the summary table and the sheet tabs — one version, never a second set from memory. If a number cannot be pulled (options chain empty pre-market, filing not out yet), say so plainly and give the shape without a price — never fill the gap with a made-up number.
+
+**Human-readable format (Nov 13, 2026 — user: hard to read):** write for a phone screen, not a document. One block per stock: verdict line first — VERDICT, price, trailing P/E, forward P/E, PEG on one line. Then one fact per line, each with its number: earnings, cash, contracts, weakness, entry, hedge, smart money, options flow, test. Story one line, bear case one line. No dense paragraphs, no more than ~7 lines per stock. If a line has no number, cut it or attach one.
+
+1. **Lynch verdict:** class, PEG, forward P/E, earnings growth % vs price (multiple compression or earnings break), one-sentence story, bear case, what would change my mind. BUY / WAIT / HOLD / TRIM — with the reason and the numbers behind it. HOLD requires the story still true, no INSIDER WARNING and no congressman exit — a broken thesis with insiders and congress exiting is TRIM / SELL, not HOLD.
+2. **Entry timing:** dip levels in $ (52-week high × 0.85 / 0.80 / 0.75), momentum/trend words, price vs 50-day %, nearest put wall / call wall in $. The entry price and the trigger that turns WAIT into BUY. End the entry line with a plain answer: ENTER NOW or WAIT. ENTER NOW requires no INSIDER WARNING and no congressman exit.
+3. **Hedge:** collar shape (put strike / call strike / expiry), net cost per share, floor per share, max loss % from the entry price — or "no hedge needed" with the reason.
+4. **Sizing:** target % of portfolio with the reason (cheapness, correlation, earnings date ahead, hedge in place). $ / share math at run time from private data only — state the share count at the entry price.
+5. **Smart money:** follow the `smart-money-signals` skill for the filings status (13F / PTR), the insider transactions and the institutional ownership — it owns the sources, the price rules and the warning definitions. If nothing new filed, say so with the next due date — never drop the line. **Filings view (Nov 13, 2026 — user: show 13F, Form 4 and PTR forms and prices per stock):** every deep dive ships a Filings tab in the sheet — Form 4 timeline (who sold/bought, date, price per share, value, price vs latest close) + top 13F holders per stock (fund, shares, % out, position date) + PTR trades per stock (member, buy/sell, trade date, amount range, market close on the trade date). Prices per form: Form 4 exact, 13F quarter-end close for context only, PTR close on the trade date (ranges only, never a midpoint as an exact price). If a stock has no PTR trades, say so — never invent one. The timeline chart (see Data routes) is the reading view of this tab.
+6. **Options flow:** call wall / put wall / max pain / straddle breakevens from the live chain, plus unusual activity (large prints vs open interest — volume is activity, never direction, per whale-options-flow). If the chain is empty or stale, say so plainly with the time it was pulled and when it goes live again — never invent a level.
+
+## Final step — criticise as Peter Lynch, then address it
+
+Before delivering, criticise the analysis as Peter Lynch would, in writing, and address every point: can the story be told in one sentence? Is the PEG on GAAP? Does every verdict carry its numbers, with source and date? Is the buy averaging down or buying cheap on a thesis that still holds? Is the hedge protecting a good business or dressing up a bad one? Is the entry level a real level or a round number? Record the criticism and the fix, one line per point. Never deliver an analysis whose Lynch critique was not written and addressed first.
+
+**Delivery gate (Nov 13, 2026 — user: enforce smart money and options flow):** a skill file cannot lock anything mechanically — this gate is the enforcement. Before delivering, check every line is present: summary table, numbers on every verdict, smart-money line, options-flow line, filings view (Form 4 timeline chart + Filings tab with 13F / PTR per stock), buy-moment answer (ENTER NOW / WAIT), hold-at-all answer. If a line is missing, the report is not delivered: either pull the data, or write the line as unavailable with the reason and the time it becomes available, and name it as pending in the report header. A report with a silently dropped section is a failed report. Never sell on news alone (Nov 12, 2026 — user rule): a sell level must be justified by fundamentals — an earnings / guidance break, a thesis break, or valuation — or by a confirmed fact (a filed exit, a confirmed board decision). An unconfirmed report, a headline, or a price break on unconfirmed news is never a sell reason, and never sell at a loss into a news-driven panic. If the fundamentals still hold, the call is HOLD — a panic dip on intact fundamentals is a hold, never a panic sale.
+
+The daily stocks-report runs its own short form and does not call this skill. This skill runs as a standalone deep dive — on demand or on trigger — and its verdict is delivered in chat, not inside the daily report.
