@@ -13,8 +13,10 @@ safe (unmatched $ renders literally), multi-$ strings are NOT.
 Nodes sized by market value (live pull, Nov 13, 2026 close):
   NVDA $3,932B, MSFT $3,890B, AMZN $2,883B, TSM $2,068B, GOOG $1,632B
   (Class C only — total Alphabet is larger), META $1,421B, AMD $876B,
-  ORCL $391B. OpenAI $500B = reported valuation (Bloomberg).
-  Neoclouds / SB Energy are private — sized by their flow, not a market value.
+  ORCL $391B. OpenAI $1.25T = reported valuation (Bloomberg/Reuters,
+  Nov 6, 2026 first close of an $11B round; $500B was the Oct 2025
+  secondary — stale, do not use). Neoclouds / SB Energy are private —
+  sized by their flow, not a market value.
 Flows (filed / reported, same numbers as the v3 dependency web):
   Hardware (pink) = Q3 2026 filed capex: AMZN 77.3, GOOG 51.4, MSFT 39.7,
   META 33.9, ORCL 28.5 (total 237.4B; sellers chip revenue 123.8B).
@@ -26,7 +28,7 @@ Flows (filed / reported, same numbers as the v3 dependency web):
   Supply (grey) = NVDA $279B supply commitments (wafers + memory).
   AMD 6 GW GPUs to OpenAI is in the note box (its arrow is the pink one).
 Caveats: capex is ALL data-center spend, not just chips (hardware ~52%);
-$37B circular revenue is an UPPER BOUND; TSMC flow amount not filed.
+$35.2B circular revenue is an UPPER BOUND; TSMC flow amount not filed.
 Usage: python3 build_money_machine.py [out.png]
 Output: PNG preview (sheet "Circular earnings" + "Quarterly real P/E" are canonical).
 """
@@ -48,7 +50,7 @@ NVDA_GREEN = "#76B900"
 # node: angle deg on the ellipse, market cap $B (None = private), sub-label
 NODES = {
     "NVDA":      dict(angle=None, mc=3932, sub=D + "3.9T", big=True),
-    "OpenAI":    dict(angle=90,   mc=500,  sub=D + "500B*"),
+    "OpenAI":    dict(angle=90,   mc=1250, sub=D + "1.25T*"),
     "Microsoft": dict(angle=54,   mc=3890, sub=D + "3.9T"),
     "Oracle":    dict(angle=18,   mc=391,  sub=D + "391B"),
     "AMD":       dict(angle=-18,  mc=876,  sub=D + "876B"),
@@ -60,7 +62,7 @@ NODES = {
     "Meta":      dict(angle=126,  mc=1421, sub=D + "1.4T"),
 }
 
-CX, CY, RX, RY = 50, 28, 38, 21
+CX, CY, RX, RY = 50, 27.5, 38, 19.5  # RY 19.5 (was 21): OpenAI grew to $1.25T and its circle was clipped at the top
 
 def node_xy(name):
     n = NODES[name]
@@ -123,10 +125,10 @@ arrow("Alphabet", "NVDA", PINK, "capex " + D + "51.4B, Q3", rad=0.12, tpos=0.55,
 arrow("Meta", "NVDA", PINK, "capex " + D + "33.9B, Q3", rad=-0.20, tpos=0.30, toff=4.5)
 arrow("Microsoft", "NVDA", PINK, "capex " + D + "39.7B, Q3", rad=0.30, tpos=0.25, toff=3.8)
 arrow("Oracle", "NVDA", PINK, "capex " + D + "28.5B, Q3", rad=-0.10, tpos=0.65, toff=3.0)
-arrow("NVDA", "OpenAI", CYAN, D + "30B check, Feb 2026", rad=0.35, tpos=0.80, toff=-4.0)
+arrow("NVDA", "OpenAI", CYAN, D + "30B check, Feb 2026", rad=0.35, tpos=0.85, toff=-4.0)
 arrow("NVDA", "OpenAI", CYAN, D + "100B LOI \u2014 not signed", rad=-0.35, ls=(0, (5, 3)),
-      tpos=0.30, toff=-4.0)
-arrow("OpenAI", "NVDA", PINK, "buys chips \u2014 " + D + "37B", rad=0.05, tpos=0.50, toff=-4.0)
+      tpos=0.15, toff=-4.0)  # low + left: the gap between the circles is only ~5 units, spread the three labels vertically
+arrow("OpenAI", "NVDA", PINK, "buys chips \u2014 " + D + "35.2B", rad=0.05, tpos=0.50, toff=4.5)  # middle + right
 arrow("NVDA", "Neoclouds", ORANGE, D + "59.5B backstop", rad=0.18, tpos=0.5, toff=3.0)
 arrow("NVDA", "SB Energy", ORANGE, D + "105B cap, Aug 2026", rad=0.0, tpos=0.5, toff=3.4)
 arrow("NVDA", "TSMC", SUPPLY, "supply " + D + "279B\nwafers + memory", rad=-0.50, tpos=0.50, toff=-4.0)
@@ -153,7 +155,7 @@ for name, n in NODES.items():
                 fontweight="bold" if big else "normal",
                 color=GREY if not big else NAVY, zorder=7)
     if big:
-        ax.text(x, y - 5.6, "Real P/E 25.9x", ha="center", va="center", fontsize=8.5,
+        ax.text(x, y - 5.6, "Real P/E 25.5x", ha="center", va="center", fontsize=8.5,
                 fontweight="bold", color=NVDA_GREEN, zorder=7)
 
 # --- deal notes: figure-level boxes below the network (never inside the axes) ---
@@ -176,20 +178,20 @@ notebox(0.66, "OPENAI \u00d7 ORACLE",
         "OpenAI inks a " + D + "300B cloud deal\nwith Oracle (signed). Oracle spends\ntens of billions on Nvidia chips.")
 
 fig.text(0.5, 0.215,
-         "THE LOOP:  Nvidia pays " + D + "35.2B net \u2192 up to " + D + "37B (21%) of H1 revenue self-funded \u2192 real profit " + D + "76.5B, not " + D + "118.0B \u2192 real P/E 25.9x vs 17.5x",
+         "THE LOOP:  Nvidia pays " + D + "35.2B net \u2192 up to " + D + "35.2B (20%) of H1 revenue self-funded \u2192 real profit " + D + "77.7B, not " + D + "118.0B \u2192 real P/E 25.5x vs 16.8x",
          ha="center", va="center", fontsize=10, fontweight="bold", color="white",
          bbox=dict(boxstyle="round,pad=0.6", facecolor=NAVY, edgecolor="none"))
 fig.text(0.5, 0.175,
          "Cash check: H1 operating cash flow gives cash P/E 26.6x \u2014 two methods, same answer.  Q3 capex is ALL data-center spend, not just chips (hardware ~52%).",
          ha="center", va="center", fontsize=9.5, color=GREY)
 fig.text(0.5, 0.14,
-         "Sources: 8-K Ex 99.1 Q2 FY27  \u2022  10-Q Q2 FY27  \u2022  Bloomberg News reporting (OpenAI " + D + "500B, Microsoft " + D + "3.9T)  \u2022  market values Nov 13, 2026 close.",
+         "Sources: 8-K Ex 99.1 Q2 FY27  \u2022  10-Q Q2 FY27  \u2022  Bloomberg News reporting (OpenAI " + D + "1.25T, Nov 6 2026, Microsoft " + D + "3.9T)  \u2022  market values Nov 13, 2026 close.",
          ha="center", va="center", fontsize=8, color=GREY)
 fig.text(0.5, 0.11,
-         "* OpenAI " + D + "500B is a reported valuation, not a market value.  \u2020  Neoclouds / SB Energy are private \u2014 sized by their flow.  \u2021  Alphabet " + D + "1.6T is Class C only.",
+         "* OpenAI " + D + "1.25T is a reported valuation, not a market value.  \u2020  Neoclouds / SB Energy are private \u2014 sized by their flow.  \u2021  Alphabet " + D + "1.6T is Class C only.",
          ha="center", va="center", fontsize=8, color=GREY)
 fig.text(0.5, 0.08,
-         D + "37B circular revenue is an UPPER BOUND \u2014 the filing does not say how much was spent on chips in H1.  TSMC flow amount is not filed.",
+         D + "35.2B circular revenue is an UPPER BOUND \u2014 the filing does not say how much was spent on chips in H1.  TSMC flow amount is not filed.",
          ha="center", va="center", fontsize=8, color=GREY)
 
 plt.savefig(OUT, facecolor="white")
