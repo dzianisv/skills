@@ -24,6 +24,8 @@ Never put the user's net worth, portfolio total, holding $ amounts, holding %, s
 
 ## Layer 1 — Lynch: the decision layer
 
+**Canonical source:** the Lynch layer itself — the six classes, the PEG bands, the story test, and Den's standing overrides — is owned by the `analyst-peter-lynch` skill. In any conflict, that skill governs. This section keeps only the deep-dive checks that extend it (real / cash P/E, circular earnings, debt jumps, dilution overhang).
+
 Why these metrics: every Lynch metric carries its research reference — see the "Research references" section in the `smart-money-signals` skill. When Den asks "why do you think so?", answer with that reference, not with a feeling.
 
 For each stock, one short block. Every item must be answered before any buy call:

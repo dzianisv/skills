@@ -59,8 +59,8 @@ Autonomous agents for project management, task ownership, and backlog draining.
 | [`take-ownership-meta-agent`](skills/take-ownership-meta-agent) | Evaluate and improve the `take-ownership` skill from its REAL recent runs. | `npx -y skills add dzianisv/skills -s take-ownership-meta-agent -g` |
 | [`no-github-backlog`](skills/no-github-backlog) | Drain a GitHub issue backlog autonomously. | `npx -y skills add dzianisv/skills -s no-github-backlog -g` |
 | [`no-pr-backlog`](skills/no-pr-backlog) | Drain a GitHub pull-request backlog autonomously. | `npx -y skills add dzianisv/skills -s no-pr-backlog -g` |
-| [`dev-workflow`](skills/dev-workflow) |  | `npx -y skills add dzianisv/skills -s dev-workflow -g` |
-| [`dev-workflow-supervisor`](skills/dev-workflow-supervisor) | Use when an hourly project check must find stalled tasks, check live subagent ownership, dispatch actionable work, and verify completion. | `npx -y skills add dzianisv/skills -s dev-workflow-supervisor -g` |
+| [`dev-workflow`](skills/dev-workflow) | MOVED to dzianisv/product-framework. | `npx -y skills add dzianisv/product-framework -s dev-workflow -g` |
+| [`dev-workflow-supervisor`](skills/dev-workflow-supervisor) | MOVED to dzianisv/product-framework. Use when an hourly project check must find stalled tasks, check live subagent ownership, dispatch actionable work, and verify completion. | `npx -y skills add dzianisv/product-framework -s dev-workflow-supervisor -g` |
 
 ### Skill Engineering
 
@@ -115,7 +115,7 @@ Turn raw work into build-in-public posts: reels, threads and captions with verif
 | [`opencode`](skills/opencode) | Control a remote or local OpenCode server via opencode-cli (or its REST API directly). | `npx -y skills add dzianisv/skills -s opencode -g` |
 | [`overflow`](skills/overflow) |  | `npx -y skills add dzianisv/skills -s overflow -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
-| [`stocks-advisor-fast`](skills/stocks-advisor-fast) |  | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
+| [`stocks-advisor-fast`](skills/stocks-advisor-fast) | Analyse assets using fundamental, technical, smart-money and narrative — fast Buy/Hold/Sell table. | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
 
 <!-- SKILLS:END -->
 
