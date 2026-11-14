@@ -21,6 +21,8 @@ Always use the CURRENT price — the price the user just stated in chat, or the 
 
 Write every line in plain English. No idioms, no slang, no figures of speech. Never write "survived by a hair", "turn is back on", "flips", "by a hair", "knife's edge", or anything like them. Say it with numbers: the price, the 50-day average, the gap in $ and %, and what changes the decision. If a sentence needs an idiom to make sense, rewrite it without one.
 
+**No unexplained jargon (Nov 14, 2026 — user: "multiple compression and leadership discount" is fluff):** never write "multiple compression", "leadership discount", "de-rating", "re-rating", "multiple expansion", or any other finance jargon without explaining it in plain words with numbers. Write it like this: "the price fell 33% from $243.37 to $162.85, while earnings for this quarter are expected to grow about 90% from last year — the company earns more, but the stock costs less" and "the price is lower because the CEO resigned and no successor is named". The Lynch cell is plain words with numbers, no jargon. The Verdict + Action cell states the action plainly — what to do, how many shares, at what price.
+
 ## Data sources — where every number comes from (Nov 13, 2026)
 
 Follow the `smart-money-signals` skill — it is the canonical copy of every source, form, website, lag and price rule (insiders Form 4, congress PTR, 13F, options unusual activity, prices, FPE/PEG, momentum, company reports). Do not duplicate its rules here; if a rule changes, change it there.

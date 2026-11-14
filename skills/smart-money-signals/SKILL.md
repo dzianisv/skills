@@ -68,6 +68,8 @@ The final decision (BUY / WAIT / HOLD / TRIM / DON'T ADD) is built from gates, n
 
 Write every line in plain English. No idioms, no slang, no figures of speech. Never write "survived by a hair", "turn is back on", "flips", "by a hair", "knife's edge", or anything like them. Say it with numbers: the price, the 50-day average, the gap in $ and %, and what changes the decision. If a sentence needs an idiom to make sense, rewrite it without one.
 
+**No unexplained jargon (Nov 14, 2026 — user: "multiple compression and leadership discount" is fluff):** never write "multiple compression", "leadership discount", "de-rating", "re-rating", "multiple expansion", or any other finance jargon without explaining it in plain words with numbers. Write it like this: "the price fell 33% from $243.37 to $162.85, while earnings for this quarter are expected to grow about 90% from last year — the company earns more, but the stock costs less" and "the price is lower because the CEO resigned and no successor is named". Every stock's view is plain words with numbers, no jargon, and ends with a clear action line — "Action: ..." — what to do, how many shares, at what price.
+
 ## Entry price — every WAIT names its price (Nov 14, 2026 — user: "wait for what? What price do I have to wait for?")
 
 Never write WAIT without the price you are waiting for. Every WAIT verdict carries one reasoned entry price in $ with its reason in a few words — put wall, straddle low, recent low, and the FPE / PEG at that price. The price comes from the analysis, not from a round number: the put wall with the most open interest, the straddle low breakeven for the nearest expiry, the recent low where buyers stepped in, and the valuation at that price.
