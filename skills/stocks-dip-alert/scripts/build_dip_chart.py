@@ -6,10 +6,10 @@ Reads the run's JSON (argv 1):
    "footnote": "Prices ~14:00 EST Nov 12 (market open, closes 16:00 EST). NVDA -5.2% today, off the $148.80 low. AVGO +5.3% today."}
   pct = price vs 52-week high, in percent (negative = below the high).
 Writes the PNG preview (argv 2, default ~/workspace/your_files/dip-chart.png).
-Horizontal bars, worst (most negative) at the top. Colors by dip level:
+Vertical bars, worst (most negative) at the left. Colors by dip level:
   red <= -25% | orange -25% to -20% | gold -20% to -15% | green above -15%.
-Dashed vertical lines at -15% / -20% / -25% — the alert thresholds.
-Value labels inside the bar (white bold) when the bar is wide, else outside (dark).
+Dashed horizontal lines at -15% / -20% / -25% — the alert thresholds.
+Value labels inside the bar (white bold) when the bar is tall, else below it (dark).
 No dollar signs in matplotlib text (mathtext mangles $) — use USD wording."""
 import json, sys
 import matplotlib
@@ -34,22 +34,21 @@ def color(p):
     return '#27ae60'
 
 plt.rcParams.update({'font.size': 11})
-fig, ax = plt.subplots(figsize=(13, 8))
-y = np.arange(len(names))
-ax.barh(y, pcts, 0.62, color=[color(p) for p in pcts])
+fig, ax = plt.subplots(figsize=(16, 8))
+x = np.arange(len(names))
+ax.bar(x, pcts, 0.62, color=[color(p) for p in pcts])
 for i, p in enumerate(pcts):
     lab = f'{p:.1f}%'
     if abs(p) >= 8:
-        ax.text(p + 1, i, lab, va='center', ha='left', fontsize=11, fontweight='bold', color='white')
+        ax.text(i, p + 1.5, lab, va='top', ha='center', fontsize=11, fontweight='bold', color='white')
     else:
-        ax.text(p - 1, i, lab, va='center', ha='right', fontsize=11, fontweight='bold', color='#333333')
+        ax.text(i, p - 1.5, lab, va='top', ha='center', fontsize=11, fontweight='bold', color='#333333')
 for v in (-15, -20, -25):
-    ax.axvline(v, color='#888888', linestyle='--', linewidth=0.9)
-ax.set_yticks(y); ax.set_yticklabels(names)
-ax.invert_yaxis()
-ax.set_xlabel('% down from 52-week high  (dashed lines: -15% / -20% / -25%)')
-ax.set_xlim(min(pcts) - 8, 2)
-ax.set_title(f"Mid-session, {D['as_of']} — how far each name is below its 52-week high",
+    ax.axhline(v, color='#888888', linestyle='--', linewidth=0.9)
+ax.set_xticks(x); ax.set_xticklabels(names)
+ax.set_ylabel('% down from 52-week high  (dashed lines: -15% / -20% / -25%)')
+ax.set_ylim(min(pcts) - 8, 2)
+ax.set_title(f"{D['as_of']} — how far each name is below its 52-week high",
              fontsize=14, fontweight='bold', pad=12)
 ax.spines[['top', 'right']].set_visible(False)
 fig.text(0.5, 0.01, D.get('footnote', ''), ha='center', fontsize=10, color='#666666')

@@ -17,6 +17,10 @@ Never put the user's net worth, portfolio total, holding $ amounts, holding %, s
 
 Always use the CURRENT price — the price the user just stated in chat, or the latest live price pulled in this run. Never use a stale close (e.g. the Nov 9, 2026 close) as today's price. If the user says "current price is $167", that is the price for the calculation, the % down, and the days-wiped-out lookback — use $167, not $178.67.
 
+## Plain English, no idioms (Nov 14, 2026 — user: "I don't understand this language")
+
+Write every line in plain English. No idioms, no slang, no figures of speech. Never write "survived by a hair", "turn is back on", "flips", "by a hair", "knife's edge", or anything like them. Say it with numbers: the price, the 50-day average, the gap in $ and %, and what changes the decision. If a sentence needs an idiom to make sense, rewrite it without one.
+
 ## Data sources — where every number comes from (Nov 13, 2026)
 
 Follow the `smart-money-signals` skill — it is the canonical copy of every source, form, website, lag and price rule (insiders Form 4, congress PTR, 13F, options unusual activity, prices, FPE/PEG, momentum, company reports). Do not duplicate its rules here; if a rule changes, change it there.
@@ -32,7 +36,7 @@ Every daily report carries all five views, in this order, with sources named for
 2. **Whale options flow** — follow the `whale-options-flow` skill: total call/put premium yesterday and today, biggest 3–5 trades (strike, expiry, premium, breakeven), call wall / put wall / max pain, most active strikes. Then one line per stock: what price whales expect — the ceiling they are buying calls for, the floor they are buying puts for — and whether that confirms or contradicts the user's sell limit.
 3. **Smart money filings — 13F is NOT Congress** — 13F is only for institutional investment managers with >$100M (Berkshire, Bridgewater, Thiel, etc., 45 days after quarter-end). Congress members do NOT file 13F — they file a **Periodic Transaction Report (PTR)** under the STOCK Act, 30–45 days after the trade, in amount ranges, not exact amounts. Trump files **OGE Form 278-T**, not a 13F and not a PTR. For each new filing: who, what form (13F / PTR / OGE 278-T), what stock, buy/sell, amount range, date filed, date traded, % of their portfolio (exact for 13F, midpoint estimate for PTR/OGE — say so). A filing is a trade, not a current holding. Never state $0 from a summary alone.
 4. **Market / expert price view** — Polymarket earnings bets (see below) + analyst targets where they changed: consensus target, range, and any upgrade/downgrade yesterday, with source and date. This is what the market expects the price to be — not a forecast, not a guarantee.
-5. **Company insiders — Form 4 (SEC EDGAR):** the company's own officers and directors, not politicians. Follow the `smart-money-signals` skill for the definition, the sources and the price rules. The warning line must read "INSIDER WARNING (Form 4, SEC EDGAR)".
+5. **Company insiders — Form 4 (SEC EDGAR):** the company's own officers and directors, not politicians. Follow the `smart-money-signals` skill for the definition, the sources and the price rules. The warning line must read "INSIDER WARNING (Form 4, SEC EDGAR)". **Never state the warning without the facts (Nov 14, 2026 — user: a bare warning is fluff without facts):** never write "the warning stands" alone. Every time the warning is stated, include the facts — how many open-market sales, total $ sold, who sold most of it, the sale price range, and how far above the current price in % and $.
 
 Sources box at the end of the report lists every source used that day, with URLs and dates — 13F / PTR / OGE filings, SpotGamma / OptionsBell / SquawkFlow for options, TradingView / Benzinga / Bloomberg for news, Polymarket with volume.
 
