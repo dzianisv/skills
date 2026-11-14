@@ -68,13 +68,16 @@ for i, (r, v) in enumerate(zip(RANGE, REAL)):
 for i, total in enumerate([58.32, 59.69, 118.01]):
     ax.text(x[i], total + 2.5, f"GAAP ${total:.2f}B", ha="center", va="bottom",
             fontsize=11.5, fontweight="bold", color=NAVY)
-# P/E on top of each bar (price $162.85, Nov 13 close): real P/E vs reported P/E
+# P/E on top of each bar (price $162.85, Nov 13 close): real P/E vs P/E
+# WITHOUT the self-funded deduction (paper gains out only) — the two
+# numbers isolate the self-funded leg: Q1 30.1x vs 21.8x, Q2 22.1x vs
+# 18.3x, H1 25.5x vs 19.9x.
 PE_REAL = ["30.1x", "22.1x", "25.5x"]
-PE_REP = ["17.0x", "16.5x", "16.8x"]
+PE_NOSELF = ["21.8x", "18.3x", "19.9x"]
 for i in range(len(GROUPS)):
     ax.text(x[i], [58.32, 59.69, 118.01][i] + 7.5,
-            f"Real P/E {PE_REAL[i]}  ·  reported {PE_REP[i]}",
-            ha="center", va="bottom", fontsize=11, color=NAVY)
+            f"Real P/E {PE_REAL[i]}  ·  without self-funded {PE_NOSELF[i]}",
+            ha="center", va="bottom", fontsize=10.5, color=NAVY)
 
 ax.set_xticks(x); ax.set_xticklabels(GROUPS, fontsize=11.5)
 ax.set_ylabel("Net income (USD billions)", fontsize=11, color=NAVY)
