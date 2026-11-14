@@ -62,6 +62,8 @@ Examples: `NVDA, -26.6%, -471d, Huang probe, HOLD — Lynch: earnings still hold
 
 **Hold at all? (Nov 13, 2026):** a dip is also the moment to ask whether the stock is worth holding at all. **HOLD AT ALL: YES / NO** — NO when the thesis broke (earnings / guidance break, story no longer true) AND insiders or congress are exiting. A NO means TRIM / SELL, not HOLD — never hold a broken thesis just because it fell.
 
+**Every WAIT names its entry price (Nov 14, 2026 — user: "wait for what? What price do I have to wait for?"):** never write WAIT without the price you are waiting for. The row carries one reasoned entry price in $ with its reason in a few words — put wall, straddle low, recent low, and the FPE / PEG at that price.
+
 Corrections (verified Nov 11, 2026): NVDA days wiped out is 471d at the $178.67 Nov 9 close on the user's first-time-reached definition (first close at/above $178.67 was 28 Jul 2025, $181.74 — Yahoo daily closes; the 490d / ~7 Jul 2025 figure was wrong, 7–9 Jul 2025 closes were $164–165). The earlier 216d was the LAST time at that level (7 Apr 2026, $178.10) and 255d was an earlier last-time figure (27 Feb 2026) — both are superseded by the first-time definition. At the current $167.82 the first reach is 17 Jul 2025 (482d). GOOG is -29.3% from its own high $404.47, NOT -30.0% from GOOGL's $408.61.
 
 Levels: -10% is a correction, -20% is a bear market, -25 to -35% is a deep bear market — often, but not always, with a recession (2022 was -25% with no recession declared). The reason matters more than the number.
