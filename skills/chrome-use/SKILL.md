@@ -1,6 +1,7 @@
 ---
 name: chrome-use
-description: Drive the user's real running Chrome with agent-browser-style commands: open pages, snapshot interactive elements as @e1 refs, click, fill, type, screenshot, scroll, and eval. Use for Chrome, browser automation, web automation, forms, clicks, screenshots, or @e1 refs. Always connects to the user's actual Chrome profile and live sessions via DevToolsActivePort autoConnect; it never launches or copies another browser profile.
+description: >-
+  Drive the user's real running Chrome with agent-browser-style commands: open pages, snapshot interactive elements as @e1 refs, click, fill, type, screenshot, scroll, and eval. Use for Chrome, browser automation, web automation, forms, clicks, screenshots, or @e1 refs. Always connects to the user's actual Chrome profile and live sessions via DevToolsActivePort autoConnect; it never launches or copies another browser profile.
 ---
 
 # chrome-use

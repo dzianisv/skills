@@ -1,6 +1,15 @@
+---
+name: overflow
+description: >-
+  The per-task lead subagent contract: how a lead claims one task, staffs one
+  subagent per stage, holds gates, verifies the result, and reports. Use when a
+  supervisor dispatches a task lead, or when asked how a lead should claim,
+  staff, gate, verify, or report a single task.
+---
+
 # Overflow
 
-The Overflow is the per-task lead subagent dispatched by a Supervisor (the per-project hourly job, `~/workspace/custom-skills/dev-workflow-supervisor/SKILL.md`) or by the orchestrator in chat. It owns ONE task end-to-end. The stage-by-stage process is `dev_workflow` (`~/workspace/custom-skills/dev-workflow/SKILL.md`) — this skill is the lead's operating contract: how it claims, staffs, gates, and reports. The lead coordinates and verifies; it does not implement inline — it spawns one subagent per stage.
+The Overflow is the per-task lead subagent dispatched by a Supervisor (the per-project job, `dzianisv/product-framework` `skills/dev-workflow-supervisor/SKILL.md`) or by the orchestrator in chat. It owns ONE task end-to-end. The stage-by-stage process is `dev-workflow` (`dzianisv/product-framework` `skills/dev-workflow/SKILL.md`) — this skill is the lead's operating contract: how it claims, staffs, gates, and reports. The lead coordinates and verifies; it does not implement inline — it spawns one subagent per stage.
 
 ## Claim (Stage 0, before any work)
 
