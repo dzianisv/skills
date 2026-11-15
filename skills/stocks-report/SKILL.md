@@ -36,10 +36,10 @@ Run every morning, ~08:48 WITA (Asia/Makassar). Each run: re-pull the latest reg
 Every daily report delivers ONE table — one row per watchlist ticker (including VOO, QQQ, and the QQQ top 10–15). No second table, no per-name prose sections. The six views below live INSIDE the table as short cells, not as separate sections. A cell that needs a sentence is too long — shorten it to a few words.
 
 Columns, in this order:
-`Ticker | Price (close, date) | 52w High (date) | 52w Low (date) | % from High | 20d SMA | vs 20d SMA | Fwd P/E | PEG | Momentum | Trend | Lynch | Options flow | Insiders (Form 4) | Congress (PTR) | Hedge funds (13F) | News | Verdict + Action`
+`Ticker | Price (close, date) | 52w High (date) | 52w Low (date) | % from High | Fwd P/E | PEG | Momentum | Trend | Lynch | Options flow | Insiders (Form 4) | Congress (PTR) | Hedge funds (13F) | News | Verdict + Action`
 
 - **Price, 52w High, 52w Low:** from daily candles, verified with the date. % from High = (high − price) / high, shown negative.
-- **20d SMA:** simple moving average of the last 20 regular-session closes, computed from daily candles at run time. vs 20d SMA = (price / SMA − 1), in %. The 50-day stays the trend measure (Trend column) — the 20d SMA is the short-term level, not a replacement.
+- **No SMA column (Nov 15, 2026 — user: SMA numbers don't make sense without visualization):** no 20d, 50d, or 200d SMA column in the table — the 20d SMA and vs 20d SMA columns are removed. A moving average only appears in a chart, as the price line against the SMA lines, never as a table number. Trend still states Uptrend / Downtrend / Sideways in words, with the price vs 50-day % beside it — that % is the trend statement, not an SMA column.
 - **Fwd P/E, PEG:** GAAP first; say so if non-GAAP. PEG = Fwd P/E ÷ forward EPS growth %.
 - **Momentum, Trend:** words only, never MACD numbers (see Daily stats below).
 - **Lynch cell:** what the company sells in plain words + PEG verdict + earnings hold or break + why it moved (news, downgrade with the reason the analyst stated, Congress dates), one short phrase. Never print the Lynch class name (Stalwart, Fast Grower, Cyclical, Turnaround, Slow Grower, Asset Play) alone — write what the company sells instead. Never write "compression" or any other jargon without the plain sentence with numbers. E.g. "sells AI chips, PEG 0.27, earnings hold — price fell 33% while earnings grew, CEO resigned Nov 11". The 2-minute story, bear case, and what-would-change-my-mind live in the deep dive (analyst-hedgefund), not in this cell.
