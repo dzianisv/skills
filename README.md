@@ -80,7 +80,7 @@ CLI tools, secret management, messaging, and deploy helpers.
 | Skill | What it does | Install |
 |-------|--------------|---------|
 | [`bitwarden-cli`](skills/bitwarden-cli) | Use when storing, retrieving, listing, or organizing secrets in Bitwarden using the bw CLI. | `npx -y skills add dzianisv/skills -s bitwarden-cli -g` |
-| [`secretsctl`](skills/secretsctl) | Fetch one Bitwarden Secrets Manager secret on demand for an agent, scoped to its own project, and copy password-manager items into SM projects. | `npx -y skills add dzianisv/skills -s secretsctl -g` |
+| [`secretsctl`](skills/secretsctl) | Fetch one Bitwarden Secrets Manager secret on demand for an agent, scoped to its own project, and copy password-manager items into SM projects. Use when an agent needs an API key, token, DSN or password at runtime. | `npx -y skills add dzianisv/skills -s secretsctl -g` |
 | [`claude-sessions`](skills/claude-sessions) | Find a past Claude Code session on this machine by project or topic, then summarize what was done in it. | `npx -y skills add dzianisv/skills -s claude-sessions -g` |
 | [`claude-max`](skills/claude-max) | Configure and activate the Claude Max subscription proxy so the agent runs on Claude Opus 4 at flat-rate cost instead of per-token Azure billing. | `npx -y skills add dzianisv/skills -s claude-max -g` |
 | [`telegram-cli`](skills/telegram-cli) | Send and read Telegram messages and media from a personal Telegram user account using the bundled `telegram-cli.py` Telethon helper. | `npx -y skills add dzianisv/skills -s telegram-cli -g` |
