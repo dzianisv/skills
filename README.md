@@ -116,6 +116,7 @@ Turn raw work into build-in-public posts: reels, threads and captions with verif
 | [`overflow`](skills/overflow) |  | `npx -y skills add dzianisv/skills -s overflow -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
 | [`stocks-advisor-fast`](skills/stocks-advisor-fast) | Analyse assets using fundamental, technical, smart-money and narrative — fast Buy/Hold/Sell table. | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
+| [`job-search`](skills/job-search) | Run a Staff SWE job search toward a $600k TC target: triage recruiter mail daily, track contacts and applications, draft adapted CVs, report daily with a roadmap chart instead of text. | `npx -y skills add dzianisv/skills -s job-search -g` |
 
 <!-- SKILLS:END -->
 
