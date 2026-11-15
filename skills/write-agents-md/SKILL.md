@@ -1,6 +1,7 @@
 ---
 name: write-agents-md
-description: Write, compact, or deduplicate an AGENTS.md / CLAUDE.md project instruction file. Use when creating agent instructions from scratch, or when asked to shorten, dedupe, clean up, or remove fluff/AI-slop from an existing AGENTS.md or CLAUDE.md. Triggers: "write AGENTS.md", "compact our agent instructions", "dedupe CLAUDE.md", "trim the agent rules".
+description: >-
+  Write, compact, or deduplicate an AGENTS.md / CLAUDE.md project instruction file. Use when creating agent instructions from scratch, or when asked to shorten, dedupe, clean up, or remove fluff/AI-slop from an existing AGENTS.md or CLAUDE.md. Triggers: "write AGENTS.md", "compact our agent instructions", "dedupe CLAUDE.md", "trim the agent rules".
 ---
 
 # Write AGENTS.md

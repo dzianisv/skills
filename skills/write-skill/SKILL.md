@@ -1,6 +1,7 @@
 ---
 name: write-skill
-description: Write or improve any AI agent instruction surface — SKILL.md, AGENTS.md, CLAUDE.md, GOAL.md, dynamic workflow scripts, or any agent documentation. Also refines a user's rough prompt into a production-quality agent prompt. MUST be loaded whenever writing, editing, reviewing, or refining agent instructions. Triggers: "write a skill", "improve SKILL.md", "write agent instructions", "update AGENTS.md", "update CLAUDE.md", "write GOAL.md", "create a workflow script", "write a dynamic workflow", "refine this prompt", "turn this into an agent prompt", "improve this prompt", "prompt engineering". For scaffolding/discovery, pair with skill-creator.
+description: >-
+  Write or improve any AI agent instruction surface — SKILL.md, AGENTS.md, CLAUDE.md, GOAL.md, dynamic workflow scripts, or any agent documentation. Also refines a user's rough prompt into a production-quality agent prompt. MUST be loaded whenever writing, editing, reviewing, or refining agent instructions. Triggers: "write a skill", "improve SKILL.md", "write agent instructions", "update AGENTS.md", "update CLAUDE.md", "write GOAL.md", "create a workflow script", "write a dynamic workflow", "refine this prompt", "turn this into an agent prompt", "improve this prompt", "prompt engineering". For scaffolding/discovery, pair with skill-creator.
 ---
 
 # Write Agent Instructions

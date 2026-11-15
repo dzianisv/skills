@@ -1,6 +1,7 @@
 ---
 name: job-search
-description: Run Den's Staff Software Engineer job search toward a $600k total-comp target: triage recruiter mail daily, track every contact and application, draft adapted CVs, and report daily with a roadmap chart. Use when the user asks about the job search, a recruiter email, a CV, an application status, or the daily jobs report.
+description: >-
+  Run Den's Staff Software Engineer job search toward a $600k total-comp target: triage recruiter mail daily, track every contact and application, draft adapted CVs, and report daily with a roadmap chart. Use when the user asks about the job search, a recruiter email, a CV, an application status, or the daily jobs report.
 ---
 
 # Job Search
