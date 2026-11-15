@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * secretsmctl-import — copy the secrets listed in a per-repo manifest from the
+ * secretsctl-import — copy the secrets listed in a per-repo manifest from the
  * Bitwarden password-manager vault into Bitwarden Secrets Manager projects,
  * without ever printing a value.
  *
@@ -20,13 +20,13 @@
  * come from the environment or from ./.env.
  *
  * Usage:
- *   npx tsx secretsmctl-import.ts                          # plan
- *   npx tsx secretsmctl-import.ts --apply                  # push
+ *   npx tsx secretsctl-import.ts                          # plan
+ *   npx tsx secretsctl-import.ts --apply                  # push
  *
  * Flags:
- *   --manifest <path>  manifest file (default scripts/secretsmctl-projects.json)
+ *   --manifest <path>  manifest file (default scripts/secretsctl-projects.json,
+ *                      falls back to the legacy scripts/secretsmctl-projects.json)
  *   --project <name>   limit to one project
- *   --check-values     resolve every value and report shape, changes nothing
  *   --apply            create missing secrets in Secrets Manager
  *   --overwrite        with --apply, replace values that differ
  *   --env-file <path>  load env vars from this file first
@@ -40,11 +40,10 @@ function loadEnvFile(path: string): void {
   for (const raw of readFileSync(path, "utf8").split("\n")) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq < 1) continue;
-    const k = line.slice(0, eq).trim();
-    const v = line.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (!process.env[k]) process.env[k] = v;
+    const m = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
+    const v = m[2].trim().replace(/^['"]|['"]$/g, "");
+    if (!process.env[m[1]]) process.env[m[1]] = v;
   }
 }
 
@@ -54,9 +53,16 @@ if (envFileIdx >= 0 && ARGV0[envFileIdx + 1]) loadEnvFile(resolve(ARGV0[envFileI
 loadEnvFile(resolve(".env"));
 
 const manifestIdx = ARGV0.indexOf("--manifest");
-const MANIFEST_PATH = resolve(manifestIdx >= 0 ? ARGV0[manifestIdx + 1] : "scripts/secretsmctl-projects.json");
+// Default to the new name, but a repo that has not migrated keeps working.
+const MANIFEST_PATH = resolve(
+  manifestIdx >= 0
+    ? ARGV0[manifestIdx + 1]
+    : existsSync("scripts/secretsctl-projects.json")
+      ? "scripts/secretsctl-projects.json"
+      : "scripts/secretsmctl-projects.json",
+);
 if (!existsSync(MANIFEST_PATH)) {
-  process.stderr.write(`secretsmctl-import: manifest not found at ${MANIFEST_PATH}\n`);
+  process.stderr.write(`secretsctl-import: manifest not found at ${MANIFEST_PATH}\n`);
   process.exit(2);
 }
 const MANIFEST = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
@@ -66,7 +72,6 @@ type Project = { envVar: string; secrets: Entry[] };
 
 const argv = process.argv.slice(2);
 const APPLY = argv.includes("--apply");
-const CHECK = argv.includes("--check-values");
 const OVERWRITE = argv.includes("--overwrite");
 const only = (() => {
   const i = argv.indexOf("--project");
@@ -74,7 +79,7 @@ const only = (() => {
 })();
 
 function die(msg: string): never {
-  process.stderr.write(`secretsmctl-import: ${msg}\n`);
+  process.stderr.write(`secretsctl-import: ${msg}\n`);
   process.exit(2);
 }
 
@@ -256,7 +261,7 @@ for (const [name, project] of projects) {
 }
 
 process.stdout.write(
-  `\n${APPLY ? "APPLIED" : CHECK ? "CHECKED" : "DRY-RUN"}  planned=${total} ok=${ready} needs_human=${needsHuman.length} writes=${writes}\n`,
+  `\n${APPLY ? "APPLIED" : "DRY-RUN"}  planned=${total} ok=${ready} needs_human=${needsHuman.length} writes=${writes}\n`,
 );
 if (needsHuman.length) {
   process.stdout.write(`\nneeds a human (fix the mapping or the source item):\n`);
