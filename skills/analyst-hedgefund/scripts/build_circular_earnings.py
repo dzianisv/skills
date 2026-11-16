@@ -6,8 +6,10 @@ Inputs: none (filed constants, H1 FY27) — reprice/rebuild when a new 10-Q land
   8-K Ex 99.1 Q2 FY27: GAAP net income H1 118.0B, paper gains 23.7B,
   purchases of equity securities 42.4B, sales 7.2B, OCF 74.4B.
   10-Q Q2 FY27: supply commitments 279B, backstops 36B, SB guarantees 105B.
-  Circular revenue upper bound 37B (21% of H1 revenue), circular profit
-  = 37B x 75% margin x 83% (17% tax) = 23.0B. Real P/E 27.6x vs reported 18.7x.
+  Circular revenue upper bound 35.2B (19.8% of H1 revenue; filed net equity
+  cash-out, purchases 42.4B minus sales 7.2B), circular profit
+  = 35.2B x 75% margin x 83% (17% tax) = 21.9B. Real P/E 25.5x vs reported
+  17.5x at price USD 162.85 (Nov 13 close). Reprice on every new close.
 Usage: python3 build_circular_earnings.py [out.png]
 Output: PNG preview (sheet tab "Circular earnings" is canonical).
 """
@@ -44,7 +46,7 @@ boxes = [
     (1, 28, 26, 60, ORANGE, ORANGE_BG, "1 \u00b7 NVIDIA PAYS OUT",
      ["Cash out: " + S + "42.4B gross", S + "35.2B net (after " + S + "7.2B sold)",
       "OpenAI " + S + "30B  \u2022  AI clouds " + S + "7B+",
-      "Promises, not cash yet: " + S + "171.5B"]),
+      "Promises, not cash yet: " + S + "164.5B"]),
     (36.5, 28, 27, 60, BLUE, BLUE_BG, "2 \u00b7 CUSTOMERS BUY CHIPS",
      ["OpenAI  \u2022  CoreWeave  \u2022  neoclouds",
       "They spend Nvidia's money",
@@ -73,7 +75,7 @@ def arrow(x0, x1, y, color, label_lines, sublabel=None):
         ax.text(cx, y - 6, sublabel, ha="center", va="top", fontsize=8.5, color=color)
 
 arrow(27.6, 36.0, 58, ORANGE, [S + "42.4B", "cash"])
-arrow(64.1, 72.4, 58, BLUE, ["chip", "purchases"], S + "37B = 21%")
+arrow(64.1, 72.4, 58, BLUE, ["chip", "purchases"], S + "35.2B = 19.8%")
 
 # Return loop: clean elbow well below the boxes
 ax.plot([86, 86], [28, 16], color=GREY, lw=2.0, linestyle=(0, (5, 3)))
@@ -91,13 +93,13 @@ ax2.set_title("REAL EARNINGS \u2014 take out what Nvidia paid for itself", fonts
 labels = ["GAAP\nnet income", "Paper gains\nremoved\n(net of tax)", "Non-GAAP\nnet income",
           "Circular profit\nremoved", "REAL\nEARNINGS"]
 xs = [0, 1, 2, 3, 4]
-bottoms = [0, 99.5, 0, 76.5, 0]
-heights = [118.0, 18.5, 99.5, 23.0, 76.5]
+bottoms = [0, 99.5, 0, 77.7, 0]
+heights = [118.0, 18.5, 99.5, 21.9, 77.7]
 colors = [GREEN, RED, LIGHT_GREEN, RED, BLUE]
-values = [118.0, -18.5, 99.5, -23.0, 76.5]
+values = [118.0, -18.5, 99.5, -21.9, 77.7]
 for x, b, h, c in zip(xs, bottoms, heights, colors):
     ax2.bar(x, h, bottom=b, width=0.62, color=c, edgecolor="white", linewidth=1.5, zorder=3)
-for x0, y in [(0, 118.0), (1, 99.5), (2, 99.5), (3, 76.5)]:
+for x0, y in [(0, 118.0), (1, 99.5), (2, 99.5), (3, 77.7)]:
     ax2.plot([x0 + 0.31, x0 + 1 - 0.31], [y, y], color=GREY, lw=1.4, linestyle=(0, (4, 3)), zorder=2)
 for x, b, h, v in zip(xs, bottoms, heights, values):
     top = b + h
@@ -116,14 +118,14 @@ for s in ["top", "right", "left"]:
 ax2.spines["bottom"].set_color("#CCCCCC")
 
 fig.text(0.5, 0.062,
-         "Real P/E  27.6x  (range 26.2\u201328.9x)   vs   reported 18.7x   \u2022   Cash P/E 28.3x \u2014 two methods, same answer",
+         "Real P/E  25.5x  (range 24.5\u201327.1x)   vs   reported 17.5x   \u2022   Cash P/E 26.6x \u2014 two methods, same answer",
          ha="center", va="center", fontsize=12, fontweight="bold", color="white",
          bbox=dict(boxstyle="round,pad=0.55", facecolor=NAVY, edgecolor="none"))
 fig.text(0.5, 0.028,
          "Sources: 8-K Ex 99.1 Q2 FY27  \u2022  10-Q Q2 FY27  \u2022  Forbes / SiliconANGLE (OpenAI " + S + "30B, clouds " + S + "7B+)",
          ha="center", va="center", fontsize=7.5, color=GREY)
 fig.text(0.5, 0.010,
-         "Circular profit = " + S + "37B \u00d7 75% margin \u00d7 83% (17% tax).  " + S + "37B is an upper bound \u2014 timing not filed.",
+         "Circular profit = " + S + "35.2B \u00d7 75% margin \u00d7 83% (17% tax).  " + S + "35.2B is the filed net equity cash-out, an upper bound \u2014 timing not filed.",
          ha="center", va="center", fontsize=7.5, color=GREY)
 plt.savefig(OUT, facecolor="white")
 print("saved", OUT)
