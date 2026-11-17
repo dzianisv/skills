@@ -42,6 +42,7 @@
       "skills": [
         "agent-memory",
         "bitwarden-cli",
+        "secretsctl",
         "claude-sessions",
         "claude-max",
         "telegram-cli",

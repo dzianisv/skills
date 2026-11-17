@@ -72,6 +72,7 @@ CLI tools, secret management, messaging, and deploy helpers.
 | Skill | What it does | Install |
 |-------|--------------|---------|
 | [`bitwarden-cli`](skills/bitwarden-cli) | Use when storing, retrieving, listing, or organizing secrets in Bitwarden using the bw CLI. | `npx -y skills add dzianisv/skills -s bitwarden-cli -g` |
+| [`secretsctl`](skills/secretsctl) | Fetch one Bitwarden Secrets Manager secret on demand for an agent, scoped to its own project, and copy password-manager items into SM projects. Use when an agent needs an API key, token, DSN or password at runtime. | `npx -y skills add dzianisv/skills -s secretsctl -g` |
 | [`claude-sessions`](skills/claude-sessions) | Find a past Claude Code session on this machine by project or topic, then summarize what was done in it. | `npx -y skills add dzianisv/skills -s claude-sessions -g` |
 | [`claude-max`](skills/claude-max) | Configure and activate the Claude Max subscription proxy so the agent runs on Claude Opus 4 at flat-rate cost instead of per-token Azure billing. | `npx -y skills add dzianisv/skills -s claude-max -g` |
 | [`telegram-cli`](skills/telegram-cli) | Send and read Telegram messages and media from a personal Telegram user account using the bundled `telegram-cli.py` Telethon helper. | `npx -y skills add dzianisv/skills -s telegram-cli -g` |
@@ -118,7 +119,8 @@ Founder materials for raising capital: pitch decks and investor narratives.
 | [`opencode`](skills/opencode) | Control a remote or local OpenCode server via opencode-cli (or its REST API directly). | `npx -y skills add dzianisv/skills -s opencode -g` |
 | [`overflow`](skills/overflow) |  | `npx -y skills add dzianisv/skills -s overflow -g` |
 | [`report`](skills/report) | Produce a 1-minute visual ops/session report as an HTML artifact: status banner, root-cause table, one flow diagram, shipped/open tables, and a session work log with PR links and live-verified statuses. | `npx -y skills add dzianisv/skills -s report -g` |
-| [`stocks-advisor-fast`](skills/stocks-advisor-fast) |  | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
+| [`stocks-advisor-fast`](skills/stocks-advisor-fast) | Analyse assets using fundamental, technical, smart-money and narrative — fast Buy/Hold/Sell table. | `npx -y skills add dzianisv/skills -s stocks-advisor-fast -g` |
+| [`job-search`](skills/job-search) | Run a Staff SWE job search toward a $600k TC target: triage recruiter mail daily, track contacts and applications, draft adapted CVs, report daily with a roadmap chart instead of text. | `npx -y skills add dzianisv/skills -s job-search -g` |
 
 <!-- SKILLS:END -->
 
@@ -161,7 +163,8 @@ npx -y skills add dzianisv/skills -s chrome-use -g
 
 `-g` installs globally. Drop it (or use `-p`) to install into the current project only.
 
-After install the agent autoloads a skill when its description/triggers match your request, or invoke it explicitly (e.g. `/chrome-use`, `/own`).
+After install the agent autoloads a skill when its description/triggers match your request,
+or invoke it explicitly (e.g. `/chrome-use`, `/own`).
 
 ## Spec
 
