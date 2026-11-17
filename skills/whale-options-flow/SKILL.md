@@ -5,39 +5,73 @@ description: Track whale / large options flow for a ticker — how much call and
 
 # Whale Options Flow
 
-Track what large options traders did yesterday and today, and use it to read where they expect the price to go — not as a forecast, as a map of ceilings and floors.
+## Pull a live chain first
 
-## Sources — in this order
+- Pull the live options chain for the expiry the user asked about in the same run you report it.
 
-1. **SpotGamma / CNBC** — biggest single trades, with premium, strike, expiry, and breakeven. Search: `[TICKER] unusual options activity SpotGamma` / `CNBC massive trade [TICKER]`.
-2. **OptionsBell** — live unusual flow, free, no login: `optionsbell.com/live-options-flow` and `/unusual-options-activity/[ticker]`. Ranked by Vol/OI, premium, strike, expiry.
-3. **SquawkFlow** — gamma walls, max pain, put/call ratio by expiry: `squawkflow.com/ticker/[TICKER]`, `squawkflow.com/options-flow`.
-4. **Unusual Whales** — top trades, volume/OI, historical volume per contract. Paywalled for detail, free for top prints.
-5. **GTA Terminal / TradingKey** — institutional flow summaries, call/put premium split, biggest unusual trade of the day.
-6. **StockVane / GreekSoup** — most active contracts, open interest by strike, priced move by expiry.
+- Use the bid and ask mid for every premium you quote and never use a stale last price as the premium.
 
-Cross-check a big trade in at least two sources before reporting it. A single Threads / Facebook post is not a source.
+- Record the chain date and time, the expiry, the underlying price, and the source beside every number you report.
 
-## What to pull, per ticker, per day
+- Refuse to compute a distribution from a chain whose call prices break no arbitrage and say plainly that a fresh bid and ask mid chain is needed.
 
-- Total options premium, call % vs put % (by premium, not by contract count).
-- Biggest 3–5 trades: strike, expiry, premium $, contracts, buy/sell if known, breakeven price.
-- Most active contracts today: strike, expiry, volume, open interest, Vol/OI.
-- Call wall, put wall, max pain, zero-gamma level, for the nearest expiry and for the next monthly expiry.
-- Put/call ratio by expiry range (1 week, 1–3 months).
+- One share class per ticker (Nov 18, 2026 — critic): for a ticker with two share classes, pull the liquid class's chain in both runs and name the class — Alphabet uses the GOOGL chain (Class A; the GOOG Class C chain is thin: GOOG $300 call open interest 5,153 vs GOOGL 23,027 on Nov 16). Never mix levels from two classes in one cell, one verdict, or one chance — the Nov 17 report used GOOG and the dip alert used GOOGL, so the same $300 level printed two max pains ($340 vs $300) and two chances above $300 (27.1% vs 30.3%).
 
-## How to read it — for a sell price
+- One file per run (Nov 18, 2026 — critic): the report writes its options check to options-check-<date>-report.json and the dip alert to options-check-<date>-dipalert.json. Never write the shared options-check-<date>.json name from two runs — on Nov 17 the dip alert overwrote the report's file mid-run and the report had to fall back to its -subagent file.
 
-- **Sell at R1 / gamma pin / first call wall** for a short-term exit. That's where a bounce stalls.
-- **Sell at the whale call strike** for a longer exit — e.g. whales bought Feb $195 calls, breakeven $206: $195–206 is the whale ceiling, not today's exit.
-- **Don't sell at max pain** — price gets pinned there. Sell just above it.
-- **Don't sell at the put wall / floor** — sell above it, on the bounce back up.
-- **Premium shows where money was paid, not who bought vs sold.** A call can be sold to collect premium, a put can be bought as a hedge. State direction as inferred, never as proven. Say so in every report.
+## Read volume as activity only
 
-## Daily report format — short
+- Treat volume and open interest as a measure of activity and never as proof of direction.
 
-Ticker, price, total premium (calls $ / puts $ / %), biggest trade (strike, expiry, premium, breakeven), call wall / put wall / max pain, most active strikes today, and one line: what this implies for the user's sell limit — keep, lower, or raise, and why. No TLDR block at the start unless the user asks for one. Never place an order.
+- Treat a large print at one strike as many possible traders or as a spread, a hedge, or a roll and never as one buyer.
 
-## Privacy — this skill lives in a PUBLIC repo
+- Never call a large print a whale bet or a huge bet and never describe volume as a majority vote for a price.
 
-Never put the user's net worth, portfolio total, holding $ amounts, holding %, share counts, or cost basis in this file. No user-specific numbers at all — not even as examples.
+- Never compute a volume weighted expected price from the chain.
+
+## Price the implied distribution
+
+- Compute each breakeven from the mid premium by adding the premium to a call strike and subtracting the premium from a put strike.
+
+- Straddle breakevens are always the ATM strike plus or minus the straddle mid, never the close plus or minus the premium. The close and the ATM strike are different prices, so the two methods print different numbers for the same chain. On Nov 14, 2026 the options check switched to close based breakevens without a skill change and printed NVDA $185.95, AVGO $298.16, MRVL $187.71 and AMD $446.88, while the daily report printed the strike based $185.10, $301.15, $185.95 and $442.82 from the same Friday chains. State the ATM strike beside every straddle so the arithmetic checks: breakeven low equals ATM strike minus straddle mid, breakeven high equals ATM strike plus straddle mid.
+
+- Build the risk neutral density from call prices across strikes using the Breeden-Litzenberger method and report the mean, the median, and the middle 50 percent range.
+
+- Report the probability of finishing above or below the key levels the user asked about and name the expiry with every probability.
+
+## One estimator per run, named every run (Nov 17, 2026 — critic)
+
+- The chances above or below a level come from one estimator, named in the options check every run. The estimator does not change between runs unless this skill changes — a method change without a skill change makes the chances incomparable across runs.
+- The default is the full-chain Breeden-Litzenberger density. When that density is unstable on Yahoo mids, use the local-slope estimator instead: the chance above a level is the local slope of call mids (−dC/dK, least squares over strikes within ±$10 of the level, two-sided quotes only), cross-checked by central differences. The density is unstable when its mean sits far from the underlying or its second differences pile density at absurd low strikes (Nov 16, 2026: the NVDA Dec 18 density mean was $50 against an underlying of $159; the Nov 20 mean $135–$142 against $159).
+- Window widening (Nov 18, 2026 — critic): if fewer than 3 two-sided quotes fall within ±$10 of the level, widen the window to ±$20 and flag it in the method note (AMD, Nov 17, 2026: strikes $10 apart, only 2 two-sided quotes within ±$10).
+- From an unstable density, do not report a mean, a median, or a middle-50 percent range — say the density is unstable and name the estimator used instead. A method change is never silent: the options check carries a method note and the report carries the comparability caveat.
+
+- Present the spread of the distribution as uncertainty and never present the mean or the median as a forecast or a guarantee.
+
+## Report walls and levels honestly
+
+- Report a call wall, a put wall, and max pain only from open interest and name them as levels where positioning clusters.
+
+- Max pain, one method (Nov 18, 2026 — critic): max pain is computed over ALL strikes from open interest — the standard definition — in both runs, and the method is named in the options check. The Nov 17 report used strikes within ±40% of the underlying while the dip alert used all strikes, so 10 of 11 chains printed different max pains (NVDA $180 vs $175, MSFT $580 vs $475, COIN $165 vs $140). If the winning strike sits more than 40% from the underlying, label it legacy-skewed and treat it as indicative only — the far-strike open interest is old positioning, not today's level.
+
+- Open-interest data check (Nov 18, 2026 — critic): fill missing open interest with 0 before the max-pain sum. A max pain far from the underlying (below half the price) is a data error, never a level — fix the data and re-pull, never report it (Nov 17, 2026: the first pull printed NVDA Dec 18 max pain $0.50 from missing open interest).
+
+- Read put volume below spot as hedging unless the chain gives other evidence and read call volume inside the expected range as ordinary activity.
+
+- Give one line per stock that names the ceiling and the floor the chain implies and whether that confirms or contradicts the sell level.
+
+- State what the chain cannot show whenever you report flow and name the missing evidence instead of filling the gap with a story.
+
+## Available connectors
+
+- Use `muse.connector_search` to find other connectors and `muse.skill_search` to find related skills.
+
+- If nothing here fits, look on the web for a maintained API or MCP server and set it up with [Custom Connectors and MCPs](/opt/muse/skills/custom-connector-setup/SKILL.md), or build a custom connector.
+
+## Alternatives for better results
+
+- Check a prediction market and analyst targets as a separate view of consensus and keep that view apart from the options distribution.
+
+- Ask for a fresh chain after an earnings date or another catalyst before you repeat a level from an old chain.
+
+- Say when the chain is too thin or too stale to support a level and offer the next expiry with a fuller chain instead.
