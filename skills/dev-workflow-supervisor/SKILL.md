@@ -2,14 +2,18 @@
 name: dev-workflow-supervisor
 description: "Project sweep: settle receipts, resolve blockers, keep every task staffed, verify finishes, report."
 ---
+
+# Supervisor loop — run in order
+
 Parameters (Work Log, Agents Context, PRD/Design/Decision Log links, repos, delivery chat) come from the job body. Missing value: record the gap, skip only that action, never invent one.
 
-1. Read, in order: Agents Context → every non-Done/Closed Work Log row (fetch each row before editing) → Decision Log / PRD / Design → board pull → this session's live subagent list.
+1. Read, in order: Agents Context → every non-Done/Closed Work Log row (fetch each row before editing) → Decision Log / PRD / Design → board pull → this session's live subagent list. The Agents Context "Lessons" section is this project's lessons DB: every lesson in it binds this run. (Cross-project rules live in this skill and `dev-workflow`, never in the main chat's MEMORY.md — a lesson that only exists there does not exist for this session.)
 2. Settle first: reconcile the previous run's pending receipts (merges, verdicts) from the GitHub API onto their rows. Never re-dispatch a task whose receipt is unreconciled.
 3. Classify every row: `cause | evidence + checked time | step held | owner | next action | expected artifact`. Statuses only: Open / In Progress / Blocked / Done / Closed. "Scheduled" = Open. Every classification is proven fresh this run — a label carried from a previous run ("post-release", "gated", "no scope") is not evidence.
 4. Blocked rows — resolve it yourself:
    - One repair per root cause: create or reuse one repair task, dispatch it, verify the fix on its exact SHA, resume every dependent.
-   - Blocked stands only if all three are on the row: (1) current-state readback this run; (2) ≥1 alternate route tried; (3) a repair in flight, or the held step is reserved: (a) owner's money, (b) owner's time/presence, (c) credentials only the owner holds.
+   - Blocked stands only if all three are on the row: (1) current-state readback this run; (2) ≥1 alternate route tried; (3) a repair in flight, or the held step is reserved: (a) owner's money — the amount read from the provider's billing record this run (a config cap value or an agent-computed total is not a bill); (b) a credential only the owner holds — proven absent from every store this run. (Replaces the old "(b) owner's time/presence" class, removed 2026-11-16 on Den's order: presence and approval taps are routes to exhaust, not reservations.)
+   - A decision is never reserved. Anything framed as the owner's call — "awaiting go-ahead", "say run it", a pick between PRs or drafts, a go/no-go — is decided by you this run and recorded on the row with its evidence. Framing a decision as the owner's is a failed classification. (Added 2026-11-16: three AgentPod items sat for days as "Den's calls" under exactly this framing.)
    - Routes on the row: `tried … | failed because … | changes when …`.
    - Every other decision is yours: decide, record on the row, proceed.
    - Release proven live (checks green on the exact SHA + live proof) → dispatch the release this run. Never park a release on the owner.
@@ -21,10 +25,10 @@ Parameters (Work Log, Agents Context, PRD/Design/Decision Log links, repos, deli
 7. Finishes: Done = merge SHA read back + Stage 5.5 recorded; critical bugs/incidents also need a Stage 6 PASS read back. Sweep PRs merged since the last run: no issue/row → create the row this run; flag record-less merges touching credentials, deploy workflows, or production routing in Agents Context.
 8. Goal-fit: default close. Keep only if (1) the goal fails without it — mechanism in one sentence, on the row — or (2) work is live on it now. Close the rest: dated reason + record link on the row, same reason on the linked issue. Never delete a row or an issue.
    - No row ends the run as "Open with an exemption label". Post-release, record-only, and no-scope rows are closed. A row gated on another row: dispatch its independent part, or close it. The only exemption is a program/umbrella row named in the job body.
-9. Report to this job's chat only, four blocks, one line per row: Blocked (title + reason + repair owner or a/b/c) / Blockers resolved / In Progress now (title + live lead) / Open left (title + why). Titles, not numbers; numbers are links. No change = silence, except a self-edit line.
+9. Report to this job's chat only, four blocks, one line per row: Blocked (title + reason + repair owner or a/b) / Blockers resolved / In Progress now (title + live lead) / Open left (title + why). Titles, not numbers; numbers are links. No change = silence, except a self-edit line.
    - Escalate to the project's main session when: one cause holds ≥3 rows, verified infrastructure is down, or the Blocked count grew. Send: cause, evidence, count, exact unblock, owner.
 10. End: continuation receipt on every active row (owner + verified state, last artifact + time, next step, gate). Re-check: In Progress ⇒ live lead; Open ⇒ reason on row; Blocked ⇒ reason + this run's attempt. Any mismatch = run FAILED: fix now or escalate.
-11. Rewrite Agents Context: current state only, one screen; delete what is no longer true.
+11. Rewrite Agents Context: current state only, one screen; delete what is no longer true. Keep its "Lessons" section: one line per recurring lesson (failure → rule), dated; a lesson that generalizes beyond this project is promoted into this skill or `dev-workflow` by the daily reflection, not left only here.
 12. Self-edit: only for a failure pattern recorded in Agents Context as recurring. Never change schedule, delivery, owner, enabled state, or project parameters. Report it in one line here + the daily log.
 13. Den's status questions: fresh board pull + this session's subagent list first; answer only from that output. Source unavailable = "unverified" + last verified value and its age.
 
