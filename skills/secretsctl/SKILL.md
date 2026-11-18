@@ -15,7 +15,7 @@ One agent, one project, one token. `secretsctl get KEY` prints the value of a si
 </when_to_use>
 
 <install>
-The repo copy is `~/workspace/skills/skills/secretsctl`; `~/.agents/skills/secretsctl` is a symlink to it, which is how every locally developed skill is installed. Nothing to build, but `bws` must be on PATH:
+The repo copy is `~/workspace/skills/skills/secretsctl`; the installed copy is `~/.agents/skills/secretsctl`. Nothing to build, but `bws` must be on PATH:
 
 ```bash
 curl -sL https://github.com/bitwarden/sdk-sm/releases/download/bws-v2.1.0/bws-aarch64-apple-darwin-2.1.0.zip \
@@ -30,16 +30,15 @@ Add to the repo's `package.json` (works without `pnpm install`, because it uses 
 "secrets:import": "npx -y tsx $HOME/.agents/skills/secretsctl/scripts/secretsctl-import.ts --manifest scripts/secretsctl-projects.json"
 ```
 
-Or install it once, the way the other in-repo skills are installed:
+Or put it on PATH once:
 
 ```bash
-ln -sfn ~/workspace/skills/skills/secretsctl ~/.agents/skills/secretsctl
-chmod +x ~/workspace/skills/skills/secretsctl/scripts/secretsctl.ts
+chmod +x ~/.agents/skills/secretsctl/scripts/secretsctl.ts
 ln -sfn ~/.agents/skills/secretsctl/scripts/secretsctl.ts ~/bin/secretsctl
 printf '\nexport PATH="$HOME/bin:$PATH"\n' >> ~/.zshrc
 ```
 
-Symlink, do not copy: a copy silently goes stale the moment the repo moves, and the skill you debug is then not the skill the agent runs. Registry skills (`npx -y skills add`) are real directories; skills developed here are symlinks. Non-interactive agent shells do not read `.zshrc`. If `command -v secretsctl` fails, call the script by full path.
+Symlink the installed copy, not the repo clone. A fresh box has no `~/workspace/skills`. Non-interactive agent shells do not read `.zshrc`. If `command -v secretsctl` fails, call the script by full path.
 </install>
 
 <token_source>

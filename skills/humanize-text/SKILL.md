@@ -21,7 +21,7 @@ Rewrite the text so a human can read it fast.
 3. Plain English. Short words, short sentences. No professional jargon. No acronyms without spelling them out once.
 4. No verbose statements. Say what happened and what it means. Nothing else.
 5. Remove duplication. Say each fact once.
-6. Remove anything that no longer matters. Old status, stale dates, dead links, superseded sections — delete them.
+6. Remove anything that no longer matters. Old status, stale dates, dead links, superseded sections. Delete them.
 
 ## What stays
 
@@ -30,3 +30,7 @@ Facts, numbers, dates, names, links that still work, decisions, and what to do n
 ## Output
 
 Return the rewritten text. Keep headings and lists only if they help. If a heading has one line under it, drop the heading.
+
+## Done when
+
+The rewritten text keeps every fact, number, date, name, and decision from the original, contains no banned word or filler phrase from the Rules list, and reads as one short plain-English statement per point. Check: read the rewrite against the original line by line.

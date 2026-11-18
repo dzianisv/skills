@@ -9,7 +9,7 @@ Non-interactive vault access via official `bw` CLI. All ops need an unlocked `BW
 
 ## Install (`bw` not found)
 
-**Do NOT use npm** — `@bitwarden/cli` npm package was backdoored April 2026 (TeamPCP supply chain attack). Use the official GitHub binary:
+**Do NOT use npm**: `@bitwarden/cli` npm package was backdoored April 2026 (TeamPCP supply chain attack). Use the official GitHub binary:
 
 ```bash
 VERSION="2026.4.2"  # check https://github.com/bitwarden/clients/releases for latest
@@ -55,7 +55,7 @@ Security → Keys page = `#/settings/security/security-keys` (not `/keys`).
 
 Unlock vault before any operation.
 
-**API key login (non-interactive — preferred):**
+**API key login (non-interactive, preferred):**
 ```bash
 # Requires: BW_CLIENTID, BW_CLIENTSECRET, BW_PASSWORD set in environment
 source ~/.bitwarden_credentials   # or export vars manually
@@ -72,7 +72,7 @@ bw sync --session "$BW_SESSION"
 
 Always `bw sync` after unlock to pull latest state.
 
-## "The decryption operation failed" — diagnose before you declare the vault lost (AGE-677)
+## "The decryption operation failed": diagnose before you declare the vault lost (AGE-677)
 
 On 2026-08-18 an agent hit `bitwarden_crypto::keys::master_key: error=The decryption operation failed`,
 concluded the master password no longer decrypted the vault, and filed a total-lockout incident. The
@@ -89,7 +89,7 @@ Canonical master password path on this host:
 
 Before you conclude the vault is unrecoverable:
 
-1. **Cross-check every candidate file by hash, not by guess** — never echo them:
+1. **Cross-check every candidate file by hash, not by guess. Never echo them:**
    ```bash
    for f in ~/.bitwarden_master_password ~/.secrets/bitwarden \
             <(grep -E '^BW_PASSWORD=' ~/.bitwarden_credentials | sed 's/^BW_PASSWORD=//; s/"//g'); do
@@ -97,7 +97,7 @@ Before you conclude the vault is unrecoverable:
    done
    ```
    Two files agreeing on a 22-char value is your master password. A lone short value is a different
-   secret that was misfiled — do not treat its failure as vault loss.
+   secret that was misfiled. Do not treat its failure as vault loss.
 2. **A wrong password is a local failure, not an account lockout.** `bw unlock` derives the key
    locally; it sends no request. Trying a *different* candidate value is not a retry of the failed
    attempt.
@@ -105,7 +105,7 @@ Before you conclude the vault is unrecoverable:
    master-password change rotates the security stamp and kills that token. Sync OK ⇒ the password was
    not rotated behind you ⇒ the problem is on your side of the disk.
 
-### `bw unlock` rotates the session — always write it back (AGE-677)
+### `bw unlock` rotates the session: always write it back (AGE-677)
 
 Every successful `bw unlock` mints a **new** session key and invalidates the previous one. Verified
 2026-08-18: a session written to `~/.env.d/bitwarden.env` reported `Vault is unlocked!`, then failed
@@ -113,7 +113,7 @@ Every successful `bw unlock` mints a **new** session key and invalidates the pre
 
 On a host where several agents share one vault, that means:
 
-- Never call `bw unlock` "just to check". Use `bw unlock --check --session "$BW_SESSION"` — it is
+- Never call `bw unlock` "just to check". Use `bw unlock --check --session "$BW_SESSION"`. It is
   read-only and rotates nothing.
 - If you *do* unlock, you own the fallout: write the new value to `~/.env.d/bitwarden.env`
   (`umask 077`, `chmod 600`) in the same command, or you have silently broken every other agent.
@@ -121,20 +121,20 @@ On a host where several agents share one vault, that means:
 
 ## Never lock yourself out (AGE-677)
 
-`BW_SESSION` does **not** expire on a clock — it is the vault key, valid until something invalidates
+`BW_SESSION` does **not** expire on a clock. It is the vault key, valid until something invalidates
 the local key blob. So the danger is never "the session timed out", it is an agent running one of
 these while it is the only access path:
 
-- `bw lock` — drops the session. Recoverable only with the master password.
-- `bw logout` — wipes `~/.config/Bitwarden CLI/data.json`. Requires a **full re-login** (email +
+- `bw lock`: drops the session. Recoverable only with the master password.
+- `bw logout`: wipes `~/.config/Bitwarden CLI/data.json`. Requires a **full re-login** (email +
   password + 2FA). Never run it to "get a clean state".
-- `bw login` on an already-authenticated host — same blast radius.
+- `bw login` on an already-authenticated host: same blast radius.
 
 If you need a clean session, `bw unlock` again. Never `logout`. Rotating or re-minting working vault
 access to tidy up is the exact failure `/home/azureuser/.paperclip/AGENTS.md` bans.
 
 Secret hygiene for these files: `~/.secrets/*` and `~/.env.d/bitwarden.env` are `0600`. Verify with
-`[ -n "$BW_SESSION" ]` or a 12-char hash prefix — never `echo` the value.
+`[ -n "$BW_SESSION" ]` or a 12-char hash prefix. Never `echo` the value.
 
 **API key login (if not yet logged in):**
 ```bash
@@ -145,8 +145,6 @@ echo "export BW_SESSION=\"$NEW_SESSION\"" > ~/.env.d/bitwarden.env
 source ~/.env.d/bitwarden.env
 bw sync --session "$BW_SESSION"
 ```
-
-Always `bw sync` after unlock to pull latest state.
 
 ## List secrets
 
@@ -202,7 +200,7 @@ bw get template item.login \
   | bw encode | bw create item --session "$BW_SESSION" | jq '{id, name}'
 ```
 
-**Into a collection (org)** — resolve collection + org IDs first:
+**Into a collection (org)**: resolve collection + org IDs first:
 ```bash
 ORG_ID=$(bw list organizations --session "$BW_SESSION" | jq -r '.[0].id')
 COLL_ID=$(bw list collections --organizationid "$ORG_ID" --session "$BW_SESSION" \
@@ -253,4 +251,8 @@ bw logout        # full logout
 | Stale data | `bw sync --session "$BW_SESSION"` before reads |
 | `bw get` returns wrong item | Use UUID from `bw list items` instead of name |
 | Passing session in plain text to scripts | Use `--session "$BW_SESSION"` not `--session abc123` hardcoded |
-| Installing via npm | Use GitHub binary — npm package was compromised April 2026 |
+| Installing via npm | Use GitHub binary. npm package was compromised April 2026 |
+
+## Done when
+
+The requested secret is stored or retrieved and confirmed by readback (`bw get` returns the expected value, or `bw list items` shows the new item), and the vault is unlocked. Check: `bw unlock --check --session "$BW_SESSION"` exits 0.
