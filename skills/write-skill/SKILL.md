@@ -32,6 +32,7 @@ For directory scaffolding, locations, and progressive disclosure into `reference
   - Add **concrete trigger phrases** the user would actually type, short, discriminative keywords [2].
   - Put every "when to use" cue here. The body can't help triggering because it isn't loaded yet [1].
   - Disambiguate from neighbors: note what it's NOT for if a sibling skill is close.
+  - One canonical description per skill, in SKILL.md frontmatter only. Do not create a skill.yaml or any second copy of the name + description: a second copy drifts. (Nov 18, 2026: 31 skill.yaml descriptions drifted from frontmatter; all 40 skill.yaml files deleted, frontmatter is the only copy.)
 
 <example>
 description: Convert Mermaid diagrams into native Excalidraw elements and merge into an existing .excalidraw file. Use when asked to "convert mermaid to excalidraw", "add this diagram to the mindmap", or "migrate .mmd to excalidraw". Not for editing existing Excalidraw shapes.
@@ -215,13 +216,14 @@ Run this check on every instruction artifact you produce before declaring done:
 ## Process
 
 1. Get 2–3 concrete example tasks the instructions must handle.
-2. **Read and apply guidelines.** Load `references/prompting-guidelines.md`; hold each item as an active constraint throughout drafting, not a post-hoc check.
-3. For skills: draft the description; test by asking, would this match the user's actual wording?
-4. For prompt refinement: extract outcome, surface constraints, structure with XML, add specifics, set autonomy, include self-check.
-5. Write the body to the minimum that lets a competent agent succeed on the examples.
-6. Pull schemas / long refs into `references/`; implement deterministic steps as `scripts/` and test by running.
-7. Use it on a real task; tighten where the agent struggled.
-8. **SELF-CHECK.** Run the Self-Audit Checklist above.
+2. **Check whether an existing skill already owns the job.** Search the skill index for the trigger phrases; if one owns it, extend that skill instead of creating a parallel one. (Nov 18, 2026: goal-kpi was created as a separate skill duplicating product-manager's KPI section and merged back the same day.)
+3. **Read and apply guidelines.** Load `references/prompting-guidelines.md`; hold each item as an active constraint throughout drafting, not a post-hoc check.
+4. For skills: draft the description; test by asking, would this match the user's actual wording?
+5. For prompt refinement: extract outcome, surface constraints, structure with XML, add specifics, set autonomy, include self-check.
+6. Write the body to the minimum that lets a competent agent succeed on the examples.
+7. Pull schemas / long refs into `references/`; implement deterministic steps as `scripts/` and test by running.
+8. Use it on a real task; tighten where the agent struggled.
+9. **SELF-CHECK.** Run the Self-Audit Checklist above.
 
 ## Done When
 
