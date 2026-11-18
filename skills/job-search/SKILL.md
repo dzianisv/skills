@@ -16,7 +16,7 @@ No private identifiers in this file: no email addresses, no phone numbers, no po
 - Read the dedicated jobs mailbox. Keep a seen-list of triaged thread IDs (private goal workspace, hidden_files/seen-hr-threads.md). Never re-report a seen thread.
 - Verdict per thread: GOOD FIT / LOW FIT / ACK (acknowledgment, awaiting decision) / REJECTION. Good fit = Staff-level (or founding-team) role, comp at or near $600k TC, right domain (infra, agents, trading infra, developer tools). Low fit = wrong level, wrong domain, comp far under target, or mass outreach with no level/comp.
 - Post to the jobs thread only when something new pops up. Low fit: send the standard decline below (Den, Nov 18: low-fit mail gets a reply, not silence). Standard decline: "Hi [Name], Thanks for reaching out. This one is not a fit for me — I am focused on Staff-level software engineering roles in AI infrastructure / agent systems, targeting $600k total comp. Happy to hear about anything at Staff level in AI infra or agent platforms if it comes up. Best, Dennis"
-- Never send or reply to any recruiter or HR contact without Den's explicit approval for that exact message. Drafting is fine. Save as a Gmail draft and link it in the jobs thread.
+- Never send or reply to any recruiter or HR contact without Den's explicit approval for that exact message. Exception: the low-fit standard decline above is pre-approved by Den's Nov 18 order, for low-fit mail only, sent exactly as written. Drafting is fine. Save as a Gmail draft and link it in the jobs thread.
 
 ## CV
 
