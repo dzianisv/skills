@@ -1,0 +1,21 @@
+name: analyst_peter_lynch
+title: Analyst Peter Lynch
+description: Analyze stocks the way Peter Lynch did.
+include_in_prompt: false
+skill_improvement:
+  managed: true
+  needs_review: false
+  evidence_handles:
+  - message:assistant-msg-46d50fd0-d3f0-ebcf-6e2c-b80707b41676
+  - message:9be9429c-86f4-4d5f-ae73-809547a85022
+  - message:assistant-msg-6972b7a6-78e8-42c1-b974-9b9ddaed5cd0
+  - /home/hatch/workspace/custom-skills/analyst-peter-lynch/SKILL.md
+  measurement:
+    proxy_metric_id: user_corrections_in_portfolio_reviews
+    success_criterion: No user corrections in portfolio reviews citing unverified figures, analyst-rating verdict reasons, wrong-period figures, re-issued conditional alerts, or AVGO PEG violations.
+    window_days: 14
+  rationale: '2026-10-15 portfolio review: worker trimmed CAG on a Zacks cut and consensus Reduce, added AVGO as buy the fear, understated ORCL FCF at -5.4B, and cited unconfirmed macro figures. User correction: analyst ratings are not Lynch sell reasons; AVGO PEG 2.11 breaks the buy rule (HOLD, buy zone 290-300); ORCL full-year FCF is -23.7B; TSM margin condition failed so the alert was cancelled. Assistant claimed three skill fixes in chat, but the managed SKILL.md (rev 166d8ab7) has none of them.'
+  review_after: 2026-10-30T10:22:46.218907+00:00
+  reviewed_at: 2026-10-16T10:22:46.218907+00:00
+  run_id: sirun_9647cbb841ff4d1c81b4754fea002804
+  status: active
