@@ -17,6 +17,7 @@ Never judge a stock before the market it trades in.
 - [ ] **Index stage:** run the same stage test on the index (S&P 500). Its stage sets the wind: stage 2 market = tailwind, stage 4 market = headwind.
 - [ ] **Breadth / momentum context:** advance–decline behavior and the share of stocks above their own 30-week averages confirm or deny the index's stage. A rising index on narrowing breadth is weaker than it looks.
 - [ ] **Rule: no new long buys against a stage-4 market.** Individual breakouts fail at a far higher rate when the index is in stage 4. Cash is a position.
+- [ ] **Market-wide precision (the 2026-11-23 misread):** an index below a still-rising 30-week MA is a late-stage-3 market, not stage 4 — that week SPY/QQQ/VOO sat −8% to −14% below MAs that still rose +0.6% to +3.8% over 10 weeks, and the setup was twice misread as "everything is stage 4." The flip to a stage-4 market requires the index MA slope to turn negative **and** price to stay below it for several weekly closes; until both hold, the label is late stage 3 (which blocks new longs just the same — the label, not the action, is what changes).
 - [ ] In a stage-2 market, still buy only stage-2 stocks in stage-2 groups (below). The market's stage permits buying; it never selects the stock.
 
 ## Layer 1 — the sector / group
@@ -111,6 +112,10 @@ Weinstein's book gives the short side a full treatment; it is included here beca
 8. **Don't chase an overextended stock.** Far above the MA = someone else's exit liquidity. Wait for the pullback.
 9. **Don't hold without a stop.** Every position carries a standing stop from day one.
 10. **Don't anticipate the breakout.** Stage 1 is a watchlist, not a portfolio. The breakout is the buy; everything before it is preparation.
+
+## What the method costs (calibration, 2026-11-23)
+
+Mechanical backtests of the stage rules (weekly, exit on the stage-4 break, cash earns nothing) quantify the trade: S&P 500 since 1960 ≈ 5.8%/yr vs ≈ 7.4% buy-and-hold, max drawdown −34% vs −56%; GOOG since IPO ≈ 13%/yr vs ≈ 23%; NVDA ≈ 24%/yr vs ≈ 31%. The rules sit in cash roughly a third of the time. Read plainly: **this is insurance against stage 4, not a return engine.** As a timing veto and knife filter it earns its keep; as a sell-everything rule applied to compounders it is too expensive — the exit is easy, the re-entry (stage 1 base → stage 2 breakout) surrenders much of the recovery. Never present a stage call without this cost attached when the question is whether to sell a fundamentally sound holding outright.
 
 ## Operational definitions (how we compute it — identical every run)
 
