@@ -20,6 +20,7 @@ This layer judges **TIMING only — it never overrides a fundamentals verdict, i
 - Fundamentals decide **WHAT** deserves capital. Weinstein decides **WHEN** capital moves.
 - A stage-2 breakout does not make a bad business buyable. A stage-4 chart does not make a good business a sell — it defers adds and tightens exits on timing grounds, and the call must be reported as a timing call, not a value call.
 - When the layers conflict (fundamentals say buy, chart says stage 4), the honest output is both verdicts side by side with the tension named — not a blend, and not one layer silently winning. The portfolio's standing compromise (small limit tranches into weakness) is a portfolio rule, not a Weinstein rule, and must be labeled as such when it is used.
+- Wired into the daily report (stocks-report skill, 2026-11-23): every row carries its stage call; a stage-4 call caps the row's verdict at SELL / no-add, a stage-3 call blocks adds — the veto above, applied mechanically.
 
 ## Workflow — forest, trees, leaves
 
