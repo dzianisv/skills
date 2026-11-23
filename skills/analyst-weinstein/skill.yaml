@@ -1,0 +1,18 @@
+name: analyst_weinstein
+title: Analyst Stan Weinstein
+description: "Judge stock timing the way Stan Weinstein did — stage analysis (30-week MA, volume, Mansfield relative strength): dip vs falling knife, and when a downtrend becomes buyable."
+include_in_prompt: false
+skill_improvement:
+  managed: true
+  needs_review: false
+  evidence_handles:
+  - /home/hatch/workspace/custom-skills/analyst-weinstein/SKILL.md
+  measurement:
+    proxy_metric_id: user_corrections_in_stage_calls
+    success_criterion: No user corrections in stage analysis citing a stage label that contradicts its stated inputs (above all the precision rule — no stage 4 call while the 30-week MA still rises), an undated figure, or a timing verdict presented as a fundamentals verdict.
+    window_days: 14
+  rationale: 'Created 2026-11-23 on Den''s order (voice call) as the timing counterpart to analyst-peter-lynch, after the NVDA stage discussion: price $125.53 was 39.6% below a still-rising 30-week MA ($207.83, +2.9% over 10 weeks) with distribution volume and RS -37.2% over 26 weeks — first called stage 4 in conversation, corrected to late stage 3 transitioning to 4. The skill exists so the full criteria set, the operational definitions and the precision rule are applied identically every run.'
+  review_after: 2026-12-07T00:00:00.000000+00:00
+  reviewed_at: 2026-11-23T00:00:00.000000+00:00
+  run_id: sirun_analyst_weinstein_creation_2026_11_23
+  status: active
