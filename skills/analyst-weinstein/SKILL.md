@@ -32,7 +32,7 @@ This layer judges **TIMING only — it never overrides a fundamentals verdict, i
 ## Computation
 
 ```bash
-~/workspace/.venv-stocks/bin/python scripts/stage_check.py NVDA GOOG
+~/workspace/investor-venv/bin/python scripts/stage_check.py NVDA GOOG
 ```
 
 Prints, per ticker plus the index (SPY) first: last weekly close, 30-week MA, price vs MA %, MA slope over 10 weeks, up/down-week volume averages (12w), RS vs the index (26-week change + position vs its 52-week average), distance from the 52-week high, and the mechanical stage call per the framework's operational definitions. Definitions are fixed in the framework file so every run — script or hand call — is identical.
