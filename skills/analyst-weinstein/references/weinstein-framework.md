@@ -1,6 +1,6 @@
 # Stan Weinstein Framework (working distillation)
 
-Use this as the timing checklist. It is a paraphrase of Weinstein's public methodology from *Secrets for Profiting in Bull and Bear Markets* (1988). Weinstein judges **when**, never **what**: this layer reads price, volume and relative strength only. It contains no opinion about a company's earnings, balance sheet or value — that is the fundamentals layer's job (Lynch / Buffett). A stage-2 chart does not make a bad business buyable; a stage-4 chart does not make a good business a sell. It sequences entries and exits on positions the fundamentals layer has already judged.
+Use this as the timing checklist. It is a paraphrase of Weinstein's public methodology from *Secrets for Profiting in Bull and Bear Markets* (1988). Weinstein judges **when**, never **what**: this layer reads price, volume and relative strength only. It contains no opinion about a company's earnings, balance sheet or value — that is the fundamentals layer's job (Lynch / Buffett). A stage-2 chart does not make a bad business buyable. Within its own terms, the method's sell is the first stage-3 close below the 30-week MA, and stage 4 means be out, never average down; how those calls combine with a fundamentals verdict on the same name is a portfolio arrangement, not part of this method.
 
 ## The apparatus
 
