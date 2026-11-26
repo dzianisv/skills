@@ -16,9 +16,9 @@ Classify before valuing. A fast grower and a cyclical cannot be judged by the sa
 ## General valuation rules (all categories)
 
 - **PEG ratio = P/E ÷ annual EPS growth rate.** Lynch's single most important number.
-  - PEG ≤ 1.0 → fairly priced growth (the buy filter)
-  - PEG ≤ 0.5 → genuine bargain growth
-  - PEG ≫ 1.5 → you're paying for hype; Lynch walks away
+  - PEG ≤ 1.0 → fairly priced growth (the buy filter): a P/E equal to the growth rate is a fairly priced company, in Lynch's own formulation
+  - PEG ≤ 0.5 → a P/E at half the growth rate — Lynch calls that very positive, genuine bargain growth
+  - PEG ≈ 2.0 → a P/E at twice the growth rate — Lynch calls that very negative; you're paying for growth that has not happened
   - PEG is only as honest as the growth rate in it. A spike year flatters PEG. Use a sustainable growth rate, never the best year.
 - **Dividend-adjusted PEG = P/E ÷ (earnings growth % + dividend yield %).** For a company that pays a dividend, the yield is part of the return and belongs in the denominator. A stalwart growing 10% with a 3% yield is judged against 13, not 10.
 - **P/E is relative, never absolute.** There is no universal "P/E 20 is expensive" rule. Judge a P/E against (1) the company's own historical P/E range and (2) the P/E of comparable companies in the same industry. A P/E at the low end of its own history, in line with its industry, with PEG near 1, passes Lynch's filter. A P/E far above both is paying for growth that has not happened yet — the Cisco 2000 failure mode: at ~166× the market assumed ~9% growth forever, and when earnings broke, the E and the multiple fell together and the stock lost ~87% peak to trough. P/E 20 by itself only says the price is 20 years of today's earnings; whether that is fair depends entirely on the growth and the category.
@@ -117,11 +117,9 @@ Cycle verdict rule: the cycle is intact while capex guides hold, TSMC revenue gr
 - Fundamentals deteriorate: rising debt, falling margins, bloated inventory.
 - The category-specific sell signals in the checklists above. For cyclicals these override the general ones: record earnings are a sell signal there, not a hold signal.
 - Never sell a fast grower just because it went up. Let winners run as long as earnings keep growing.
-- Don't over-diversify: Den holds ~35 individual names; Lynch would call anything past ~20 positions he can't track "diworsification." Consolidate the tail.
 
 ## Portfolio-level Lynch rules for Den
 
 - **ETFs are a bedrock, not picks — and out of scope.** No verdicts, no overlap notes. Focus the review on individual stocks only.
 - Concentration is a feature, not a bug, when the story holds. Lynch ran concentrated positions in his best ideas. (Note: Lynch set no fixed per-position percentage cap; any position-size limit in use is a portfolio rule of Den's, not a Lynch rule.)
-- Avoid doubling down on losers without a new story — a falling price is not a sale.
 - Crypto equities (COIN, HOOD, CRCL): excluded from TRIM per Den's standing instruction.
